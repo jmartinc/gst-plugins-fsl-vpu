@@ -35,7 +35,8 @@ Portability:    compatable with Linux OS and Gstreamer 10.11 and below
 #include <string.h>
 #include <fcntl.h>		/* fcntl */
 #include <sys/mman.h>		/* mmap */
-#include <sys/ioctl.h>		/* fopen/fread */		
+#include <sys/ioctl.h>		/* fopen/fread */
+#include <gst-plugins-fsl-vpu_config.h>
 #include "vpu_io.h"
 #include "vpu_lib.h"
 #include "mfw_gst_vpu_encoder.h"
@@ -577,7 +578,7 @@ mfw_gst_encoder_fill_headers(MfwGstVPU_Enc *vpu_enc)
 
 	}
 
-	return ;
+	return 0;
 }
 
 
@@ -610,19 +611,17 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
 {
     MfwGstVPU_Enc *vpu_enc  = NULL;
     RetCode vpu_ret=RETCODE_SUCCESS;
-    gulong size=0;
     GstFlowReturn retval=GST_FLOW_OK;
     GstCaps *src_caps=NULL;;
     GstCaps *caps=NULL;;
     GstBuffer *outbuffer=NULL;
     gint i=0;
-    SearchRamParam searchPa = { 0 };
     EncInitialInfo initialInfo = { 0 };
     gint totalsize=0;
     gint offset=0;
     FRAME_BUF *pFrame[NUM_INPUT_BUF]={0};
     gint    ret;
-    gchar*     mime;
+    gchar*     mime = "undef";
 
 	GST_DEBUG("mfw_gst_vpuenc_chain\n");
     vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
@@ -953,11 +952,6 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
     MfwGstVPU_Enc *vpu_enc  = NULL;
     vpu_enc                     = MFW_GST_VPU_ENC(element);
     gint vpu_ret=0;
-    gfloat avg_mcps = 0, avg_plugin_time = 0, avg_enc_time = 0;
-    guint8* outdata = NULL;
-    gfloat time_val = 0.0;
-    gint i=0;
-    GstFlowReturn res=GST_FLOW_OK;
     guint8 *virt_bit_stream_buf=NULL;
     CodStd mode;
 
@@ -1230,7 +1224,6 @@ static gboolean
 mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps *caps)
 {
    MfwGstVPU_Enc *vpu_enc  = NULL;
-   const gchar *mime;
     gint32 frame_rate_de = 0;
     gint32 frame_rate_nu = 0;
     gint width=0;

@@ -7,11 +7,17 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/include \
 	-I$(top_builddir)/include
 
-libgst-plugins-fsl-vpu_la_SOURCES = \
+libgst_plugins_fsl_vpu_la_SOURCES = \
 	mfw_gst_vpu_encoder.c
 
-gst-plugins-fsl-vpu_la_LDFLAGS = \
-	-version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE)
+libgst_plugins_fsl_vpu_la_CFLAGS = \
+	$(GST_BASE_CFLAGS) $(GST_LIBS_CFLAGS) -O2
+
+libgst_plugins_fsl_vpu_la_LIBADD = \
+	$(GST_PLUGINS_BASE_LIBS) $(GST_BASE_LIBS) $(GST_LIBS) -lfsl-vpu
+
+libgst_plugins_fsl_vpu_la_LDFLAGS = \
+	$(GST_PLUGIN_LDFLAGS) -lgstriff-@GST_MAJORMINOR@
 
 MAINTAINERCLEANFILES = \
 	GNUmakefile.in

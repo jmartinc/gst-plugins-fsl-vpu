@@ -4,7 +4,7 @@ AC_PREREQ(2.59)
 
 AC_INIT([gst-plugins-fsl-vpu], [0.0.0], [bugs@pengutronix.de])
 AC_CONFIG_HEADERS([include/gst-plugins-fsl-vpu_config.h])
-AC_CONFIG_SRCDIR([src/gst-plugins-fsl-vpu.c])
+AC_CONFIG_SRCDIR([src/mfw_gst_vpu_encoder.c])
 AC_CONFIG_MACRO_DIR([config/m4])
 AC_CONFIG_AUX_DIR([config/autoconf])
 AC_CANONICAL_BUILD
@@ -122,6 +122,56 @@ else
     CFLAGS="${CFLAGS} -O2"
 fi
 
+dnl Check for pkgconfig first
+AC_CHECK_PROG(HAVE_PKGCONFIG, pkg-config, yes, no)
+
+dnl Give error and exit if we don't have pkgconfig
+if test "x$HAVE_PKGCONFIG" = "xno"; then
+  AC_MSG_ERROR(you need to have pkgconfig installed !)
+fi
+
+dnl Now we're ready to ask for gstreamer libs and cflags
+dnl And we can also ask for the right version of gstreamer
+
+GST_REQUIRED=0.10
+
+GST_MAJORMINOR=0.10
+PKG_CHECK_MODULES(GST, \
+  gstreamer-$GST_MAJORMINOR >= $GST_REQUIRED,
+  HAVE_GST=yes,HAVE_GST=no)
+
+dnl Give error and exit if we don't have gstreamer
+if test "x$HAVE_GST" = "xno"; then
+  AC_MSG_ERROR(you need gstreamer development packages installed !)
+fi
+
+dnl make GST_CFLAGS and GST_LIBS available
+AC_SUBST(GST_CFLAGS)
+AC_SUBST(GST_LIBS)
+
+dnl make GST_MAJORMINOR available in Makefile.am
+AC_SUBST(GST_MAJORMINOR)
+
+dnl If we need them, we can also use the plugin libraries
+PKG_CHECK_MODULES(GST_LIBS, gstreamer-plugins-base-$GST_MAJORMINOR >= $GST_REQUIRED,
+                  HAVE_GST_LIBS=yes, HAVE_GST_LIBS=no)
+
+dnl Give a warning if we don't have gstreamer libs
+if test "x$HAVE_GST_LIBS" = "xno"; then
+  AC_MSG_NOTICE(no GStreamer plugin libs found)
+fi
+
+dnl make GST_LIBS_CFLAGS and GST_LIBS_LIBS available
+AC_SUBST(GST_LIBS_CFLAGS)
+AC_SUBST(GST_LIBS_LIBS)
+
+dnl set the plugindir where plugins should be installed
+plugindir="\$(libdir)/gstreamer-$GST_MAJORMINOR"
+AC_SUBST(plugindir)
+
+dnl set proper LDFLAGS for plugins
+GST_PLUGIN_LDFLAGS='-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*'
+AC_SUBST(GST_PLUGIN_LDFLAGS)
 
 AC_CONFIG_FILES([
 	GNUmakefile
@@ -129,7 +179,6 @@ AC_CONFIG_FILES([
 	config/GNUmakefile
 	include/GNUmakefile
 	src/GNUmakefile
-	tests/GNUmakefile
 	])
 AC_OUTPUT
 

@@ -1,4 +1,4 @@
-SUBDIRS = include config src tests
+SUBDIRS = include config src
 
 EXTRA_DIST = \
 	autogen.sh \
