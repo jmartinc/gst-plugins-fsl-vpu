@@ -49,7 +49,7 @@ Portability:    compatable with Linux OS and Gstreamer 10.11 and below
 #define BUFF_FILL_SIZE (200 * 1024)
 
 /* Maximum width and height - D1*/
-#define MAX_WIDTH		720 
+#define MAX_WIDTH		720
 #define MAX_HEIGHT		576
 
 /* Default height, width - Set to QCIF */
@@ -60,7 +60,7 @@ Portability:    compatable with Linux OS and Gstreamer 10.11 and below
 #define DEFAULT_FRAME_RATE	30
 
 
-/* The processor clock is 333 MHz for  MX27 
+/* The processor clock is 333 MHz for  MX27
 to be chnaged for other platforms */
 
 #define MFW_GST_VPUENC_VIDEO_CAPS \
@@ -78,7 +78,7 @@ to be chnaged for other platforms */
 
 /* 	Chroma Subsampling ratio - assuming 4:2:0. */
 /*	Not providing ability to set this on the command line because I'm not sure if VPU supports 4:2:2 - r58604 */
-#define CHROMA_SAMPLING_MULTIPLE	1.5		
+#define CHROMA_SAMPLING_MULTIPLE	1.5
 
 
 /*======================================================================================
@@ -156,11 +156,11 @@ GST_DEBUG_CATEGORY_STATIC(mfw_gst_vpuenc_debug);
 
 static void mfw_gst_vpuenc_class_init                  (MfwGstVPU_EncClass *);
 static void mfw_gst_vpuenc_base_init                   (MfwGstVPU_EncClass *);
-static void mfw_gst_vpuenc_init                        
+static void mfw_gst_vpuenc_init
                                         (MfwGstVPU_Enc *, MfwGstVPU_EncClass *);
-static GstFlowReturn mfw_gst_vpuenc_chain              
+static GstFlowReturn mfw_gst_vpuenc_chain
                                         (GstPad *, GstBuffer *);
-static GstStateChangeReturn mfw_gst_vpuenc_change_state    
+static GstStateChangeReturn mfw_gst_vpuenc_change_state
                                                          (GstElement *, GstStateChange);
 static void mfw_gst_vpuenc_set_property(GObject *,guint,const GValue *,GParamSpec *);
 static void mfw_gst_vpuenc_get_property(GObject *,guint,GValue *,GParamSpec *);
@@ -222,17 +222,17 @@ static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 	GST_DEBUG("codec=%d\n", vpu_enc->codec);
 	vpu_enc->codecTypeProvided = TRUE;
 	break;
-    
+
     case MFW_GST_VPUENC_WIDTH:
         vpu_enc->width = g_value_get_uint(value);
         GST_DEBUG("width=%u\n", vpu_enc->width);
 	vpu_enc->widthProvided = TRUE;
         break;
-        
+
     case MFW_GST_VPUENC_HEIGHT:
         vpu_enc->height = g_value_get_uint(value);
         GST_DEBUG("height=%u\n", vpu_enc->height);
-	vpu_enc->heightProvided = TRUE;	
+	vpu_enc->heightProvided = TRUE;
         break;
 
     case MFW_GST_VPUENC_BITRATE:
@@ -299,7 +299,7 @@ static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
      case MFW_GST_VPUENC_WIDTH:
          g_value_set_uint(value, vpu_enc->width);
          break;
-         
+
      case MFW_GST_VPUENC_HEIGHT:
          g_value_set_uint(value, vpu_enc->height);
          break;
@@ -311,7 +311,7 @@ static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
      case MFW_GST_VPUENC_FRAME_RATE:
          g_value_set_float(value, vpu_enc->framerate );
          break;
-         
+
      case MFW_GST_VPUENC_GOP:
          g_value_set_int(value, vpu_enc->gopsize);
          break;
@@ -328,14 +328,14 @@ static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 /*=============================================================================
 FUNCTION:       mfw_gst_vpuenc_FrameBuffer_alloc
 
-DESCRIPTION:    Allocates the Framebuffers required to store the 
+DESCRIPTION:    Allocates the Framebuffers required to store the
                 input frames for the encoder.
-             
+
 
 ARGUMENTS PASSED:
         strideY         - width of the image
         height          - height of the image.
-        FrameBuf        - pointer to structure used for allocating the 
+        FrameBuf        - pointer to structure used for allocating the
                           frame buffers.
         FrameNumber     - Number of Frame Buffers to be allocated.
 
@@ -356,13 +356,13 @@ static int mfw_gst_vpuenc_FrameBuffer_alloc(int strideY, int height,
                     FRAME_BUF * FrameBuf, int FrameNumber)
 {
     int i;
-    
+
     for (i = 0; i < FrameNumber; i++) {
         memset(&(FrameBuf[i].CurrImage), 0, sizeof(vpu_mem_desc));
-	FrameBuf[i].CurrImage.size = (strideY * height * CHROMA_SAMPLING_MULTIPLE);	
+	FrameBuf[i].CurrImage.size = (strideY * height * CHROMA_SAMPLING_MULTIPLE);
 
         IOGetPhyMem(&(FrameBuf[i].CurrImage));
-	
+
         if (FrameBuf[i].CurrImage.phy_addr == 0) {
             int j;
             for (j = 0; j < i; j++) {
@@ -393,10 +393,10 @@ static int mfw_gst_vpuenc_FrameBuffer_alloc(int strideY, int height,
 FUNCTION:       mfw_gst_vpuenc_cleanup
 
 DESCRIPTION:    Closes the Encoder and frees all the memory allocated
-             
+
 
 ARGUMENTS PASSED:
-        vpu_enc         - Plug-in context.   
+        vpu_enc         - Plug-in context.
 
 RETURN VALUE:
        None
@@ -418,7 +418,7 @@ static void mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc *vpu_enc)
     RetCode vpu_ret=RETCODE_SUCCESS;
     int ret=0;
     GST_DEBUG("mfw_gst_vpuenc_cleanup\n");
-    
+
     if(vpu_enc->directrender==FALSE)
     {
 
@@ -428,7 +428,7 @@ static void mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc *vpu_enc)
             IOFreePhyMem(&(vpu_enc->FrameBufPool[i].CurrImage));
         }
     }
-    
+
     if(vpu_enc->handle > 0 )
     {
         vpu_ret = vpu_EncClose(vpu_enc->handle);
@@ -441,7 +441,7 @@ static void mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc *vpu_enc)
             }
         }
     }
-    
+
     if(vpu_enc->encOP!=NULL)
     {
         g_free(vpu_enc->encOP);
@@ -472,12 +472,12 @@ static void mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc *vpu_enc)
 /*=============================================================================
 FUNCTION:       mfw_gst_encoder_fill_headers
 
-DESCRIPTION:    Writes the Headers incase of MPEG4 and H.264 before encoding the 
+DESCRIPTION:    Writes the Headers incase of MPEG4 and H.264 before encoding the
                 Frame.
-             
+
 
 ARGUMENTS PASSED:
-        vpu_enc         - Plug-in context.   
+        vpu_enc         - Plug-in context.
 
 RETURN VALUE:
        None
@@ -492,7 +492,7 @@ IMPORTANT NOTES:
         None
 =============================================================================*/
 
-static int 
+static int
 mfw_gst_encoder_fill_headers(MfwGstVPU_Enc *vpu_enc)
 {
 	EncHeaderParam enchdr_param = {0};
@@ -532,7 +532,7 @@ mfw_gst_encoder_fill_headers(MfwGstVPU_Enc *vpu_enc)
 		enchdr_param.headerType = VOL_HEADER;
 		vpu_EncGiveCommand(vpu_enc->handle, ENC_PUT_MP4_HEADER, &enchdr_param);
         vpu_enc->headersize[2] = enchdr_param.size;
- 
+
         vpu_enc->header[2]=g_malloc(enchdr_param.size);
         if(vpu_enc->header[2]==NULL)
         {
@@ -543,8 +543,8 @@ mfw_gst_encoder_fill_headers(MfwGstVPU_Enc *vpu_enc)
         memcpy(vpu_enc->header[2],ptr,enchdr_param.size);
 
 
-	} 
-        
+	}
+
 	else if (vpu_enc->codec == STD_AVC) {
 
         vpu_enc->headercount=2;
@@ -587,7 +587,7 @@ mfw_gst_encoder_fill_headers(MfwGstVPU_Enc *vpu_enc)
 
 FUNCTION:          mfw_gst_vpuenc_chain
 
-DESCRIPTION:       The main processing function where the data comes in as buffer. This 
+DESCRIPTION:       The main processing function where the data comes in as buffer. This
                     data is encoded, and then pushed onto the next element for further
                     processing.
 
@@ -627,7 +627,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
     vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
     if(vpu_enc->init==FALSE){
 
-        /*store the physicall addreses of the buffers used by the source 
+        /*store the physicall addreses of the buffers used by the source
            to register them in the encoder */
         if(GST_BUFFER_FLAG_IS_SET(buffer,GST_BUFFER_FLAG_LAST))
         {
@@ -643,7 +643,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
             vpu_enc->numframebufs++;
             if(vpu_enc->numframebufs<NUM_INPUT_BUF)
             {
-                return GST_FLOW_OK;  
+                return GST_FLOW_OK;
             }
         }
 
@@ -660,17 +660,17 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
              return GST_FLOW_ERROR;
         }
 
-	/* */	
+	/* */
         vpu_enc->encOP->picWidth = vpu_enc->width;
         vpu_enc->encOP->picHeight = vpu_enc->height;
-        
 
-        /* The Frame Rate Value is set only in case of MPEG4 and H.264 
+
+        /* The Frame Rate Value is set only in case of MPEG4 and H.264
         not set for H.263 */
         if(vpu_enc->encOP->frameRateInfo !=0x3E87530)
             vpu_enc->encOP->frameRateInfo = (gint)(vpu_enc->framerate+0.5);
 
-        
+
         /* open a VPU's encoder instance */
         vpu_ret = vpu_EncOpen(&vpu_enc->handle,vpu_enc->encOP);
         if (vpu_ret != RETCODE_SUCCESS) {
@@ -686,7 +686,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
                 "vpu_EncOpen failed"));
              return GST_FLOW_ERROR;
         }
-        
+
         /* get the minum number of framebuffers to be allocated  */
         vpu_ret = vpu_EncGetInitialInfo(vpu_enc->handle, &initialInfo);
         if (vpu_ret != RETCODE_SUCCESS) {
@@ -707,12 +707,12 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
 
         GST_DEBUG("Enc: min buffer count= %d\n", initialInfo.minFrameBufferCount);
 
-        /* allocate the frame buffers if the buffers cannot be shared with the 
+        /* allocate the frame buffers if the buffers cannot be shared with the
             source element */
         if(vpu_enc->directrender==FALSE){
             ret = mfw_gst_vpuenc_FrameBuffer_alloc(vpu_enc->width,
                 vpu_enc->height,vpu_enc->FrameBufPool,NUM_INPUT_BUF);
-            
+
             if(ret < 0)
             {
                 GError *error = NULL;
@@ -733,10 +733,10 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
                 vpu_enc->frameBuf[i].bufCr = pFrame[i]->AddrCr;
             }
         }
-       
+
 
         /* register the framebuffers with the encoder */
-        vpu_ret = vpu_EncRegisterFrameBuffer(vpu_enc->handle, 
+        vpu_ret = vpu_EncRegisterFrameBuffer(vpu_enc->handle,
             vpu_enc->frameBuf,NUM_INPUT_BUF-1,vpu_enc->width);
         if (vpu_ret != RETCODE_SUCCESS) {
             GST_ERROR("vpu_EncRegisterFrameBuffer failed.Error code is %d \n",
@@ -753,7 +753,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
             return GST_FLOW_ERROR;
         }
 
-        
+
         vpu_enc->encParam->quantParam = 30;
         vpu_enc->encParam->forceIPicture = 0;
         vpu_enc->encParam->skipPicture = 0;
@@ -794,7 +794,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
     }
 
 
-    
+
     if(vpu_enc->directrender==FALSE)  {
 
         /* copy the input Frame into the allocated buffer */
@@ -808,7 +808,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
     else
     {
 
-        /* search the exact Frame buffer in which the incoming frame is 
+        /* search the exact Frame buffer in which the incoming frame is
         present */
         for(i=0;i<NUM_INPUT_BUF;i++){
             if(vpu_enc->frameBuf[i].bufY == GST_BUFFER_OFFSET(buffer))
@@ -826,7 +826,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
     if(vpu_enc->wait==TRUE){
         while (vpu_IsBusy()){
         };
-        vpu_ret = vpu_EncGetOutputInfo(vpu_enc->handle, 
+        vpu_ret = vpu_EncGetOutputInfo(vpu_enc->handle,
             vpu_enc->outputInfo);
         if (vpu_ret != RETCODE_SUCCESS) {
             GST_ERROR
@@ -834,7 +834,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
                 vpu_ret);
             return GST_FLOW_ERROR;
         }
-        
+
         src_caps = GST_PAD_CAPS(vpu_enc->srcpad);
         /* Push the Header along with the First Frame */
         if(vpu_enc->headercount!=0){
@@ -887,7 +887,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
                     "the Source Pad,error is %d \n",retval);
             }
         }
-        
+
     }
 
     GST_DEBUG("bitsream size=%d\n",vpu_enc->outputInfo->bitstreamSize);
@@ -901,7 +901,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *pad, GstBuffer *buffer)
         vpu_enc->encParam->forceIPicture = 0;
     }
 
-    
+
     vpu_ret = vpu_EncStartOneFrame(vpu_enc->handle, vpu_enc->encParam);
     if (vpu_ret != RETCODE_SUCCESS) {
         GST_ERROR("vpu_EncStartOneFrame failed. Error code is %d \n",
@@ -955,7 +955,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
     guint8 *virt_bit_stream_buf=NULL;
     CodStd mode;
 
-    switch (transition) 
+    switch (transition)
     {
         case GST_STATE_CHANGE_NULL_TO_READY:
 	    {
@@ -972,7 +972,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
         case GST_STATE_CHANGE_READY_TO_PAUSED:
 	    {
             GST_DEBUG("\nVPU State: Ready to Paused\n\n");
-            
+
             vpu_enc->encOP          = g_malloc(sizeof(EncOpenParam));
             if(vpu_enc->encOP == NULL){
                 GST_DEBUG("Error in allocating encoder"
@@ -980,7 +980,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
                 mfw_gst_vpuenc_cleanup(vpu_enc);
                 return GST_STATE_CHANGE_FAILURE;
             }
-            
+
 
             vpu_enc->initialInfo    = g_malloc(sizeof(EncInitialInfo));
             if(vpu_enc->initialInfo == NULL){
@@ -1008,21 +1008,21 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
                 return GST_STATE_CHANGE_FAILURE;
             }
 
-            
+
             memset(vpu_enc->initialInfo  ,0,sizeof(EncInitialInfo));
             memset(vpu_enc->encParam ,0,sizeof(EncParam));
             memset(vpu_enc->encOP,0,sizeof(EncOpenParam));
             memset(vpu_enc->outputInfo,0,sizeof(EncOutputInfo));
             memset(&vpu_enc->bit_stream_buf, 0, sizeof(vpu_mem_desc));
 
-            
+
             vpu_enc->bit_stream_buf.size = BUFF_FILL_SIZE;
             IOGetPhyMem(&vpu_enc->bit_stream_buf);
             virt_bit_stream_buf = (guint8 *)IOGetVirtMem(&vpu_enc->bit_stream_buf);
             vpu_enc->start_addr = virt_bit_stream_buf;
             vpu_enc->encOP->bitstreamBuffer = vpu_enc->bit_stream_buf.phy_addr;
             vpu_enc->encOP->bitstreamBufferSize = BUFF_FILL_SIZE ;
- 
+
             GST_DEBUG("codec=%d\n",vpu_enc->codec);
             mode = vpu_enc->encOP->bitstreamFormat = vpu_enc->codec;
 
@@ -1074,7 +1074,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
                 return GST_STATE_CHANGE_FAILURE;
             }
 
-           
+
 
             break;
 	    }
@@ -1090,7 +1090,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
     ret = vpu_enc->parent_class->change_state(element, transition);
     GST_DEBUG("\n State Change for VPU returned %d", ret);
 
-    switch (transition) 
+    switch (transition)
     {
         case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
         {
@@ -1102,7 +1102,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
             GST_DEBUG("\nVPU State: Paused to Ready\n");
             mfw_gst_vpuenc_cleanup(vpu_enc);
             break;
-        }   
+        }
         case GST_STATE_CHANGE_READY_TO_NULL:
 	    {
             GST_DEBUG("\nVPU State: Ready to Null\n");
@@ -1149,32 +1149,32 @@ mfw_gst_vpuenc_sink_event(GstPad * pad, GstEvent * event)
     MfwGstVPU_Enc *vpu_enc  = NULL;
     gboolean    ret=FALSE;
     vpu_enc  = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
-    
+
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_NEWSEGMENT:
         {
             GstFormat format;
             gint64 start, stop, position;
             gdouble rate;
-            
+
             gst_event_parse_new_segment(event, NULL, &rate, &format,
                 &start, &stop, &position);
-            
+
             if (format == GST_FORMAT_BYTES) {
                 ret = gst_pad_push_event(vpu_enc->srcpad,
-                    gst_event_new_new_segment(FALSE, 
+                    gst_event_new_new_segment(FALSE,
                     1.0, GST_FORMAT_TIME,0,GST_CLOCK_TIME_NONE,
                     0));
             }
-            
+
             break;
         }
 
     case GST_EVENT_EOS:
         {
-            
+
             ret = gst_pad_push_event(vpu_enc->srcpad, event);
-            
+
             if (TRUE != ret) {
                 GST_ERROR("\n Error in pushing the event,result	is %d\n",
                     ret);
@@ -1235,7 +1235,7 @@ mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps *caps)
     gst_structure_get_int(structure, "width", &width);
     if(width != 0)
     {
-        
+
         vpu_enc->width=width;
     }
     gst_structure_get_int(structure, "height", &height);
@@ -1251,7 +1251,7 @@ mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps *caps)
     if((frame_rate_nu != 0) && (frame_rate_de != 0))
     {
         vpu_enc->framerate = (gfloat)frame_rate_nu/frame_rate_de;
-        
+
     }
     GST_DEBUG("framerate=%f\n",vpu_enc->framerate);
     gst_object_unref(vpu_enc);
@@ -1304,13 +1304,13 @@ static void mfw_gst_vpuenc_base_init(MfwGstVPU_EncClass *klass)
 
 FUNCTION:       mfw_gst_vpuenc_codec_get_type
 
-DESCRIPTION:    Gets an enumeration for the different 
+DESCRIPTION:    Gets an enumeration for the different
                 codec standars supported by the encoder
 ARGUMENTS PASSED:
                 None
 
 RETURN VALUE:
-                enumerated type of the codec standatds 
+                enumerated type of the codec standatds
                 supported by the encoder
 
 PRE-CONDITIONS:
@@ -1370,55 +1370,55 @@ IMPORTANT NOTES:
 
 static void mfw_gst_vpuenc_class_init(MfwGstVPU_EncClass *klass)
 {
-   
-   
+
+
     GObjectClass *gobject_class         = NULL;
     GstElementClass *gstelement_class   = NULL;
-	
+
     gobject_class                       = (GObjectClass *) klass;
     gstelement_class                    = (GstElementClass *) klass;
     gstelement_class->change_state      = mfw_gst_vpuenc_change_state;
     gobject_class->set_property = mfw_gst_vpuenc_set_property;
     gobject_class->get_property = mfw_gst_vpuenc_get_property;
-    
+
     g_object_class_install_property(gobject_class, MFW_GST_VPU_PROF_ENABLE,
-				    g_param_spec_boolean("profile", "Profile", 
+				    g_param_spec_boolean("profile", "Profile",
                     "enable time profile of the vpu encoder plug-in",
                     FALSE, G_PARAM_READWRITE));
 
     g_object_class_install_property(gobject_class, MFW_GST_VPU_CODEC_TYPE,
-				    g_param_spec_enum("codec-type", "codec_type", 
+				    g_param_spec_enum("codec-type", "codec_type",
                     "selects the codec type for encoding",
                     MFW_GST_TYPE_VPU_ENC_CODEC, STD_AVC, G_PARAM_READWRITE));
 
     g_object_class_install_property (gobject_class, MFW_GST_VPUENC_WIDTH,
-        g_param_spec_uint("width", "Width", 
+        g_param_spec_uint("width", "Width",
         "gets the width of the input frame to be encoded",
         0, MAX_WIDTH, 0, G_PARAM_READWRITE));
 
     g_object_class_install_property (gobject_class, MFW_GST_VPUENC_HEIGHT,
-        g_param_spec_uint("height", "Height", 
+        g_param_spec_uint("height", "Height",
         "gets the Height of the input frame to be encoded",
         0, MAX_HEIGHT, 0, G_PARAM_READWRITE));
 
     g_object_class_install_property (gobject_class, MFW_GST_VPUENC_FRAME_RATE,
-        g_param_spec_float("framerate", "FrameRate", 
+        g_param_spec_float("framerate", "FrameRate",
         "gets the framerate at which the input stream is to be encoded",
         0,60.0, 30.0, G_PARAM_READWRITE));
 
 
     g_object_class_install_property (gobject_class, MFW_GST_VPUENC_BITRATE,
-        g_param_spec_int("bitrate", "Bitrate", 
+        g_param_spec_int("bitrate", "Bitrate",
         "gets the bitrate (in kbps) at which stream is to be encoded",
         0,1024, 0, G_PARAM_READWRITE));
 
     g_object_class_install_property (gobject_class, MFW_GST_VPUENC_GOP,
-        g_param_spec_int("gopsize", "Gopsize", 
+        g_param_spec_int("gopsize", "Gopsize",
         "gets the GOP size at which stream is to be encoded",
         0,G_MAXINT, 0, G_PARAM_READWRITE));
 
 
-    
+
 }
 
 
@@ -1445,7 +1445,7 @@ IMPORTANT NOTES:
 
 =======================================================================================*/
 
-static void 
+static void
 mfw_gst_vpuenc_init(MfwGstVPU_Enc *vpu_enc, MfwGstVPU_EncClass *gclass)
 {
 
@@ -1467,7 +1467,7 @@ mfw_gst_vpuenc_init(MfwGstVPU_Enc *vpu_enc, MfwGstVPU_EncClass *gclass)
      gst_pad_set_event_function(vpu_enc->sinkpad,
 			       GST_DEBUG_FUNCPTR
 			       (mfw_gst_vpuenc_sink_event));
-    
+
     gst_pad_set_setcaps_function(vpu_enc->sinkpad,
         mfw_gst_vpuenc_setcaps);
 
@@ -1558,11 +1558,11 @@ IMPORTANT NOTES:
 GType mfw_gst_type_vpu_enc_get_type(void)
 {
     static GType vpu_enc_type = 0;
-    
 
-    if (!vpu_enc_type) 
+
+    if (!vpu_enc_type)
     {
-	    static const GTypeInfo vpu_enc_info = 
+	    static const GTypeInfo vpu_enc_info =
         {
 	        sizeof(MfwGstVPU_EncClass),
 	        (GBaseInitFunc) mfw_gst_vpuenc_base_init,
