@@ -1,0 +1,17 @@
+noinst_HEADERS = mfw_gst_vpu_encoder.h
+
+
+lib_LTLIBRARIES = libgst-plugins-fsl-vpu.la
+
+AM_CPPFLAGS = \
+	-I$(top_srcdir)/include \
+	-I$(top_builddir)/include
+
+libgst-plugins-fsl-vpu_la_SOURCES = \
+	mfw_gst_vpu_encoder.c
+
+gst-plugins-fsl-vpu_la_LDFLAGS = \
+	-version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE)
+
+MAINTAINERCLEANFILES = \
+	GNUmakefile.in

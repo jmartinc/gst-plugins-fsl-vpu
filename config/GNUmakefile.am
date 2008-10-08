@@ -1,0 +1,7 @@
+EXTRA_DIST = gst-plugins-fsl-vpu.pc.in
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = gst-plugins-fsl-vpu.pc
+
+MAINTAINERCLEANFILES = \
+	GNUmakefile.in

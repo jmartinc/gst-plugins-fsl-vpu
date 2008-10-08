@@ -1,0 +1,4 @@
+
+MAINTAINERCLEANFILES = \
+	gst-plugins-fsl-vpu_config.h.in \
+	GNUmakefile.in
