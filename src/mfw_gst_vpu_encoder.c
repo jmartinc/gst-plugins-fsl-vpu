@@ -193,46 +193,46 @@ static void
 mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 			    const GValue * value, GParamSpec * pspec)
 {
-	GST_DEBUG("mfw_gst_vpuenc_set_property\n");
+	GST_DEBUG("mfw_gst_vpuenc_set_property");
 
 	MfwGstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
 	switch (prop_id) {
 	case MFW_GST_VPU_PROF_ENABLE:
 		vpu_enc->profile = g_value_get_boolean(value);
-		GST_DEBUG("profile=%d\n", vpu_enc->profile);
+		GST_DEBUG("profile=%d", vpu_enc->profile);
 		break;
 
 	case MFW_GST_VPU_CODEC_TYPE:
 		vpu_enc->codec = g_value_get_enum(value);
-		GST_DEBUG("codec=%d\n", vpu_enc->codec);
+		GST_DEBUG("codec=%d", vpu_enc->codec);
 		vpu_enc->codecTypeProvided = TRUE;
 		break;
 
 	case MFW_GST_VPUENC_WIDTH:
 		vpu_enc->width = g_value_get_uint(value);
-		GST_DEBUG("width=%u\n", vpu_enc->width);
+		GST_DEBUG("width=%u", vpu_enc->width);
 		vpu_enc->widthProvided = TRUE;
 		break;
 
 	case MFW_GST_VPUENC_HEIGHT:
 		vpu_enc->height = g_value_get_uint(value);
-		GST_DEBUG("height=%u\n", vpu_enc->height);
+		GST_DEBUG("height=%u", vpu_enc->height);
 		vpu_enc->heightProvided = TRUE;
 		break;
 
 	case MFW_GST_VPUENC_BITRATE:
 		vpu_enc->bitrate = g_value_get_int(value);
-		GST_DEBUG("bitrate=%u\n", vpu_enc->bitrate);
+		GST_DEBUG("bitrate=%u", vpu_enc->bitrate);
 		break;
 
 	case MFW_GST_VPUENC_FRAME_RATE:
 		vpu_enc->framerate = g_value_get_float(value);
-		GST_DEBUG("framerate=%u\n", vpu_enc->framerate);
+		GST_DEBUG("framerate=%u", vpu_enc->framerate);
 		break;
 
 	case MFW_GST_VPUENC_GOP:
 		vpu_enc->gopsize = g_value_get_int(value);
-		GST_DEBUG("gopsize=%u\n", vpu_enc->gopsize);
+		GST_DEBUG("gopsize=%u", vpu_enc->gopsize);
 		break;
 
 	default:
@@ -269,7 +269,7 @@ mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 			    GValue * value, GParamSpec * pspec)
 {
 
-	GST_DEBUG("mfw_gst_vpuenc_get_property\n");
+	GST_DEBUG("mfw_gst_vpuenc_get_property");
 	MfwGstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
 	switch (prop_id) {
 	case MFW_GST_VPU_PROF_ENABLE:
@@ -398,7 +398,7 @@ mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
 	int i = 0;
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	int ret = 0;
-	GST_DEBUG("mfw_gst_vpuenc_cleanup\n");
+	GST_DEBUG("mfw_gst_vpuenc_cleanup");
 
 	if (vpu_enc->directrender == FALSE) {
 
@@ -607,7 +607,7 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	gint ret;
 	gchar *mime = "undef";
 
-	GST_DEBUG("mfw_gst_vpuenc_chain\n");
+	GST_DEBUG("mfw_gst_vpuenc_chain");
 	vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
 	if (vpu_enc->init == FALSE) {
 
@@ -687,7 +687,7 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 
 		}
 
-		GST_DEBUG("Enc: min buffer count= %d\n",
+		GST_DEBUG("Enc: min buffer count= %d",
 			  initialInfo.minFrameBufferCount);
 
 		/* allocate the frame buffers if the buffers cannot be shared with the
@@ -886,8 +886,8 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 
 	}
 
-	GST_DEBUG("bitsream size=%d\n", vpu_enc->outputInfo->bitstreamSize);
-	GST_DEBUG("fram=%d\n", vpu_enc->frameIdx);
+	GST_DEBUG("bitsream size=%d", vpu_enc->outputInfo->bitstreamSize);
+	GST_DEBUG("fram=%d", vpu_enc->frameIdx);
 
 	/* Force the Encoder to encode every 5th Frame as an I frame */
 	if (vpu_enc->frameIdx % 5 == 0) {
@@ -948,11 +948,10 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 		{
-			GST_DEBUG("\nVPU State: Null to Ready\n");
+			GST_DEBUG("VPU State: Null to Ready");
 			vpu_ret = IOSystemInit(NULL);
 			if (vpu_ret < 0) {
-				GST_DEBUG("Error in initializing the VPU \n"
-					  "error is %d\n", vpu_ret);
+				GST_DEBUG("Error in initializing the VPU: error is %d", vpu_ret);
 				return GST_STATE_CHANGE_FAILURE;
 			}
 
@@ -960,12 +959,12 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 		}
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		{
-			GST_DEBUG("\nVPU State: Ready to Paused\n\n");
+			GST_DEBUG("VPU State: Ready to Paused");
 
 			vpu_enc->encOP = g_malloc(sizeof (EncOpenParam));
 			if (vpu_enc->encOP == NULL) {
 				GST_DEBUG("Error in allocating encoder"
-					  "open parameter structure \n");
+					  "open parameter structure");
 				mfw_gst_vpuenc_cleanup(vpu_enc);
 				return GST_STATE_CHANGE_FAILURE;
 			}
@@ -974,7 +973,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 			    g_malloc(sizeof (EncInitialInfo));
 			if (vpu_enc->initialInfo == NULL) {
 				GST_DEBUG("Error in allocating encoder"
-					  "initial info structure \n");
+					  "initial info structure");
 				mfw_gst_vpuenc_cleanup(vpu_enc);
 				return GST_STATE_CHANGE_FAILURE;
 			}
@@ -982,7 +981,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 			vpu_enc->encParam = g_malloc(sizeof (EncParam));
 			if (vpu_enc->encParam == NULL) {
 				GST_DEBUG("Error in allocating encoder"
-					  "parameter structure \n");
+					  "parameter structure");
 				mfw_gst_vpuenc_cleanup(vpu_enc);
 				return GST_STATE_CHANGE_FAILURE;
 			}
@@ -990,7 +989,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 			vpu_enc->outputInfo = g_malloc(sizeof (EncOutputInfo));
 			if (vpu_enc->outputInfo == NULL) {
 				GST_DEBUG("Error in allocating encoder"
-					  "output structure \n");
+					  "output structure");
 				mfw_gst_vpuenc_cleanup(vpu_enc);
 				return GST_STATE_CHANGE_FAILURE;
 			}
@@ -1012,7 +1011,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 			    vpu_enc->bit_stream_buf.phy_addr;
 			vpu_enc->encOP->bitstreamBufferSize = BUFF_FILL_SIZE;
 
-			GST_DEBUG("codec=%d\n", vpu_enc->codec);
+			GST_DEBUG("codec=%d", vpu_enc->codec);
 			mode = vpu_enc->encOP->bitstreamFormat = vpu_enc->codec;
 
 			vpu_enc->init = FALSE;
@@ -1076,7 +1075,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 				    avc_fmoSliceNum = 0;
 			} else {
 				GST_ERROR
-				    ("Encoder: Invalid codec standard mode \n");
+				    ("Encoder: Invalid codec standard mode");
 				mfw_gst_vpuenc_cleanup(vpu_enc);
 				return GST_STATE_CHANGE_FAILURE;
 			}
@@ -1085,7 +1084,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 		}
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
 		{
-			GST_DEBUG("\nVPU State: Paused to Playing\n");
+			GST_DEBUG("VPU State: Paused to Playing");
 			break;
 		}
 	default:
@@ -1093,23 +1092,23 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 	}
 
 	ret = vpu_enc->parent_class->change_state(element, transition);
-	GST_DEBUG("\n State Change for VPU returned %d", ret);
+	GST_DEBUG("State Change for VPU returned %d", ret);
 
 	switch (transition) {
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
 		{
-			GST_DEBUG("\nVPU State: Playing to Paused\n");
+			GST_DEBUG("VPU State: Playing to Paused");
 			break;
 		}
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		{
-			GST_DEBUG("\nVPU State: Paused to Ready\n");
+			GST_DEBUG("VPU State: Paused to Ready");
 			mfw_gst_vpuenc_cleanup(vpu_enc);
 			break;
 		}
 	case GST_STATE_CHANGE_READY_TO_NULL:
 		{
-			GST_DEBUG("\nVPU State: Ready to Null\n");
+			GST_DEBUG("VPU State: Ready to Null");
 			IOSystemShutdown();
 			break;
 		}
@@ -1230,7 +1229,7 @@ mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 	gint width = 0;
 	gint height = 0;
 
-	GST_DEBUG("mfw_gst_vpuenc_setcaps\n");
+	GST_DEBUG("mfw_gst_vpuenc_setcaps");
 	vpu_enc = MFW_GST_VPU_ENC(gst_pad_get_parent(pad));
 	GstStructure *structure = gst_caps_get_structure(caps, 0);
 	gst_structure_get_int(structure, "width", &width);
@@ -1243,7 +1242,7 @@ mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 		vpu_enc->height = height;
 	}
 
-	GST_DEBUG("\nInput Height is %d\n", vpu_enc->height);
+	GST_DEBUG("Input Height is %d", vpu_enc->height);
 	gst_structure_get_fraction(structure, "framerate",
 				   &frame_rate_nu, &frame_rate_de);
 
@@ -1251,7 +1250,7 @@ mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 		vpu_enc->framerate = (gfloat) frame_rate_nu / frame_rate_de;
 
 	}
-	GST_DEBUG("framerate=%f\n", vpu_enc->framerate);
+	GST_DEBUG("framerate=%f", vpu_enc->framerate);
 	gst_object_unref(vpu_enc);
 	return gst_pad_set_caps(pad, caps);
 
@@ -1453,7 +1452,7 @@ static void
 mfw_gst_vpuenc_init(MfwGstVPU_Enc * vpu_enc, MfwGstVPU_EncClass * gclass)
 {
 
-	GST_DEBUG("mfw_gst_vpuenc_init\n");
+	GST_DEBUG("mfw_gst_vpuenc_init");
 
 	GstElementClass *klass = GST_ELEMENT_GET_CLASS(vpu_enc);
 
