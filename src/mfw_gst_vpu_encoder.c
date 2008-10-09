@@ -1478,7 +1478,6 @@ mfw_gst_vpuenc_init(MfwGstVPU_Enc * vpu_enc, MfwGstVPU_EncClass * gclass)
 	vpu_enc->height = DEFAULT_WIDTH;
 	vpu_enc->framerate = DEFAULT_FRAME_RATE;
 	vpu_enc->bitrate = 0;
-	vpu_enc->bitrate = 0;
 	vpu_enc->gopsize = 0;
 	vpu_enc->codecTypeProvided = FALSE;
 	vpu_enc->heightProvided = FALSE;
