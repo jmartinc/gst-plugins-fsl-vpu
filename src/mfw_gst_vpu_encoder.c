@@ -822,12 +822,6 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 
 	GST_DEBUG("bitsream size=%d", vpu_enc->outputInfo->bitstreamSize);
 	GST_DEBUG("fram=%d", vpu_enc->frameIdx);
-	/* Force the Encoder to encode every 5th Frame as an I frame */
-	if (vpu_enc->frameIdx % 5 == 0) {
-		vpu_enc->encParam->forceIPicture = 1;
-	} else {
-		vpu_enc->encParam->forceIPicture = 0;
-	}
 
 	vpu_ret = vpu_EncStartOneFrame(vpu_enc->handle, vpu_enc->encParam);
 	if (vpu_ret != RETCODE_SUCCESS) {
