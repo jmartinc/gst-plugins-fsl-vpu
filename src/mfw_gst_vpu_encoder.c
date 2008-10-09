@@ -405,6 +405,11 @@ mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
 		vpu_enc->outputInfo = NULL;
 	}
 
+	for (i = 0; i < vpu_enc->headercount; i++) {
+		g_free(vpu_enc->header[i]);
+	}
+	vpu_enc->headercount = 0;
+
 	IOFreePhyMem(&(vpu_enc->bit_stream_buf));
 	IOFreeVirtMem(&(vpu_enc->bit_stream_buf));
 
@@ -768,8 +773,8 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 
 	/* Wait for the VPU to complete the Processing */
 	if (vpu_enc->wait == TRUE) {
-		while (vpu_IsBusy()) {
-		};
+		while (vpu_IsBusy());
+
 		vpu_ret = vpu_EncGetOutputInfo(vpu_enc->handle,
 					       vpu_enc->outputInfo);
 		if (vpu_ret != RETCODE_SUCCESS) {
@@ -780,61 +785,32 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 		}
 
 		src_caps = GST_PAD_CAPS(vpu_enc->srcpad);
-		/* Push the Header along with the First Frame */
-		if (vpu_enc->headercount != 0) {
-			for (i = 0; i < vpu_enc->headercount; i++) {
-				totalsize += vpu_enc->headersize[i];
-			}
-			retval =
-			    gst_pad_alloc_buffer_and_set_caps(vpu_enc->srcpad,
-							      0,
-							      vpu_enc->
-							      outputInfo->
-							      bitstreamSize +
-							      totalsize,
-							      src_caps,
-							      &outbuffer);
-			if (retval != GST_FLOW_OK) {
-				GST_ERROR
-				    ("Error in allocating the Framebuffer[%d],"
-				     " error is %d", i, retval);
-				return retval;
-			}
-			for (i = 0; i < vpu_enc->headercount; i++) {
-				memcpy(GST_BUFFER_DATA(outbuffer) + offset,
-				       vpu_enc->header[i],
-				       vpu_enc->headersize[i]);
-				offset += vpu_enc->headersize[i];
-				g_free(vpu_enc->header[i]);
-				vpu_enc->header[i] = NULL;
-				vpu_enc->headersize[i] = 0;
-			}
-			memcpy(GST_BUFFER_DATA(outbuffer) + offset,
-			       vpu_enc->start_addr,
-			       vpu_enc->outputInfo->bitstreamSize);
-			GST_BUFFER_SIZE(outbuffer) =
-			    vpu_enc->outputInfo->bitstreamSize + totalsize;
-			vpu_enc->headercount = 0;
-		} else {
-			retval =
-			    gst_pad_alloc_buffer_and_set_caps(vpu_enc->srcpad,
-							      0,
-							      vpu_enc->
-							      outputInfo->
-							      bitstreamSize,
-							      src_caps,
-							      &outbuffer);
-			if (retval != GST_FLOW_OK) {
-				GST_ERROR
-				    ("Error in allocating the Framebuffer[%d],"
-				     " error is %d", i, retval);
-				return retval;
-			}
-			memcpy(GST_BUFFER_DATA(outbuffer), vpu_enc->start_addr,
-			       vpu_enc->outputInfo->bitstreamSize);
-			GST_BUFFER_SIZE(outbuffer) =
-			    vpu_enc->outputInfo->bitstreamSize;
+
+		for (i = 0; i < vpu_enc->headercount; i++)
+			totalsize += vpu_enc->headersize[i];
+
+		retval = gst_pad_alloc_buffer_and_set_caps(vpu_enc->srcpad,
+			0, vpu_enc->outputInfo->bitstreamSize + totalsize,
+			src_caps, &outbuffer);
+
+		if (retval != GST_FLOW_OK) {
+			GST_ERROR
+			    ("Error in allocating the Framebuffer[%d],"
+			     " error is %d", i, retval);
+			return retval;
 		}
+
+		for (i = 0; i < vpu_enc->headercount; i++) {
+			memcpy(GST_BUFFER_DATA(outbuffer) + offset,
+			       vpu_enc->header[i], vpu_enc->headersize[i]);
+			offset += vpu_enc->headersize[i];
+		}
+
+		memcpy(GST_BUFFER_DATA(outbuffer) + offset,
+		       vpu_enc->start_addr, vpu_enc->outputInfo->bitstreamSize);
+
+		GST_BUFFER_SIZE(outbuffer) =
+				vpu_enc->outputInfo->bitstreamSize + totalsize;
 
 		retval = gst_pad_push(vpu_enc->srcpad, outbuffer);
 		if (retval != GST_FLOW_OK) {
@@ -842,12 +818,10 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 				  "the Source Pad,error is %d \n",
 				  retval);
 		}
-
 	}
 
 	GST_DEBUG("bitsream size=%d", vpu_enc->outputInfo->bitstreamSize);
 	GST_DEBUG("fram=%d", vpu_enc->frameIdx);
-
 	/* Force the Encoder to encode every 5th Frame as an I frame */
 	if (vpu_enc->frameIdx % 5 == 0) {
 		vpu_enc->encParam->forceIPicture = 1;
