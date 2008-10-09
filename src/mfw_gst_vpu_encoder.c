@@ -1074,8 +1074,7 @@ static gboolean mfw_gst_vpuenc_sink_event(GstPad * pad, GstEvent * event)
 		ret = gst_pad_push_event(vpu_enc->srcpad, event);
 
 		if (TRUE != ret) {
-			GST_ERROR
-			    ("\n Error in pushing the event,result	is %d\n",
+			GST_ERROR("Error in pushing the event, result is %d\n",
 			     ret);
 			gst_event_unref(event);
 		}
