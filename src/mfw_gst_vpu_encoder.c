@@ -607,7 +607,7 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
 	if (vpu_enc->init == FALSE) {
 
-		/* store the physical addreses of the buffers used by the source
+		/* store the physical addresses of the buffers used by the source
 		   to register them in the encoder */
 		if (GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_LAST)) {
 
