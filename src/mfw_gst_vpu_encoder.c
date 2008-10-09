@@ -879,7 +879,8 @@ IMPORTANT NOTES:
 =======================================================================================*/
 
 static GstStateChangeReturn mfw_gst_vpuenc_change_state
-    (GstElement * element, GstStateChange transition) {
+    (GstElement * element, GstStateChange transition)
+{
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	MfwGstVPU_Enc *vpu_enc = NULL;
 	vpu_enc = MFW_GST_VPU_ENC(element);
@@ -889,146 +890,114 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
-		{
-			GST_DEBUG("VPU State: Null to Ready");
-			vpu_ret = IOSystemInit(NULL);
-			if (vpu_ret < 0) {
-				GST_DEBUG("Error in initializing the VPU: error is %d", vpu_ret);
-				return GST_STATE_CHANGE_FAILURE;
-			}
-
-			break;
+		GST_DEBUG("VPU State: Null to Ready");
+		vpu_ret = IOSystemInit(NULL);
+		if (vpu_ret < 0) {
+			GST_DEBUG("Error in initializing the VPU: error is %d", vpu_ret);
+			return GST_STATE_CHANGE_FAILURE;
 		}
+
+		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
-		{
-			GST_DEBUG("VPU State: Ready to Paused");
+		GST_DEBUG("VPU State: Ready to Paused");
 
-			vpu_enc->encOP = g_malloc(sizeof (EncOpenParam));
-			if (vpu_enc->encOP == NULL) {
-				GST_DEBUG("Error in allocating encoder"
-					  "open parameter structure");
-				mfw_gst_vpuenc_cleanup(vpu_enc);
-				return GST_STATE_CHANGE_FAILURE;
-			}
-
-			vpu_enc->initialInfo =
-			    g_malloc(sizeof (EncInitialInfo));
-			if (vpu_enc->initialInfo == NULL) {
-				GST_DEBUG("Error in allocating encoder"
-					  "initial info structure");
-				mfw_gst_vpuenc_cleanup(vpu_enc);
-				return GST_STATE_CHANGE_FAILURE;
-			}
-
-			vpu_enc->encParam = g_malloc(sizeof (EncParam));
-			if (vpu_enc->encParam == NULL) {
-				GST_DEBUG("Error in allocating encoder"
-					  "parameter structure");
-				mfw_gst_vpuenc_cleanup(vpu_enc);
-				return GST_STATE_CHANGE_FAILURE;
-			}
-
-			vpu_enc->outputInfo = g_malloc(sizeof (EncOutputInfo));
-			if (vpu_enc->outputInfo == NULL) {
-				GST_DEBUG("Error in allocating encoder"
-					  "output structure");
-				mfw_gst_vpuenc_cleanup(vpu_enc);
-				return GST_STATE_CHANGE_FAILURE;
-			}
-
-			memset(vpu_enc->initialInfo, 0,
-			       sizeof (EncInitialInfo));
-			memset(vpu_enc->encParam, 0, sizeof (EncParam));
-			memset(vpu_enc->encOP, 0, sizeof (EncOpenParam));
-			memset(vpu_enc->outputInfo, 0, sizeof (EncOutputInfo));
-			memset(&vpu_enc->bit_stream_buf, 0,
-			       sizeof (vpu_mem_desc));
-
-			vpu_enc->bit_stream_buf.size = BUFF_FILL_SIZE;
-			IOGetPhyMem(&vpu_enc->bit_stream_buf);
-			virt_bit_stream_buf =
-			    (guint8 *) IOGetVirtMem(&vpu_enc->bit_stream_buf);
-			vpu_enc->start_addr = virt_bit_stream_buf;
-			vpu_enc->encOP->bitstreamBuffer =
-			    vpu_enc->bit_stream_buf.phy_addr;
-			vpu_enc->encOP->bitstreamBufferSize = BUFF_FILL_SIZE;
-
-			GST_DEBUG("codec=%d", vpu_enc->codec);
-			mode = vpu_enc->encOP->bitstreamFormat = vpu_enc->codec;
-
-			vpu_enc->init = FALSE;
-			vpu_enc->wait = FALSE;
-			vpu_enc->frameIdx = 0;
-			vpu_enc->headercount = 0;
-			vpu_enc->handle = 0;
-			vpu_enc->encOP->bitRate = vpu_enc->bitrate;
-			vpu_enc->encOP->initialDelay = 0;
-			vpu_enc->encOP->vbvBufferSize = 0;	/* 0 = ignore 8 */
-			vpu_enc->encOP->enableAutoSkip = 0;
-			vpu_enc->encOP->gopSize = vpu_enc->gopsize;
-			vpu_enc->encOP->slicemode.sliceMode = 1;	/* 1 slice per picture */
-			vpu_enc->encOP->slicemode.sliceSizeMode = 0;
-			vpu_enc->encOP->slicemode.sliceSize = 4000;	/* not used if sliceMode is 0 */
-			vpu_enc->numframebufs = 0;
-
-			if (mode == STD_MPEG4) {
-				vpu_enc->encOP->EncStdParam.mp4Param.
-				    mp4_dataPartitionEnable = 0;
-				vpu_enc->encOP->EncStdParam.mp4Param.
-				    mp4_reversibleVlcEnable = 0;
-				vpu_enc->encOP->EncStdParam.mp4Param.
-				    mp4_intraDcVlcThr = 0;
-			} else if (mode == STD_H263) {
-
-				vpu_enc->encOP->EncStdParam.h263Param.
-				    h263_annexJEnable = 0;
-				vpu_enc->encOP->EncStdParam.h263Param.
-				    h263_annexKEnable = 0;
-				vpu_enc->encOP->EncStdParam.h263Param.
-				    h263_annexTEnable = 0;
-
-				if (vpu_enc->encOP->EncStdParam.h263Param.
-				    h263_annexJEnable == 0
-				    && vpu_enc->encOP->EncStdParam.h263Param.
-				    h263_annexKEnable == 0
-				    && vpu_enc->encOP->EncStdParam.h263Param.
-				    h263_annexTEnable == 0) {
-					vpu_enc->encOP->frameRateInfo =
-					    0x3E87530;
-				}
-			} else if (mode == STD_AVC) {
-				vpu_enc->encOP->EncStdParam.avcParam.
-				    avc_constrainedIntraPredFlag = 0;
-				vpu_enc->encOP->EncStdParam.avcParam.
-				    avc_disableDeblk = 0;
-				vpu_enc->encOP->EncStdParam.avcParam.
-				    avc_deblkFilterOffsetAlpha = 0;
-				vpu_enc->encOP->EncStdParam.avcParam.
-				    avc_deblkFilterOffsetBeta = 0;
-				vpu_enc->encOP->EncStdParam.avcParam.
-				    avc_chromaQpOffset = 0;
-				vpu_enc->encOP->EncStdParam.avcParam.
-				    avc_audEnable = 0;
-				vpu_enc->encOP->EncStdParam.avcParam.
-				    avc_fmoEnable = 0;
-				vpu_enc->encOP->EncStdParam.avcParam.
-				    avc_fmoType = 0;
-				vpu_enc->encOP->EncStdParam.avcParam.
-				    avc_fmoSliceNum = 0;
-			} else {
-				GST_ERROR
-				    ("Encoder: Invalid codec standard mode");
-				mfw_gst_vpuenc_cleanup(vpu_enc);
-				return GST_STATE_CHANGE_FAILURE;
-			}
-
-			break;
+		vpu_enc->encOP = g_malloc(sizeof (EncOpenParam));
+		if (vpu_enc->encOP == NULL) {
+			GST_DEBUG("Error in allocating encoder open parameter structure");
+			mfw_gst_vpuenc_cleanup(vpu_enc);
+			return GST_STATE_CHANGE_FAILURE;
 		}
+
+		vpu_enc->initialInfo =
+		    g_malloc(sizeof (EncInitialInfo));
+		if (vpu_enc->initialInfo == NULL) {
+			GST_DEBUG("Error in allocating encoder initial info structure");
+			mfw_gst_vpuenc_cleanup(vpu_enc);
+			return GST_STATE_CHANGE_FAILURE;
+		}
+
+		vpu_enc->encParam = g_malloc(sizeof (EncParam));
+		if (vpu_enc->encParam == NULL) {
+			GST_DEBUG("Error in allocating encoder parameter structure");
+			mfw_gst_vpuenc_cleanup(vpu_enc);
+			return GST_STATE_CHANGE_FAILURE;
+		}
+
+		vpu_enc->outputInfo = g_malloc(sizeof (EncOutputInfo));
+		if (vpu_enc->outputInfo == NULL) {
+			GST_DEBUG("Error in allocating encoder output structure");
+			mfw_gst_vpuenc_cleanup(vpu_enc);
+			return GST_STATE_CHANGE_FAILURE;
+		}
+
+		memset(vpu_enc->initialInfo, 0, sizeof (EncInitialInfo));
+		memset(vpu_enc->encParam, 0, sizeof (EncParam));
+		memset(vpu_enc->encOP, 0, sizeof (EncOpenParam));
+		memset(vpu_enc->outputInfo, 0, sizeof (EncOutputInfo));
+		memset(&vpu_enc->bit_stream_buf, 0,
+		       sizeof (vpu_mem_desc));
+
+		vpu_enc->bit_stream_buf.size = BUFF_FILL_SIZE;
+		IOGetPhyMem(&vpu_enc->bit_stream_buf);
+		virt_bit_stream_buf = (guint8 *) IOGetVirtMem(&vpu_enc->bit_stream_buf);
+		vpu_enc->start_addr = virt_bit_stream_buf;
+		vpu_enc->encOP->bitstreamBuffer = vpu_enc->bit_stream_buf.phy_addr;
+		vpu_enc->encOP->bitstreamBufferSize = BUFF_FILL_SIZE;
+
+		GST_DEBUG("codec=%d", vpu_enc->codec);
+		mode = vpu_enc->encOP->bitstreamFormat = vpu_enc->codec;
+
+		vpu_enc->init = FALSE;
+		vpu_enc->wait = FALSE;
+		vpu_enc->frameIdx = 0;
+		vpu_enc->headercount = 0;
+		vpu_enc->handle = 0;
+		vpu_enc->encOP->bitRate = vpu_enc->bitrate;
+		vpu_enc->encOP->initialDelay = 0;
+		vpu_enc->encOP->vbvBufferSize = 0;	/* 0 = ignore 8 */
+		vpu_enc->encOP->enableAutoSkip = 0;
+		vpu_enc->encOP->gopSize = vpu_enc->gopsize;
+		vpu_enc->encOP->slicemode.sliceMode = 1;	/* 1 slice per picture */
+		vpu_enc->encOP->slicemode.sliceSizeMode = 0;
+		vpu_enc->encOP->slicemode.sliceSize = 4000;	/* not used if sliceMode is 0 */
+		vpu_enc->numframebufs = 0;
+
+		if (mode == STD_MPEG4) {
+			vpu_enc->encOP->EncStdParam.mp4Param.mp4_dataPartitionEnable = 0;
+			vpu_enc->encOP->EncStdParam.mp4Param.mp4_reversibleVlcEnable = 0;
+			vpu_enc->encOP->EncStdParam.mp4Param.mp4_intraDcVlcThr = 0;
+		} else if (mode == STD_H263) {
+
+			vpu_enc->encOP->EncStdParam.h263Param.h263_annexJEnable = 0;
+			vpu_enc->encOP->EncStdParam.h263Param.h263_annexKEnable = 0;
+			vpu_enc->encOP->EncStdParam.h263Param.h263_annexTEnable = 0;
+
+			if (vpu_enc->encOP->EncStdParam.h263Param.h263_annexJEnable == 0
+			    && vpu_enc->encOP->EncStdParam.h263Param.h263_annexKEnable == 0
+			    && vpu_enc->encOP->EncStdParam.h263Param.h263_annexTEnable == 0) {
+				vpu_enc->encOP->frameRateInfo = 0x3E87530;
+			}
+		} else if (mode == STD_AVC) {
+			vpu_enc->encOP->EncStdParam.avcParam.avc_constrainedIntraPredFlag = 0;
+			vpu_enc->encOP->EncStdParam.avcParam.avc_disableDeblk = 0;
+			vpu_enc->encOP->EncStdParam.avcParam.avc_deblkFilterOffsetAlpha = 0;
+			vpu_enc->encOP->EncStdParam.avcParam.avc_deblkFilterOffsetBeta = 0;
+			vpu_enc->encOP->EncStdParam.avcParam.avc_chromaQpOffset = 0;
+			vpu_enc->encOP->EncStdParam.avcParam.avc_audEnable = 0;
+			vpu_enc->encOP->EncStdParam.avcParam.avc_fmoEnable = 0;
+			vpu_enc->encOP->EncStdParam.avcParam.avc_fmoType = 0;
+			vpu_enc->encOP->EncStdParam.avcParam.avc_fmoSliceNum = 0;
+		} else {
+			GST_ERROR
+			    ("Encoder: Invalid codec standard mode");
+			mfw_gst_vpuenc_cleanup(vpu_enc);
+			return GST_STATE_CHANGE_FAILURE;
+		}
+
+		break;
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-		{
-			GST_DEBUG("VPU State: Paused to Playing");
-			break;
-		}
+		GST_DEBUG("VPU State: Paused to Playing");
+		break;
 	default:
 		break;
 	}
@@ -1038,22 +1007,16 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 
 	switch (transition) {
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-		{
-			GST_DEBUG("VPU State: Playing to Paused");
-			break;
-		}
+		GST_DEBUG("VPU State: Playing to Paused");
+		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
-		{
-			GST_DEBUG("VPU State: Paused to Ready");
-			mfw_gst_vpuenc_cleanup(vpu_enc);
-			break;
-		}
+		GST_DEBUG("VPU State: Paused to Ready");
+		mfw_gst_vpuenc_cleanup(vpu_enc);
+		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
-		{
-			GST_DEBUG("VPU State: Ready to Null");
-			IOSystemShutdown();
-			break;
-		}
+		GST_DEBUG("VPU State: Ready to Null");
+		IOSystemShutdown();
+		break;
 	default:
 		break;
 	}
