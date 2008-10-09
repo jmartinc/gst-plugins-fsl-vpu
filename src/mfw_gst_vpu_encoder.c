@@ -1047,53 +1047,42 @@ IMPORTANT NOTES:
 
 ==================================================================================================*/
 
-static gboolean
-mfw_gst_vpuenc_sink_event(GstPad * pad, GstEvent * event)
+static gboolean mfw_gst_vpuenc_sink_event(GstPad * pad, GstEvent * event)
 {
 	MfwGstVPU_Enc *vpu_enc = NULL;
 	gboolean ret = FALSE;
 	vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
+	GstFormat format;
+	gint64 start, stop, position;
+	gdouble rate;
 
 	switch (GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
-		{
-			GstFormat format;
-			gint64 start, stop, position;
-			gdouble rate;
+		gst_event_parse_new_segment(event, NULL, &rate, &format,
+					    &start, &stop, &position);
 
-			gst_event_parse_new_segment(event, NULL, &rate, &format,
-						    &start, &stop, &position);
-
-			if (format == GST_FORMAT_BYTES) {
-				ret = gst_pad_push_event(vpu_enc->srcpad,
-							 gst_event_new_new_segment
-							 (FALSE, 1.0,
-							  GST_FORMAT_TIME, 0,
-							  GST_CLOCK_TIME_NONE,
-							  0));
-			}
-
-			break;
+		if (format == GST_FORMAT_BYTES) {
+			ret = gst_pad_push_event(vpu_enc->srcpad,
+						 gst_event_new_new_segment
+						 (FALSE, 1.0,
+						  GST_FORMAT_TIME, 0,
+						  GST_CLOCK_TIME_NONE,
+						  0));
 		}
-
+		break;
 	case GST_EVENT_EOS:
-		{
+		ret = gst_pad_push_event(vpu_enc->srcpad, event);
 
-			ret = gst_pad_push_event(vpu_enc->srcpad, event);
-
-			if (TRUE != ret) {
-				GST_ERROR
-				    ("\n Error in pushing the event,result	is %d\n",
-				     ret);
-				gst_event_unref(event);
-			}
-			break;
+		if (TRUE != ret) {
+			GST_ERROR
+			    ("\n Error in pushing the event,result	is %d\n",
+			     ret);
+			gst_event_unref(event);
 		}
+		break;
 	default:
-		{
-			ret = gst_pad_event_default(pad, event);
-			break;
-		}
+		ret = gst_pad_event_default(pad, event);
+		break;
 	}
 	return ret;
 }
