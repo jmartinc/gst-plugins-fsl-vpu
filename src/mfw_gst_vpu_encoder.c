@@ -814,12 +814,6 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 			       vpu_enc->outputInfo->bitstreamSize);
 			GST_BUFFER_SIZE(outbuffer) =
 			    vpu_enc->outputInfo->bitstreamSize + totalsize;
-			retval = gst_pad_push(vpu_enc->srcpad, outbuffer);
-			if (retval != GST_FLOW_OK) {
-				GST_ERROR("Error in Pushing the Output ont to "
-					  "the Source Pad,error is %d \n",
-					  retval);
-			}
 			vpu_enc->headercount = 0;
 		} else {
 			retval =
@@ -840,12 +834,13 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 			       vpu_enc->outputInfo->bitstreamSize);
 			GST_BUFFER_SIZE(outbuffer) =
 			    vpu_enc->outputInfo->bitstreamSize;
-			retval = gst_pad_push(vpu_enc->srcpad, outbuffer);
-			if (retval != GST_FLOW_OK) {
-				GST_ERROR("Error in Pushing the Output ont to "
-					  "the Source Pad,error is %d \n",
-					  retval);
-			}
+		}
+
+		retval = gst_pad_push(vpu_enc->srcpad, outbuffer);
+		if (retval != GST_FLOW_OK) {
+			GST_ERROR("Error in Pushing the Output ont to "
+				  "the Source Pad,error is %d \n",
+				  retval);
 		}
 
 	}
