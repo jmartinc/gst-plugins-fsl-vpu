@@ -759,14 +759,12 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 			mime = "video/x-h263";
 
 		caps = gst_caps_new_simple(mime,
-					   "mpegversion", G_TYPE_INT, 4,
-					   "systemstream", G_TYPE_BOOLEAN,
-					   FALSE, "height", G_TYPE_INT,
-					   vpu_enc->height, "width", G_TYPE_INT,
-					   vpu_enc->width, "framerate",
-					   GST_TYPE_FRACTION,
-					   (gint32) (vpu_enc->framerate * 1000),
-					   1000, NULL);
+				   "mpegversion", G_TYPE_INT, 4,
+				   "systemstream", G_TYPE_BOOLEAN, FALSE,
+				   "height", G_TYPE_INT, vpu_enc->height,
+				   "width", G_TYPE_INT, vpu_enc->width,
+				   "framerate", GST_TYPE_FRACTION, (gint32) (vpu_enc->framerate * 1000),
+				   1000, NULL);
 
 		gst_pad_set_caps(vpu_enc->srcpad, caps);
 
