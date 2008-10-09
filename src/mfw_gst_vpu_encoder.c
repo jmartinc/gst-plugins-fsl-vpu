@@ -981,7 +981,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 			vpu_enc->frameIdx = 0;
 			vpu_enc->headercount = 0;
 			vpu_enc->handle = 0;
-			vpu_enc->encOP->bitRate = 0;
+			vpu_enc->encOP->bitRate = vpu_enc->bitrate;
 			vpu_enc->encOP->initialDelay = 0;
 			vpu_enc->encOP->vbvBufferSize = 0;	/* 0 = ignore 8 */
 			vpu_enc->encOP->enableAutoSkip = 0;
@@ -1362,7 +1362,7 @@ mfw_gst_vpuenc_class_init(MfwGstVPU_EncClass * klass)
 	g_object_class_install_property(gobject_class, MFW_GST_VPUENC_BITRATE,
 					g_param_spec_int("bitrate", "Bitrate",
 							 "gets the bitrate (in kbps) at which stream is to be encoded",
-							 0, 1024, 0,
+							 0, 32767, 0,
 							 G_PARAM_READWRITE));
 
 	g_object_class_install_property(gobject_class, MFW_GST_VPUENC_GOP,
