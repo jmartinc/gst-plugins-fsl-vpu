@@ -987,7 +987,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 			vpu_enc->encOP->initialDelay = 0;
 			vpu_enc->encOP->vbvBufferSize = 0;	/* 0 = ignore 8 */
 			vpu_enc->encOP->enableAutoSkip = 0;
-			vpu_enc->encOP->gopSize = 5;	/* only first picture is I */
+			vpu_enc->encOP->gopSize = vpu_enc->gopsize;
 			vpu_enc->encOP->slicemode.sliceMode = 1;	/* 1 slice per picture */
 			vpu_enc->encOP->slicemode.sliceSizeMode = 0;
 			vpu_enc->encOP->slicemode.sliceSize = 4000;	/* not used if sliceMode is 0 */
@@ -1370,7 +1370,7 @@ mfw_gst_vpuenc_class_init(MfwGstVPU_EncClass * klass)
 	g_object_class_install_property(gobject_class, MFW_GST_VPUENC_GOP,
 					g_param_spec_int("gopsize", "Gopsize",
 							 "gets the GOP size at which stream is to be encoded",
-							 0, G_MAXINT, 0,
+							 0, 60, 0,
 							 G_PARAM_READWRITE));
 
 }
