@@ -52,10 +52,6 @@ Portability:    compatable with Linux OS and Gstreamer 10.11 and below
 #define MAX_WIDTH		720
 #define MAX_HEIGHT		576
 
-/* Default height, width - Set to QCIF */
-#define DEFAULT_HEIGHT	176
-#define DEFAULT_WIDTH	144
-
 /* Default frame rate */
 #define DEFAULT_FRAME_RATE	30
 
@@ -1474,8 +1470,6 @@ mfw_gst_vpuenc_init(MfwGstVPU_Enc * vpu_enc, MfwGstVPU_EncClass * gclass)
 	gst_pad_set_setcaps_function(vpu_enc->sinkpad, mfw_gst_vpuenc_setcaps);
 
 	vpu_enc->codec = STD_AVC;
-	vpu_enc->width = DEFAULT_HEIGHT;
-	vpu_enc->height = DEFAULT_WIDTH;
 	vpu_enc->framerate = DEFAULT_FRAME_RATE;
 	vpu_enc->bitrate = 0;
 	vpu_enc->gopsize = 0;
