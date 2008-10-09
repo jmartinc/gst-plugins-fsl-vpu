@@ -538,6 +538,178 @@ mfw_gst_encoder_fill_headers(MfwGstVPU_Enc * vpu_enc)
 	return 0;
 }
 
+static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
+{
+	MfwGstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
+	gchar *mime = "undef";
+	gint ret, i;
+	EncInitialInfo initialInfo = { 0 };
+	FRAME_BUF *pFrame[NUM_INPUT_BUF] = { 0 };
+	RetCode vpu_ret = RETCODE_SUCCESS;
+	GstCaps *caps = NULL;;
+
+	/* store the physical addresses of the buffers used by the source
+	   to register them in the encoder */
+	if (GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_LAST)) {
+
+		i = vpu_enc->numframebufs;
+
+		vpu_enc->frameBuf[i].bufY = GST_BUFFER_OFFSET(buffer);
+		vpu_enc->frameBuf[i].bufCb = GST_BUFFER_OFFSET(buffer) +
+				(vpu_enc->width * vpu_enc->height);
+		vpu_enc->frameBuf[i].bufCr = vpu_enc->frameBuf[i].bufCb +
+				(vpu_enc->width * vpu_enc->height) / 4;
+
+		vpu_enc->directrender = TRUE;
+		vpu_enc->numframebufs++;
+
+		if (vpu_enc->numframebufs < NUM_INPUT_BUF)
+			return GST_FLOW_OK;
+	}
+
+	if (!vpu_enc->codecTypeProvided) {
+		GST_ERROR("Incomplete command line.\n");
+		GError *error = NULL;
+		GQuark domain = g_quark_from_string("mfw_vpuencoder");
+		error = g_error_new(domain, 10, "fatal error");
+		gst_element_post_message(GST_ELEMENT(vpu_enc),
+					 gst_message_new_error
+					 (GST_OBJECT(vpu_enc), error,
+					  "Incomplete command line - codec type was not provided."));
+		return GST_FLOW_ERROR;
+	}
+
+	vpu_enc->encOP->picWidth = vpu_enc->width;
+	vpu_enc->encOP->picHeight = vpu_enc->height;
+
+	/* The Frame Rate Value is set only in case of MPEG4 and H.264
+	   not set for H.263 */
+	if (vpu_enc->encOP->frameRateInfo != 0x3E87530)
+		vpu_enc->encOP->frameRateInfo =
+		    (gint) (vpu_enc->framerate + 0.5);
+
+	/* open a VPU's encoder instance */
+	vpu_ret = vpu_EncOpen(&vpu_enc->handle, vpu_enc->encOP);
+	if (vpu_ret != RETCODE_SUCCESS) {
+		GST_ERROR("vpu_EncOpen failed. Error code is %d \n",
+			  vpu_ret);
+		GError *error = NULL;
+		GQuark domain;
+		domain = g_quark_from_string("mfw_vpuencoder");
+		error = g_error_new(domain, 10, "fatal error");
+		gst_element_post_message(GST_ELEMENT(vpu_enc),
+					 gst_message_new_error
+					 (GST_OBJECT(vpu_enc), error,
+					  "vpu_EncOpen failed"));
+		return GST_FLOW_ERROR;
+	}
+
+	/* get the minum number of framebuffers to be allocated  */
+	vpu_ret = vpu_EncGetInitialInfo(vpu_enc->handle, &initialInfo);
+	if (vpu_ret != RETCODE_SUCCESS) {
+		GST_ERROR
+		    ("vpu_EncGetInitialInfo failed. Error code is %d \n",
+		     vpu_ret);
+		GError *error = NULL;
+		GQuark domain;
+		domain = g_quark_from_string("mfw_vpuencoder");
+		error = g_error_new(domain, 10, "fatal error");
+		gst_element_post_message(GST_ELEMENT(vpu_enc),
+					 gst_message_new_error
+					 (GST_OBJECT(vpu_enc), error,
+					  "vpu_EncGetInitialInfo failed"));
+		return GST_FLOW_ERROR;
+
+	}
+
+	GST_DEBUG("Enc: min buffer count= %d",
+		  initialInfo.minFrameBufferCount);
+
+	/* allocate the frame buffers if the buffers cannot be shared with the
+	   source element */
+	if (vpu_enc->directrender == FALSE) {
+		ret = mfw_gst_vpuenc_FrameBuffer_alloc(vpu_enc->width,
+						       vpu_enc->height,
+						       vpu_enc->
+						       FrameBufPool,
+						       NUM_INPUT_BUF);
+
+		if (ret < 0) {
+			GError *error = NULL;
+			GQuark domain;
+			domain = g_quark_from_string("mfw_vpuencoder");
+			error = g_error_new(domain, 10, "fatal error");
+			gst_element_post_message(GST_ELEMENT(vpu_enc),
+						 gst_message_new_error
+						 (GST_OBJECT(vpu_enc),
+						  error,
+						  "Allocation for frame buffers failed "));
+			return GST_FLOW_ERROR;
+		}
+		for (i = 0; i < NUM_INPUT_BUF; ++i) {
+			pFrame[i] = &vpu_enc->FrameBufPool[i];
+			vpu_enc->frameBuf[i].bufY = pFrame[i]->AddrY;
+			vpu_enc->frameBuf[i].bufCb = pFrame[i]->AddrCb;
+			vpu_enc->frameBuf[i].bufCr = pFrame[i]->AddrCr;
+		}
+	}
+
+	/* register the framebuffers with the encoder */
+	vpu_ret = vpu_EncRegisterFrameBuffer(vpu_enc->handle,
+					     vpu_enc->frameBuf,
+					     NUM_INPUT_BUF - 1,
+					     vpu_enc->width);
+	if (vpu_ret != RETCODE_SUCCESS) {
+		GST_ERROR
+		    ("vpu_EncRegisterFrameBuffer failed.Error code is %d \n",
+		     vpu_ret);
+		GError *error = NULL;
+		GQuark domain;
+		domain = g_quark_from_string("mfw_vpuencoder");
+		error = g_error_new(domain, 10, "fatal error");
+		gst_element_post_message(GST_ELEMENT(vpu_enc),
+					 gst_message_new_error
+					 (GST_OBJECT(vpu_enc), error,
+					  "vpu_EncRegisterFrameBuffer failed "));
+		return GST_FLOW_ERROR;
+	}
+
+	vpu_enc->encParam->quantParam = 30;
+	vpu_enc->encParam->forceIPicture = 0;
+	vpu_enc->encParam->skipPicture = 0;
+	ret = mfw_gst_encoder_fill_headers(vpu_enc);
+	if (ret < 0) {
+		GError *error = NULL;
+		GQuark domain;
+		domain = g_quark_from_string("mfw_vpuencoder");
+		error = g_error_new(domain, 10, "fatal error");
+		gst_element_post_message(GST_ELEMENT(vpu_enc),
+					 gst_message_new_error
+					 (GST_OBJECT(vpu_enc), error,
+					  "Allocation for Headers failed "));
+		return GST_FLOW_ERROR;
+	}
+
+	if (vpu_enc->codec == STD_MPEG4)
+		mime = "video/mpeg";
+	else if (vpu_enc->codec == STD_AVC)
+		mime = "video/x-h264";
+	else if (vpu_enc->codec == STD_H263)
+		mime = "video/x-h263";
+
+	caps = gst_caps_new_simple(mime,
+			   "mpegversion", G_TYPE_INT, 4,
+			   "systemstream", G_TYPE_BOOLEAN, FALSE,
+			   "height", G_TYPE_INT, vpu_enc->height,
+			   "width", G_TYPE_INT, vpu_enc->width,
+			   "framerate", GST_TYPE_FRACTION, (gint32) (vpu_enc->framerate * 1000),
+			   1000, NULL);
+
+	gst_pad_set_caps(vpu_enc->srcpad, caps);
+
+	return GST_FLOW_OK;
+}
+
 /*======================================================================================
 
 FUNCTION:          mfw_gst_vpuenc_chain
@@ -569,181 +741,24 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFlowReturn retval = GST_FLOW_OK;
 	GstCaps *src_caps = NULL;;
-	GstCaps *caps = NULL;;
 	GstBuffer *outbuffer = NULL;
 	gint i = 0;
-	EncInitialInfo initialInfo = { 0 };
 	gint totalsize = 0;
 	gint offset = 0;
-	FRAME_BUF *pFrame[NUM_INPUT_BUF] = { 0 };
-	gint ret;
-	gchar *mime = "undef";
 
 	GST_DEBUG("mfw_gst_vpuenc_chain");
+
 	vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
+
 	if (vpu_enc->init == FALSE) {
-
-		/* store the physical addresses of the buffers used by the source
-		   to register them in the encoder */
-		if (GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_LAST)) {
-
-			i = vpu_enc->numframebufs;
-			vpu_enc->frameBuf[i].bufY = GST_BUFFER_OFFSET(buffer);
-			vpu_enc->frameBuf[i].bufCb = GST_BUFFER_OFFSET(buffer) +
-			    (vpu_enc->width * vpu_enc->height);
-			vpu_enc->frameBuf[i].bufCr =
-			    vpu_enc->frameBuf[i].bufCb +
-			    (vpu_enc->width * vpu_enc->height) / 4;
-
-			vpu_enc->directrender = TRUE;
-			vpu_enc->numframebufs++;
-			if (vpu_enc->numframebufs < NUM_INPUT_BUF) {
-				return GST_FLOW_OK;
-			}
-		}
-
-		if (!vpu_enc->codecTypeProvided) {
-			GST_ERROR("Incomplete command line.\n");
-			GError *error = NULL;
-			GQuark domain = g_quark_from_string("mfw_vpuencoder");
-			error = g_error_new(domain, 10, "fatal error");
-			gst_element_post_message(GST_ELEMENT(vpu_enc),
-						 gst_message_new_error
-						 (GST_OBJECT(vpu_enc), error,
-						  "Incomplete command line - codec type was not provided."));
-			return GST_FLOW_ERROR;
-		}
-
-		/* */
-		vpu_enc->encOP->picWidth = vpu_enc->width;
-		vpu_enc->encOP->picHeight = vpu_enc->height;
-
-		/* The Frame Rate Value is set only in case of MPEG4 and H.264
-		   not set for H.263 */
-		if (vpu_enc->encOP->frameRateInfo != 0x3E87530)
-			vpu_enc->encOP->frameRateInfo =
-			    (gint) (vpu_enc->framerate + 0.5);
-
-		/* open a VPU's encoder instance */
-		vpu_ret = vpu_EncOpen(&vpu_enc->handle, vpu_enc->encOP);
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_EncOpen failed. Error code is %d \n",
-				  vpu_ret);
-			GError *error = NULL;
-			GQuark domain;
-			domain = g_quark_from_string("mfw_vpuencoder");
-			error = g_error_new(domain, 10, "fatal error");
-			gst_element_post_message(GST_ELEMENT(vpu_enc),
-						 gst_message_new_error
-						 (GST_OBJECT(vpu_enc), error,
-						  "vpu_EncOpen failed"));
-			return GST_FLOW_ERROR;
-		}
-
-		/* get the minum number of framebuffers to be allocated  */
-		vpu_ret = vpu_EncGetInitialInfo(vpu_enc->handle, &initialInfo);
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_EncGetInitialInfo failed. Error code is %d \n",
-			     vpu_ret);
-			GError *error = NULL;
-			GQuark domain;
-			domain = g_quark_from_string("mfw_vpuencoder");
-			error = g_error_new(domain, 10, "fatal error");
-			gst_element_post_message(GST_ELEMENT(vpu_enc),
-						 gst_message_new_error
-						 (GST_OBJECT(vpu_enc), error,
-						  "vpu_EncGetInitialInfo failed"));
-			return GST_FLOW_ERROR;
-
-		}
-
-		GST_DEBUG("Enc: min buffer count= %d",
-			  initialInfo.minFrameBufferCount);
-
-		/* allocate the frame buffers if the buffers cannot be shared with the
-		   source element */
-		if (vpu_enc->directrender == FALSE) {
-			ret = mfw_gst_vpuenc_FrameBuffer_alloc(vpu_enc->width,
-							       vpu_enc->height,
-							       vpu_enc->
-							       FrameBufPool,
-							       NUM_INPUT_BUF);
-
-			if (ret < 0) {
-				GError *error = NULL;
-				GQuark domain;
-				domain = g_quark_from_string("mfw_vpuencoder");
-				error = g_error_new(domain, 10, "fatal error");
-				gst_element_post_message(GST_ELEMENT(vpu_enc),
-							 gst_message_new_error
-							 (GST_OBJECT(vpu_enc),
-							  error,
-							  "Allocation for frame buffers failed "));
-				return GST_FLOW_ERROR;
-			}
-			for (i = 0; i < NUM_INPUT_BUF; ++i) {
-				pFrame[i] = &vpu_enc->FrameBufPool[i];
-				vpu_enc->frameBuf[i].bufY = pFrame[i]->AddrY;
-				vpu_enc->frameBuf[i].bufCb = pFrame[i]->AddrCb;
-				vpu_enc->frameBuf[i].bufCr = pFrame[i]->AddrCr;
-			}
-		}
-
-		/* register the framebuffers with the encoder */
-		vpu_ret = vpu_EncRegisterFrameBuffer(vpu_enc->handle,
-						     vpu_enc->frameBuf,
-						     NUM_INPUT_BUF - 1,
-						     vpu_enc->width);
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_EncRegisterFrameBuffer failed.Error code is %d \n",
-			     vpu_ret);
-			GError *error = NULL;
-			GQuark domain;
-			domain = g_quark_from_string("mfw_vpuencoder");
-			error = g_error_new(domain, 10, "fatal error");
-			gst_element_post_message(GST_ELEMENT(vpu_enc),
-						 gst_message_new_error
-						 (GST_OBJECT(vpu_enc), error,
-						  "vpu_EncRegisterFrameBuffer failed "));
-			return GST_FLOW_ERROR;
-		}
-
-		vpu_enc->encParam->quantParam = 30;
-		vpu_enc->encParam->forceIPicture = 0;
-		vpu_enc->encParam->skipPicture = 0;
-		ret = mfw_gst_encoder_fill_headers(vpu_enc);
-		if (ret < 0) {
-			GError *error = NULL;
-			GQuark domain;
-			domain = g_quark_from_string("mfw_vpuencoder");
-			error = g_error_new(domain, 10, "fatal error");
-			gst_element_post_message(GST_ELEMENT(vpu_enc),
-						 gst_message_new_error
-						 (GST_OBJECT(vpu_enc), error,
-						  "Allocation for Headers failed "));
-			return GST_FLOW_ERROR;
-		}
-
-		if (vpu_enc->codec == STD_MPEG4)
-			mime = "video/mpeg";
-		else if (vpu_enc->codec == STD_AVC)
-			mime = "video/x-h264";
-		else if (vpu_enc->codec == STD_H263)
-			mime = "video/x-h263";
-
-		caps = gst_caps_new_simple(mime,
-				   "mpegversion", G_TYPE_INT, 4,
-				   "systemstream", G_TYPE_BOOLEAN, FALSE,
-				   "height", G_TYPE_INT, vpu_enc->height,
-				   "width", G_TYPE_INT, vpu_enc->width,
-				   "framerate", GST_TYPE_FRACTION, (gint32) (vpu_enc->framerate * 1000),
-				   1000, NULL);
-
-		gst_pad_set_caps(vpu_enc->srcpad, caps);
+		retval = mfw_gst_vpuenc_init_encoder(pad, buffer);
+		if (retval != GST_FLOW_OK)
+			return retval;
 
 		vpu_enc->init = TRUE;
+
+		if (vpu_enc->directrender)
+			return GST_FLOW_OK;
 	}
 
 	if (vpu_enc->directrender == FALSE) {
