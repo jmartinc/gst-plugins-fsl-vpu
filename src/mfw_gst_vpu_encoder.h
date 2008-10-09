@@ -126,8 +126,6 @@ typedef struct _MfwGstVPU_Enc
 	FRAME_BUF    FrameBufPool[NUM_INPUT_BUF];
 	gint            	bitrate;
 	gint            	gopsize;	
-	gboolean 	heightProvided; 	/* Set when the user provides the height on the command line */ 
-	gboolean 	widthProvided; 	/* Set whent he user provides the width on the command line */ 
 	gboolean 	codecTypeProvided; 	/* Set when the user provides the compression format on the command line */
 }MfwGstVPU_Enc;
 

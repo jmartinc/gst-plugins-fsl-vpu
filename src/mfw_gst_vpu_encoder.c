@@ -84,8 +84,6 @@ enum {
 	MFW_GST_VPU_PROP_0,
 	MFW_GST_VPU_CODEC_TYPE,
 	MFW_GST_VPU_PROF_ENABLE,
-	MFW_GST_VPUENC_WIDTH,
-	MFW_GST_VPUENC_HEIGHT,
 	MFW_GST_VPUENC_FRAME_RATE,
 	MFW_GST_VPUENC_BITRATE,
 	MFW_GST_VPUENC_GOP
@@ -204,18 +202,6 @@ mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 		vpu_enc->codecTypeProvided = TRUE;
 		break;
 
-	case MFW_GST_VPUENC_WIDTH:
-		vpu_enc->width = g_value_get_uint(value);
-		GST_DEBUG("width=%u", vpu_enc->width);
-		vpu_enc->widthProvided = TRUE;
-		break;
-
-	case MFW_GST_VPUENC_HEIGHT:
-		vpu_enc->height = g_value_get_uint(value);
-		GST_DEBUG("height=%u", vpu_enc->height);
-		vpu_enc->heightProvided = TRUE;
-		break;
-
 	case MFW_GST_VPUENC_BITRATE:
 		vpu_enc->bitrate = g_value_get_int(value);
 		GST_DEBUG("bitrate=%u", vpu_enc->bitrate);
@@ -274,14 +260,6 @@ mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 
 	case MFW_GST_VPU_CODEC_TYPE:
 		g_value_set_enum(value, vpu_enc->codec);
-		break;
-
-	case MFW_GST_VPUENC_WIDTH:
-		g_value_set_uint(value, vpu_enc->width);
-		break;
-
-	case MFW_GST_VPUENC_HEIGHT:
-		g_value_set_uint(value, vpu_enc->height);
 		break;
 
 	case MFW_GST_VPUENC_BITRATE:
@@ -626,8 +604,7 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 			}
 		}
 
-		if (!(vpu_enc->heightProvided) || !(vpu_enc->widthProvided)
-		    || !(vpu_enc->codecTypeProvided)) {
+		if (!vpu_enc->codecTypeProvided) {
 			GST_ERROR("Incomplete command line.\n");
 			GError *error = NULL;
 			GQuark domain = g_quark_from_string("mfw_vpuencoder");
@@ -635,7 +612,7 @@ mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 			gst_element_post_message(GST_ELEMENT(vpu_enc),
 						 gst_message_new_error
 						 (GST_OBJECT(vpu_enc), error,
-						  "Incomplete command line - Width, height or codec type was not provided."));
+						  "Incomplete command line - codec type was not provided."));
 			return GST_FLOW_ERROR;
 		}
 
@@ -1225,18 +1202,16 @@ mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 
 	GST_DEBUG("mfw_gst_vpuenc_setcaps");
 	vpu_enc = MFW_GST_VPU_ENC(gst_pad_get_parent(pad));
+
 	GstStructure *structure = gst_caps_get_structure(caps, 0);
+
 	gst_structure_get_int(structure, "width", &width);
-	if (width != 0) {
+	vpu_enc->width = width;
 
-		vpu_enc->width = width;
-	}
 	gst_structure_get_int(structure, "height", &height);
-	if (height != 0) {
-		vpu_enc->height = height;
-	}
+	vpu_enc->height = height;
 
-	GST_DEBUG("Input Height is %d", vpu_enc->height);
+
 	gst_structure_get_fraction(structure, "framerate",
 				   &frame_rate_nu, &frame_rate_de);
 
@@ -1385,18 +1360,6 @@ mfw_gst_vpuenc_class_init(MfwGstVPU_EncClass * klass)
 							  STD_AVC,
 							  G_PARAM_READWRITE));
 
-	g_object_class_install_property(gobject_class, MFW_GST_VPUENC_WIDTH,
-					g_param_spec_uint("width", "Width",
-							  "gets the width of the input frame to be encoded",
-							  0, MAX_WIDTH, 0,
-							  G_PARAM_READWRITE));
-
-	g_object_class_install_property(gobject_class, MFW_GST_VPUENC_HEIGHT,
-					g_param_spec_uint("height", "Height",
-							  "gets the Height of the input frame to be encoded",
-							  0, MAX_HEIGHT, 0,
-							  G_PARAM_READWRITE));
-
 	g_object_class_install_property(gobject_class,
 					MFW_GST_VPUENC_FRAME_RATE,
 					g_param_spec_float("framerate",
@@ -1472,8 +1435,6 @@ mfw_gst_vpuenc_init(MfwGstVPU_Enc * vpu_enc, MfwGstVPU_EncClass * gclass)
 	vpu_enc->bitrate = 0;
 	vpu_enc->gopsize = 0;
 	vpu_enc->codecTypeProvided = FALSE;
-	vpu_enc->heightProvided = FALSE;
-	vpu_enc->widthProvided = FALSE;
 }
 
 /*======================================================================================
