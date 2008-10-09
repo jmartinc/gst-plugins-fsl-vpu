@@ -934,8 +934,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 		memset(vpu_enc->encParam, 0, sizeof (EncParam));
 		memset(vpu_enc->encOP, 0, sizeof (EncOpenParam));
 		memset(vpu_enc->outputInfo, 0, sizeof (EncOutputInfo));
-		memset(&vpu_enc->bit_stream_buf, 0,
-		       sizeof (vpu_mem_desc));
+		memset(&vpu_enc->bit_stream_buf, 0, sizeof (vpu_mem_desc));
 
 		vpu_enc->bit_stream_buf.size = BUFF_FILL_SIZE;
 		IOGetPhyMem(&vpu_enc->bit_stream_buf);
@@ -988,8 +987,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 			vpu_enc->encOP->EncStdParam.avcParam.avc_fmoType = 0;
 			vpu_enc->encOP->EncStdParam.avcParam.avc_fmoSliceNum = 0;
 		} else {
-			GST_ERROR
-			    ("Encoder: Invalid codec standard mode");
+			GST_ERROR("Encoder: Invalid codec standard mode");
 			mfw_gst_vpuenc_cleanup(vpu_enc);
 			return GST_STATE_CHANGE_FAILURE;
 		}
