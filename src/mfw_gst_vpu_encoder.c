@@ -130,21 +130,6 @@ GST_STATIC_PAD_TEMPLATE("sink",
 
 GST_DEBUG_CATEGORY_STATIC(mfw_gst_vpuenc_debug);
 
-static void mfw_gst_vpuenc_class_init(MfwGstVPU_EncClass *);
-static void mfw_gst_vpuenc_base_init(MfwGstVPU_EncClass *);
-static void mfw_gst_vpuenc_init(MfwGstVPU_Enc *, MfwGstVPU_EncClass *);
-static GstFlowReturn mfw_gst_vpuenc_chain(GstPad *, GstBuffer *);
-static GstStateChangeReturn mfw_gst_vpuenc_change_state
-    (GstElement *, GstStateChange);
-static void mfw_gst_vpuenc_set_property(GObject *, guint, const GValue *,
-					GParamSpec *);
-static void mfw_gst_vpuenc_get_property(GObject *, guint, GValue *,
-					GParamSpec *);
-static int mfw_gst_vpuenc_FrameBuffer_alloc(int strideY, int height,
-					    FRAME_BUF * FrameBuf,
-					    int FrameNumber);
-static gboolean mfw_gst_vpuenc_setcaps(GstPad *, GstCaps *);
-
 /*======================================================================================
                                      GLOBAL VARIABLES
 =======================================================================================*/
@@ -176,8 +161,7 @@ IMPORTANT NOTES:
         None
 =============================================================================*/
 
-static void
-mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
+static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 			    const GValue * value, GParamSpec * pspec)
 {
 	GST_DEBUG("mfw_gst_vpuenc_set_property");
@@ -239,8 +223,7 @@ POST-CONDITIONS:
 IMPORTANT NOTES:
         None
 =============================================================================*/
-static void
-mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
+static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 			    GValue * value, GParamSpec * pspec)
 {
 
@@ -300,8 +283,7 @@ POST-CONDITIONS:
 IMPORTANT NOTES:
         None
 =============================================================================*/
-static int
-mfw_gst_vpuenc_FrameBuffer_alloc(int strideY, int height,
+static int mfw_gst_vpuenc_FrameBuffer_alloc(int strideY, int height,
 				 FRAME_BUF * FrameBuf, int FrameNumber)
 {
 	int i;
@@ -358,8 +340,7 @@ IMPORTANT NOTES:
         None
 =============================================================================*/
 
-static void
-mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
+static void mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
 {
 
 	int i = 0;
@@ -368,7 +349,6 @@ mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
 	GST_DEBUG("mfw_gst_vpuenc_cleanup");
 
 	if (vpu_enc->directrender == FALSE) {
-
 		for (i = 0; i < NUM_INPUT_BUF; i++) {
 			IOFreeVirtMem(&(vpu_enc->FrameBufPool[i].CurrImage));
 			IOFreePhyMem(&(vpu_enc->FrameBufPool[i].CurrImage));
@@ -381,33 +361,31 @@ mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
 			vpu_EncGetOutputInfo(vpu_enc->handle,
 					     vpu_enc->outputInfo);
 			vpu_ret = vpu_EncClose(vpu_enc->handle);
-			if (ret < 0) {
+			if (ret < 0)
 				GST_ERROR("Error in closing the VPU encoder"
 					  ",error is %d\n", vpu_ret);
-			}
 		}
 	}
 
-	if (vpu_enc->encOP != NULL) {
+	if (vpu_enc->encOP != NULL)
 		g_free(vpu_enc->encOP);
-		vpu_enc->encOP = NULL;
-	}
-	if (vpu_enc->initialInfo != NULL) {
-		g_free(vpu_enc->initialInfo);
-		vpu_enc->initialInfo = NULL;
-	}
-	if (vpu_enc->encParam != NULL) {
-		g_free(vpu_enc->encParam);
-		vpu_enc->encParam = NULL;
-	}
-	if (vpu_enc->outputInfo != NULL) {
-		g_free(vpu_enc->outputInfo);
-		vpu_enc->outputInfo = NULL;
-	}
+	vpu_enc->encOP = NULL;
 
-	for (i = 0; i < vpu_enc->headercount; i++) {
+	if (vpu_enc->initialInfo != NULL)
+		g_free(vpu_enc->initialInfo);
+	vpu_enc->initialInfo = NULL;
+
+	if (vpu_enc->encParam != NULL)
+		g_free(vpu_enc->encParam);
+	vpu_enc->encParam = NULL;
+
+	if (vpu_enc->outputInfo != NULL)
+		g_free(vpu_enc->outputInfo);
+	vpu_enc->outputInfo = NULL;
+
+	for (i = 0; i < vpu_enc->headercount; i++)
 		g_free(vpu_enc->header[i]);
-	}
+
 	vpu_enc->headercount = 0;
 
 	IOFreePhyMem(&(vpu_enc->bit_stream_buf));
@@ -436,8 +414,7 @@ IMPORTANT NOTES:
         None
 =============================================================================*/
 
-static int
-mfw_gst_encoder_fill_headers(MfwGstVPU_Enc * vpu_enc)
+static int mfw_gst_encoder_fill_headers(MfwGstVPU_Enc * vpu_enc)
 {
 	EncHeaderParam enchdr_param = { 0 };
 
@@ -734,8 +711,7 @@ IMPORTANT NOTES:
                     None
 
 =======================================================================================*/
-static GstFlowReturn
-mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
+static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 {
 	MfwGstVPU_Enc *vpu_enc = NULL;
 	RetCode vpu_ret = RETCODE_SUCCESS;
@@ -1111,8 +1087,7 @@ IMPORTANT NOTES:
 
 =======================================================================================*/
 
-static gboolean
-mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
+static gboolean mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 {
 	MfwGstVPU_Enc *vpu_enc = NULL;
 	gint32 frame_rate_de = 0;
@@ -1168,8 +1143,7 @@ IMPORTANT NOTES:
                     None
 
 =======================================================================================*/
-static void
-mfw_gst_vpuenc_base_init(MfwGstVPU_EncClass * klass)
+static void mfw_gst_vpuenc_base_init(MfwGstVPU_EncClass * klass)
 {
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
@@ -1210,8 +1184,7 @@ IMPORTANT NOTES:
 
 ========================================================================================*/
 
-GType
-mfw_gst_vpuenc_codec_get_type(void)
+GType mfw_gst_vpuenc_codec_get_type(void)
 {
 	static GType vpuenc_codec_type = 0;
 	static GEnumValue vpuenc_codecs[] = {
@@ -1387,7 +1360,6 @@ IMPORTANT NOTES:
 static gboolean
 plugin_init(GstPlugin * plugin)
 {
-
 	return gst_element_register(plugin, "mfw_vpuencoder",
 				    GST_RANK_PRIMARY, MFW_GST_TYPE_VPU_ENC);
 }
@@ -1425,8 +1397,7 @@ IMPORTANT NOTES:
                 None
 
 ========================================================================================*/
-GType
-mfw_gst_type_vpu_enc_get_type(void)
+GType mfw_gst_type_vpu_enc_get_type(void)
 {
 	static GType vpu_enc_type = 0;
 
