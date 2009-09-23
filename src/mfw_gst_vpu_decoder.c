@@ -37,6 +37,8 @@ Portability:    compatable with Linux OS and Gstreamer 10.11 and above
 #include <fcntl.h>		/* fcntl */
 #include <sys/mman.h>		/* mmap */
 #include <sys/ioctl.h>		/* fopen/fread */		
+#include <sys/time.h>
+#include <gst-plugins-fsl-vpu_config.h>
 #include "vpu_io.h"
 #include "vpu_lib.h"
 #include "mfw_gst_vpu_decoder.h"
@@ -155,6 +157,18 @@ static gboolean mfw_gst_vpudec_setcaps  (GstPad * , GstCaps *);
 /*======================================================================================
                                      LOCAL FUNCTIONS
 =======================================================================================*/
+
+/* helper function for float comaprision with 0.00001 precision */
+#define FLOAT_MATCH 1
+#define FLOAT_UNMATCH 0
+static inline guint g_compare_float(const gfloat a, const gfloat b)
+{
+	const gfloat precision = 0.00001;
+	if (((a - precision) < b) && (a + precision) > b)
+		return FLOAT_MATCH;
+	else
+		return FLOAT_UNMATCH;
+}
 
 /*=============================================================================
 FUNCTION: mfw_gst_vpudec_set_property
@@ -391,9 +405,10 @@ IMPORTANT NOTES:
         None
 =============================================================================*/
 
-static gint mfw_gst_vpudec_FrameBufferClose(MfwGstVPU_Dec *vpu_dec)
+static void mfw_gst_vpudec_FrameBufferClose(MfwGstVPU_Dec *vpu_dec)
 {
-    gint i;
+    guint i;
+
     for(i=0;i<vpu_dec->numframebufs;i++)
     {
         if (vpu_dec->frame_mem[i].phy_addr != 0)
@@ -526,24 +541,17 @@ static GstFlowReturn mfw_gst_vpudec_chain(GstPad *pad, GstBuffer *buffer)
 {
     MfwGstVPU_Dec *vpu_dec  = NULL;
     RetCode vpu_ret=RETCODE_SUCCESS;
-    PhysicalAddress paWrPtr = 0;
-    PhysicalAddress paRdPtr = 0;
-    gulong size=0;
     GstFlowReturn retval=GST_FLOW_OK;
     gint i=0;
     gint valret=0;
     guint needFrameBufCount=0;
     guint residue=0;
     gint fourcc = GST_STR_FOURCC("I420");
-    GstBuffer *outbuffer = NULL;
-    guint8 *outdata = NULL;
     GstCaps *src_caps = NULL;
     GstCaps *caps=NULL;
-    gfloat time_val = 0;
     struct timeval tv_prof, tv_prof1;
     struct timeval tv_prof2, tv_prof3;
     long time_before = 0, time_after = 0;
-    gint diffsize=0;
     GstBuffer *SrcFrameSize=NULL;
      vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
     if (vpu_dec->profiling) {
@@ -693,7 +701,12 @@ static GstFlowReturn mfw_gst_vpudec_chain(GstPad *pad, GstBuffer *buffer)
         vpu_ret = vpu_DecRegisterFrameBuffer(*(vpu_dec->handle),
             vpu_dec->frameBuf,
             vpu_dec->initialInfo->minFrameBufferCount,
-            vpu_dec->initialInfo->picWidth);
+            vpu_dec->initialInfo->picWidth, 
+	    /*FIXME: the decoder we have may need another vpu lib version, which
+	     * doesn't have pBufInfo in parameter. We add a NULL here
+	     * temporarily to get it compile, this may crash though , we need to
+	     * make clear how this comes */
+	    NULL);
         if (vpu_ret != RETCODE_SUCCESS) {
             GST_ERROR("vpu_DecRegisterFrameBuffer failed. Error code is %d \n",
                 vpu_ret);
@@ -865,19 +878,9 @@ static gboolean mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 {
     MfwGstVPU_Dec *vpu_dec  = NULL;
     gboolean result = TRUE;
-    guint8* outdata = NULL;
-    gfloat time_val = 0.0;
     vpu_dec                     = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
-    gint i=0;
-    GstFlowReturn res;
     guint height=0,width=0;
-    DecInfo *pDecInfo=NULL;
     RetCode vpu_ret=RETCODE_SUCCESS;
-    PhysicalAddress paWrPtr;
-    PhysicalAddress paRdPtr;
-    gulong size=0;
-    gint  flushsize=0;
-    guint offset=0;
 
     width = vpu_dec->initialInfo->picWidth;
     height = vpu_dec->initialInfo->picHeight;
@@ -1015,12 +1018,8 @@ static GstStateChangeReturn mfw_gst_vpudec_change_state
     vpu_dec                     = MFW_GST_VPU_DEC(element);
     gint vpu_ret=0;
     gfloat avg_mcps = 0, avg_plugin_time = 0, avg_dec_time = 0;
-    guint8* outdata = NULL;
-    gfloat time_val = 0.0;
-    gint i=0,err;
-    GstFlowReturn res=GST_FLOW_OK;
     guint8 *virt_bit_stream_buf=NULL;
-    vpu_versioninfo ver;
+
     switch (transition) 
     {
         case GST_STATE_CHANGE_NULL_TO_READY:
@@ -1117,13 +1116,13 @@ static GstStateChangeReturn mfw_gst_vpudec_change_state
                 g_print("PROFILE FIGURES OF VPU DECODER PLUGIN");
                 g_print("\nTotal decode wait time is            %fus",
                     (gfloat)vpu_dec->decode_wait_time);
-                g_print("\nTotal plugin time is                 %ldus",
+                g_print("\nTotal plugin time is                 %lluus",
                     vpu_dec->chain_Time);
-                g_print("\nTotal number of frames decoded is    %d",
+                g_print("\nTotal number of frames decoded is    %llu",
                     vpu_dec->decoded_frames);
-                g_print("\nTotal number of frames dropped is    %d\n",
+                g_print("\nTotal number of frames dropped is    %llu\n",
                     vpu_dec->frames_dropped);
-                if(vpu_dec->frame_rate!=0){
+                if(g_compare_float(vpu_dec->frame_rate, 0) != FLOAT_MATCH){
                     avg_mcps = ((float) vpu_dec->decode_wait_time * PROCESSOR_CLOCK /
                         (1000000 *
                         (vpu_dec->decoded_frames -
@@ -1336,7 +1335,7 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps *caps)
     mime = gst_structure_get_name(structure);
     GValue *codec_data = NULL;
     guint8 *hdrextdata;
-    gint i=0;
+    guint i=0;
     gint wmvversion;
     if(mime!=NULL)
     {
@@ -1392,9 +1391,9 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps *caps)
 	vpu_dec->frame_rate = (gfloat) (frame_rate_nu) / frame_rate_de;
     }
     GST_DEBUG(" Frame Rate = %f \n", vpu_dec->frame_rate);
-    gst_structure_get_int(structure, "width", &vpu_dec->picWidth);
+    gst_structure_get_uint(structure, "width", &vpu_dec->picWidth);
     GST_DEBUG("\nInput Width is %d\n", vpu_dec->picWidth);
-    gst_structure_get_int(structure, "height", &vpu_dec->picHeight);
+    gst_structure_get_uint(structure, "height", &vpu_dec->picHeight);
     GST_DEBUG("\nInput Height is %d\n", vpu_dec->picHeight);
     if(vpu_dec->codec==STD_VC1)
     {
@@ -1467,7 +1466,11 @@ static void mfw_gst_vpudec_base_init(MfwGstVPU_DecClass *klass)
     gst_element_class_add_pad_template(element_class,
 				       gst_static_pad_template_get
 				       (&mfw_gst_vpudec_sink_factory));
-
+    
+    gst_element_class_add_pad_template(element_class,
+				       gst_static_pad_template_get
+				       (&mfw_gst_vpudec_src_factory));
+    
     gst_element_class_set_details(element_class, &mfw_gst_vpudec_details);
 
 }
