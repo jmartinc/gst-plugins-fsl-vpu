@@ -1,7 +1,8 @@
 /*
- * Copyright 2005-2007 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2005-2009 Freescale Semiconductor, Inc. All rights reserved.
+ *
  */
-
+ 
 /*
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -18,18 +19,23 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
+ 
+/*
+ * Module Name:    mfw_gst_vpu_decoder.h  
+ *
+ * Description:    Include File for Hardware (VPU) Decoder Plugin 
+ *                 for Gstreamer  
+ *
+ * Portability:    This code is written for Linux OS and Gstreamer
+ */  
+ 
+/*
+ * Changelog: 
+ *
+ */
+
 
 /*=============================================================================
-                                                                               
-    Module Name:                mfw_gst_vpu_decoder.h  
-
-    General Description:        Include File for Hardware (VPU) Decoder Plugin 
-                                for Gstreamer              
-                            
-===============================================================================
-Portability:    compatable with Linux OS and Gstreamer 10.11 and above 
-
-===============================================================================
                             INCLUDE FILES
 =============================================================================*/
 #ifndef __MFW_GST_VPU_DECODER_H__
@@ -37,7 +43,8 @@ Portability:    compatable with Linux OS and Gstreamer 10.11 and above
 /*=============================================================================
                                            CONSTANTS
 =============================================================================*/
-#define NUM_FRAME_BUF	(1+17+2)
+#define NUM_MAX_VPU_REQUIRED 20
+#define NUM_FRAME_BUF	(NUM_MAX_VPU_REQUIRED+2)
 
 #define MAX_STREAM_BUF  512
 //For Composing the RCV format for VC1
@@ -80,6 +87,7 @@ G_BEGIN_DECLS
 
 #define MFW_GST_TYPE_VPU_DEC_CODEC (mfw_gst_vpudec_codec_get_type())
 
+#define MFW_GST_TYPE_VPU_DEC_MIRROR (mfw_gst_vpudec_mirror_get_type())
 
 
 
@@ -88,6 +96,14 @@ G_BEGIN_DECLS
 /*=============================================================================
                                  STRUCTURES AND OTHER TYPEDEFS
 =============================================================================*/
+typedef enum {
+    FB_STATE_ILLEGAL,  
+    FB_STATE_ALLOCTED, /* buffer is in allocated */
+    FB_STATE_DISPLAY,  /* buffer is in display */
+    FB_STATE_DECODED,  /* buffer is in decoded */
+    FB_STATE_FREE,     /* buffer need free */
+} FB_STATE;
+
 typedef struct _MfwGstVPU_Dec 
 {
     /* Plug-in specific members */
@@ -96,6 +112,7 @@ typedef struct _MfwGstVPU_Dec
     GstPad          *srcpad;	     /* source and sink pad of element */
     GstElementClass *parent_class;
     gboolean         init;           /* initialisation flag */
+    gboolean        vpu_opened;
     guint            outsize;        /* size of the output image */
     GstBuffer       *outbuffers[NUM_FRAME_BUF]; 
                                      /*output buffers allocated */
@@ -109,6 +126,7 @@ typedef struct _MfwGstVPU_Dec
     guint           buffidx_in;
     guint           buffidx_out;    /* members to handle input 
                                        buffer management */
+    gboolean        buf_empty;
 
     /* VPU specific Members */
     DecHandle       *handle;
@@ -125,6 +143,7 @@ typedef struct _MfwGstVPU_Dec
                                     /* Hardware output buffer structure */
     guint8         *frame_virt[NUM_FRAME_BUF]; 
                                     /* Hardware output buffer virtual adresses */
+    FB_STATE        fb_state_plugin[NUM_FRAME_BUF];
     CodStd          codec;          /* codec standard to be selected */
     gboolean        vpu_wait;       /* Flag for the VPU wait call */
     PhysicalAddress base_write;     /* Base address (Physical) 
@@ -142,10 +161,15 @@ typedef struct _MfwGstVPU_Dec
                                    /* Structure for Frame buffer parameters 
                                        if not used with V4LSink */
     guint           numframebufs;  /* Number of Frame buffers */
-
+    gboolean        file_play_mode;  /* Flag for file play mode */
+    gboolean        eos;            /* Flag for end of stream */
+    vpu_mem_desc    ps_mem_desc;   /* ps save buffer */
+    vpu_mem_desc    slice_mem_desc;/* slice save buffer */
     
     /* Misc members */
     guint64         decoded_frames; /*number of the decoded frames */
+    guint64         no_ts_frames;   /*number of no timestamp frames, for mpeg2 */
+    GstClockTime    base_ts;        /*the latest valid timestamp */
     gfloat          frame_rate;     /* Frame rate of display */
     gboolean        profiling;      /* enable profiling */
     guint64         chain_Time;     /* time spent in the chain function */
@@ -162,9 +186,19 @@ typedef struct _MfwGstVPU_Dec
                                        loop back */
     gboolean        framebufinit_done;
                                    /* Flag to initialise the Frame buffers */
-    gboolean        flush;         /* Flag to indicate the flush event */
+    gint            prv_use_idx;
+    gboolean        is_startframe;
+    
+    GMutex          *vpu_mutex;
+    gboolean        lastframedropped;
+    gboolean        flush;           // Flag to indicate the flush event
+    gboolean        rotation_angle;  // rotation angle used for VPU to rotate 
+    guint           rot_buff_idx;    // rotator buf index
+    MirrorDirection mirror_dir;      // VPU mirror direction
+    gboolean        dbk_enabled;
+    gint            dbk_offset_a;
+    gint            dbk_offset_b;
 
-   
 }MfwGstVPU_Dec;
 
 typedef struct _MfwGstVPU_DecClass 
