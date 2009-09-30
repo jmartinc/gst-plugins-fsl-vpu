@@ -37,12 +37,15 @@
 /*======================================================================================
                             INCLUDE FILES
 =======================================================================================*/
-#include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 #include <string.h>
 #include <fcntl.h>		/* fcntl */
+#include <unistd.h>
 #include <sys/mman.h>		/* mmap */
-#include <sys/ioctl.h>		/* fopen/fread */		
+#include <sys/ioctl.h>		/* fopen/fread */
+#include <sys/time.h>
+#include <gst/gst.h>
+#include <gst/base/gstadapter.h>
+#include <gst-plugins-fsl-vpu_config.h>
 #include "vpu_io.h"
 #include "vpu_lib.h"
 #include "mfw_gst_vpu_decoder.h"
@@ -229,6 +232,18 @@ static gboolean mfw_gst_vpudec_setcaps  (GstPad * , GstCaps *);
 /*======================================================================================
                                      LOCAL FUNCTIONS
 =======================================================================================*/
+
+/* helper function for float comaprision with 0.00001 precision */
+#define FLOAT_MATCH 1
+#define FLOAT_UNMATCH 0
+static inline guint g_compare_float(const gfloat a, const gfloat b)
+{
+	const gfloat precision = 0.00001;
+	if (((a - precision) < b) && (a + precision) > b)
+		return FLOAT_MATCH;
+	else
+		return FLOAT_UNMATCH;
+}
 
 /*=============================================================================
 FUNCTION:           mfw_gst_vpudec_set_property
@@ -426,7 +441,6 @@ mfw_gst_VC1_Create_RCVheader(MfwGstVPU_Dec *vpu_dec,GstBuffer *inbuffer)
     unsigned int value=0;
     int i =0;
 
-    RetCode vpu_ret=RETCODE_SUCCESS;
 #define RCV_HEADER_LEN  24
     RCVHeader = gst_buffer_new_and_alloc(RCV_HEADER_LEN);
     RCVHeaderData = GST_BUFFER_DATA(RCVHeader);
@@ -484,7 +498,8 @@ IMPORTANT NOTES:    None
 
 static void mfw_gst_vpudec_FrameBufferClose(MfwGstVPU_Dec *vpu_dec)
 {
-    gint i;
+    guint i;
+
     for(i=0;i<vpu_dec->numframebufs;i++)
     {
         if (vpu_dec->frame_mem[i].phy_addr != 0)
@@ -500,8 +515,8 @@ static void mfw_gst_vpudec_FrameBufferClose(MfwGstVPU_Dec *vpu_dec)
 static gboolean mfw_gst_get_timestamp(MfwGstVPU_Dec *vpu_dec, GstClockTime * ptimestamp)
 {
     gboolean found = FALSE;
-    int i = vpu_dec->ts_tx;
-    int index;
+    guint i = vpu_dec->ts_tx;
+    guint index;
     GstClockTime timestamp = 0;
     while(i != vpu_dec->ts_rx){
         if (found){
@@ -837,7 +852,7 @@ GstFlowReturn mfw_gst_vpudec_release_buff(MfwGstVPU_Dec *vpu_dec)
             }
         }
     } else {
-        gint i=0;
+        guint i=0;
         gint loop_cnt = 5;
         while (loop_cnt)
         {
@@ -1428,17 +1443,14 @@ static GstFlowReturn mfw_gst_vpudec_chain_file_mode(GstPad *pad, GstBuffer *buff
 {
     MfwGstVPU_Dec *vpu_dec  = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
     RetCode vpu_ret=RETCODE_SUCCESS;
-    gulong size=0;
     GstFlowReturn retval=GST_FLOW_OK;
     gint i=0;
     guint needFrameBufCount=0;
-    guint residue=0;
 #if (defined (VPU_MX37) || defined (VPU_MX51)) && defined (CHROMA_INTERLEAVE)    
     gint fourcc = GST_STR_FOURCC("NV12");
 #else
     gint fourcc = GST_STR_FOURCC("I420");
 #endif
-    GstBuffer *outbuffer = NULL;
     GstCaps *caps=NULL;
     struct timeval tv_prof, tv_prof1;
     struct timeval tv_prof2, tv_prof3;
@@ -1866,12 +1878,8 @@ static gboolean mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 {
     MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
     gboolean result = TRUE;
-    gint i=0;
     guint height=0,width=0;
     RetCode vpu_ret=RETCODE_SUCCESS;
-    gulong size=0;
-    gint  flushsize=0;
-    guint offset=0;
 
     width = vpu_dec->initialInfo->picWidth;
     height = vpu_dec->initialInfo->picHeight;
@@ -1883,7 +1891,6 @@ static gboolean mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
             GstFormat format;
             gint64 start, stop, position;
             gdouble rate;
-            gint i;
             gst_event_parse_new_segment(event, NULL, &rate, &format,
                 &start, &stop, &position);
             GST_DEBUG(" receiving new seg \n");
@@ -1903,7 +1910,7 @@ static gboolean mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
         }
     case GST_EVENT_FLUSH_STOP:
         {
-            gint idx;
+            guint idx;
 
             vpu_dec->buffidx_in = 0;
             vpu_dec->buffidx_out = 0;
@@ -2036,7 +2043,7 @@ static GstStateChangeReturn mfw_gst_vpudec_change_state(GstElement *element, Gst
             vpu_versioninfo ver;
  
             GST_DEBUG("\nVPU State: Null to Ready\n");
-            vpu_ret = vpu_Init(NULL);
+            vpu_ret = vpu_Init((PhysicalAddress)(NULL));
             if(vpu_ret < 0){
                 GST_DEBUG("Error in initializing the VPU\n,error is %d",vpu_ret);
                 return GST_STATE_CHANGE_FAILURE;
@@ -2139,13 +2146,13 @@ static GstStateChangeReturn mfw_gst_vpudec_change_state(GstElement *element, Gst
                 g_print("PROFILE FIGURES OF VPU DECODER PLUGIN");
                 g_print("\nTotal decode wait time is            %fus",
                     (gfloat)vpu_dec->decode_wait_time);
-                g_print("\nTotal plugin time is                 %ldus",
+                g_print("\nTotal plugin time is                 %lldus",
                     vpu_dec->chain_Time);
-                g_print("\nTotal number of frames decoded is    %d",
+                g_print("\nTotal number of frames decoded is    %lld",
                     vpu_dec->decoded_frames);
-                g_print("\nTotal number of frames dropped is    %d\n",
+                g_print("\nTotal number of frames dropped is    %lld\n",
                     vpu_dec->frames_dropped);
-                if(vpu_dec->frame_rate!=0){
+		if(g_compare_float(vpu_dec->frame_rate, 0) != FLOAT_MATCH) {
                     avg_mcps = ((float) vpu_dec->decode_wait_time * PROCESSOR_CLOCK /
                         (1000000 *
                         (vpu_dec->decoded_frames -
@@ -2186,7 +2193,7 @@ static GstStateChangeReturn mfw_gst_vpudec_change_state(GstElement *element, Gst
 
             {
                 /* release framebuffers hold by vpu */
-                int cnt;
+                guint cnt;
                 for (cnt=0; cnt<vpu_dec->numframebufs; cnt++)
                 {
                     if (vpu_dec->outbuffers[cnt])
@@ -2381,7 +2388,7 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps *caps)
     mime = gst_structure_get_name(structure);
     GValue *codec_data = NULL;
     guint8 *hdrextdata;
-    gint i=0;
+    guint i=0;
     gint wmvversion;
 
     if(strcmp(mime,"video/x-h264") == 0)
@@ -2413,9 +2420,9 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps *caps)
 	vpu_dec->frame_rate = (gfloat) (frame_rate_nu) / frame_rate_de;
     }
     GST_DEBUG(" Frame Rate = %f \n", vpu_dec->frame_rate);
-    gst_structure_get_int(structure, "width", &vpu_dec->picWidth);
+    gst_structure_get_uint(structure, "width", &vpu_dec->picWidth);
     GST_DEBUG("\nInput Width is %d\n", vpu_dec->picWidth);
-    gst_structure_get_int(structure, "height", &vpu_dec->picHeight);
+    gst_structure_get_uint(structure, "height", &vpu_dec->picHeight);
     GST_DEBUG("\nInput Height is %d\n", vpu_dec->picHeight);
     if(vpu_dec->codec==STD_VC1)
     {
