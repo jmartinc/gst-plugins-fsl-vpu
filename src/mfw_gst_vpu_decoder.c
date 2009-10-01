@@ -176,19 +176,6 @@ static GstStaticPadTemplate mfw_gst_vpudec_sink_factory =
 			GST_PAD_ALWAYS,
 			GST_STATIC_CAPS(MFW_GST_VPUDEC_VIDEO_CAPS));
 
-
-/* defines the source pad  properties of VPU Decoder element */
-static GstStaticPadTemplate mfw_gst_vpudec_src_factory =
-GST_STATIC_PAD_TEMPLATE ("src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-raw-yuv, "
-        "format = (fourcc) {I420, NV12}, "
-        "width = (int) [ 16, 4096 ], "
-        "height = (int) [ 16, 4096 ], "
-        "framerate = (fraction) [ 0/1, 2147483647/1 ]")
-    );
-
 /* table with framerates expressed as fractions */
 static const gint fpss[][2] = { {24000, 1001},
 {24, 1}, {25, 1}, {30000, 1001},
@@ -218,13 +205,14 @@ static void mfw_gst_vpudec_class_init   (MfwGstVPU_DecClass *);
 static void mfw_gst_vpudec_base_init    (MfwGstVPU_DecClass *);
 static void mfw_gst_vpudec_init         (MfwGstVPU_Dec *, MfwGstVPU_DecClass *);
 static GstFlowReturn mfw_gst_vpudec_chain_stream_mode (GstPad *, GstBuffer *);
+#ifndef VPU_MX27
 static GstFlowReturn mfw_gst_vpudec_chain_file_mode(GstPad *, GstBuffer *);
+#endif
 static GstStateChangeReturn mfw_gst_vpudec_change_state(GstElement *, GstStateChange);
 static void mfw_gst_vpudec_set_property (GObject *,guint,const GValue *,GParamSpec *);
 static void mfw_gst_vpudec_get_property (GObject *,guint,GValue *,GParamSpec *);
 static gint mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec *,FrameBuffer *,gint);
 static gboolean mfw_gst_vpudec_sink_event (GstPad *, GstEvent *);
-static gboolean mfw_gst_vpudec_src_event (GstPad *, GstEvent *);
 static gboolean mfw_gst_vpudec_setcaps  (GstPad * , GstCaps *);
 /*======================================================================================
                                      GLOBAL VARIABLES
@@ -516,7 +504,7 @@ static gboolean mfw_gst_get_timestamp(MfwGstVPU_Dec *vpu_dec, GstClockTime * pti
 {
     gboolean found = FALSE;
     guint i = vpu_dec->ts_tx;
-    guint index;
+    guint index = 0;
     GstClockTime timestamp = 0;
     while(i != vpu_dec->ts_rx){
         if (found){
@@ -1366,7 +1354,7 @@ static GstFlowReturn mfw_gst_vpudec_chain_stream_mode(GstPad *pad, GstBuffer *bu
                 if (!(mfw_gst_get_timestamp(vpu_dec, &ts))){
                     /* no timestamp found */
                     vpu_dec->no_ts_frames ++;
-                    if(vpu_dec->frame_rate != 0) 
+		   if (g_compare_float(vpu_dec->frame_rate, 0) != FLOAT_MATCH)
                     {
                         /* calculating timestamp for decoded data */
                         time_val = (gfloat) ((gfloat) vpu_dec->no_ts_frames / (gfloat) vpu_dec->frame_rate);
@@ -1424,6 +1412,7 @@ done:
     return retval;
 }
 
+#ifndef VPU_MX27
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_chain_file_mode
 
@@ -1725,7 +1714,7 @@ static GstFlowReturn mfw_gst_vpudec_chain_file_mode(GstPad *pad, GstBuffer *buff
                 }
             }
             i++;
-            if (i == vpu_dec->numframebufs) i = 0;
+            if ((guint)i == vpu_dec->numframebufs) i = 0;
             if (i == vpu_dec->prv_use_idx) break;
         }
         vpu_dec->prv_use_idx = i;
@@ -1856,6 +1845,8 @@ done:
     }
     return retval;
 }
+
+#endif /* ifndef VPU_MX27 */
 
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_sink_event
@@ -2699,43 +2690,6 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec *vpu_dec, MfwGstVPU_DecClass *gclass)
     vpu_dec->dbk_offset_a = vpu_dec->dbk_offset_b = DEFAULT_DBK_OFFSET_VALUE;
 
 }
-
-/*======================================================================================
-FUNCTION:           plugin_init
-
-DESCRIPTION:        Special function , which is called as soon as the plugin or
-                    element is loaded and information returned by this function
-                    will be cached in central registry
-
-ARGUMENTS PASSED:
-		        plugin - pointer to container that contains features loaded
-                        from shared object module
-
-RETURN VALUE:
-		        return TRUE or FALSE depending on whether it loaded initialized any
-                dependency correctly
-
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
-
-static gboolean plugin_init(GstPlugin *plugin)
-{
-    return gst_element_register(plugin, "mfw_vpudecoder",
-				GST_RANK_PRIMARY, MFW_GST_TYPE_VPU_DEC);
-}
-
-GST_PLUGIN_DEFINE (
-          GST_VERSION_MAJOR,	                    /* major version of gstreamer */
-		  GST_VERSION_MINOR,	                    /* minor version of gstreamer */
-		  "mfw_vpudecoder",	                        /* name of our  plugin */
-		  "Decodes H264, MPEG4 and H263 Encoded"
-          "data to Raw YUV Data ",                   /* what our plugin actually does */
-		  plugin_init,	                            /* first function to be called */
-		  VERSION,
-		  GST_LICENSE_UNKNOWN,
-		  "Freescale Semiconductor", "www.freescale.com")
 
 /*======================================================================================
 FUNCTION:           mfw_gst_type_vpu_dec_get_type

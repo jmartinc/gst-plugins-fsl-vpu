@@ -1332,49 +1332,6 @@ mfw_gst_vpuenc_init(MfwGstVPU_Enc * vpu_enc, MfwGstVPU_EncClass * gclass)
 
 /*======================================================================================
 
-FUNCTION:       plugin_init
-
-DESCRIPTION:    special function , which is called as soon as the plugin or
-                element is loaded and information returned by this function
-                will be cached in central registry
-
-ARGUMENTS PASSED:
-		        plugin - pointer to container that contains features loaded
-                        from shared object module
-
-RETURN VALUE:
-		        return TRUE or FALSE depending on whether it loaded initialized any
-                dependency correctly
-
-PRE-CONDITIONS:
-		        None
-
-POST-CONDITIONS:
-		        None
-
-IMPORTANT NOTES:
-		        None
-
-=======================================================================================*/
-
-static gboolean
-plugin_init(GstPlugin * plugin)
-{
-	return gst_element_register(plugin, "mfw_vpuencoder",
-				    GST_RANK_PRIMARY, MFW_GST_TYPE_VPU_ENC);
-}
-
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR,	/* major version of gstreamer */
-		  GST_VERSION_MINOR,	/* minor version of gstreamer */
-		  "mfw_vpuencoder",	/* name of our  plugin */
-		  "Encodes Raw YUV Data to MPEG4 SP," "or H.264 BP, or H.263 Format" "data to Raw YUV Data ",	/* what our plugin actually does */
-		  plugin_init,	/* first function to be called */
-		  VERSION,
-		  GST_LICENSE_UNKNOWN,
-		  "freescale semiconductor", "www.freescale.com")
-
-/*======================================================================================
-
 FUNCTION:       mfw_gst_type_vpu_enc_get_type
 
 DESCRIPTION:    Intefaces are initiated in this function.you can register one
