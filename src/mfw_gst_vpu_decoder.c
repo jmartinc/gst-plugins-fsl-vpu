@@ -1488,9 +1488,8 @@ static GstFlowReturn mfw_gst_vpudec_chain_file_mode(GstPad *pad, GstBuffer *buff
 #else
         vpu_dec->decOP->filePlayEnable = 0;
 #endif
-        vpu_dec->decOP->picWidth = vpu_dec->picWidth;
-        vpu_dec->decOP->picHeight = vpu_dec->picHeight;
-
+	vpu_dec->decOP->picWidth = vpu_dec->picWidth;
+	vpu_dec->decOP->picHeight = vpu_dec->picHeight;
         vpu_dec->base_write = vpu_dec->bit_stream_buf.phy_addr;
         vpu_dec->end_write = vpu_dec->bit_stream_buf.phy_addr + BUFF_FILL_SIZE;
 
@@ -2411,9 +2410,9 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps *caps)
 	vpu_dec->frame_rate = (gfloat) (frame_rate_nu) / frame_rate_de;
     }
     GST_DEBUG(" Frame Rate = %f \n", vpu_dec->frame_rate);
-    gst_structure_get_uint(structure, "width", &vpu_dec->picWidth);
+    gst_structure_get_int(structure, "width", &vpu_dec->picWidth);
     GST_DEBUG("\nInput Width is %d\n", vpu_dec->picWidth);
-    gst_structure_get_uint(structure, "height", &vpu_dec->picHeight);
+    gst_structure_get_int(structure, "height", &vpu_dec->picHeight);
     GST_DEBUG("\nInput Height is %d\n", vpu_dec->picHeight);
     if(vpu_dec->codec==STD_VC1)
     {

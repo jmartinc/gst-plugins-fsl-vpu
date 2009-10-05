@@ -150,9 +150,9 @@ typedef struct _MfwGstVPU_Dec
                                     of the input ring buffer */
     PhysicalAddress end_write;      /* End address (Physical) 
                                     of the input ring buffer */
-    guint           picWidth;       /* Width of the Image obtained through 
+    gint           picWidth;       /* Width of the Image obtained through 
                                     Caps Neogtiation */
-    guint           picHeight;      /* Height of the Image obtained through 
+    gint           picHeight;      /* Height of the Image obtained through 
                                     Caps Neogtiation */
     GstBuffer*      HdrExtData;
     guint           HdrExtDataLen;  /* Heafer Extension Data and length 
