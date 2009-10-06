@@ -1157,7 +1157,7 @@ static GstFlowReturn mfw_gst_vpudec_chain_stream_mode(GstPad *pad, GstBuffer *bu
         retval = mfw_gst_vpudec_vpu_init(vpu_dec);
         if (retval != GST_FLOW_OK)
         {
-            GST_ERROR("mfw_gst_vpudec_vpu_init failed closing VPU\n");
+            GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU\n");
             goto done;
         }
         // don't exit instead start the first decode
