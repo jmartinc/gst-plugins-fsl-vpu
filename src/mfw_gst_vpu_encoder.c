@@ -867,7 +867,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 		GST_DEBUG("VPU State: Null to Ready");
-		vpu_ret = IOSystemInit(NULL);
+		vpu_ret = vpu_Init(NULL);
 		if (vpu_ret < 0) {
 			GST_DEBUG("Error in initializing the VPU: error is %d", vpu_ret);
 			return GST_STATE_CHANGE_FAILURE;
