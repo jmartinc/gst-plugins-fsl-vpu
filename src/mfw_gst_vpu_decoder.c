@@ -1055,37 +1055,26 @@ mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		}
 
 		/* set the capabilites on the source pad */
-		caps = gst_caps_new_simple("video/x-raw-yuv",
-					   "format", GST_TYPE_FOURCC, fourcc,
-					   "width", G_TYPE_INT,
-					   ((vpu_dec->rotation_angle == 90)
-					    || (vpu_dec->rotation_angle ==
-						270)) ? vpu_dec->initialInfo->
-					   picHeight : vpu_dec->initialInfo->
-					   picWidth, "height", G_TYPE_INT,
-					   ((vpu_dec->rotation_angle == 90)
-					    || (vpu_dec->rotation_angle ==
-						270)) ? vpu_dec->initialInfo->
-					   picWidth : vpu_dec->initialInfo->
-					   picHeight, "pixel-aspect-ratio",
-					   GST_TYPE_FRACTION, 1, 1,
-					   "crop-top-by-pixel", G_TYPE_INT,
-					   crop_top_len, "crop-left-by-pixel",
-					   G_TYPE_INT,
-					   (crop_left_len + 7) / 8 * 8,
-					   "crop-right-by-pixel", G_TYPE_INT,
-					   ((vpu_dec->rotation_angle == 90)
-					    || (vpu_dec->rotation_angle ==
-						270)) ? (crop_right_len +
-							 7) / 8 *
-					   8 : (crop_bottom_len + 7) / 8 * 8,
-					   "crop-bottom-by-pixel", G_TYPE_INT,
-					   ((vpu_dec->rotation_angle == 90)
-					    || (vpu_dec->rotation_angle ==
-						270)) ? crop_right_len :
-					   crop_bottom_len,
-					   "num-buffers-required", G_TYPE_INT,
-					   needFrameBufCount, NULL);
+		caps = gst_caps_new_simple(
+				"video/x-raw-yuv", "format", GST_TYPE_FOURCC, fourcc,
+				"width", G_TYPE_INT,
+				((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270)) ?
+					vpu_dec->initialInfo-> picHeight : vpu_dec->initialInfo->picWidth,
+				"height", G_TYPE_INT,
+				((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270)) ?
+					vpu_dec->initialInfo->picWidth : vpu_dec->initialInfo->picHeight,
+				"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
+				"crop-top-by-pixel", G_TYPE_INT, crop_top_len,
+				"crop-left-by-pixel", G_TYPE_INT, (crop_left_len + 7) / 8 * 8,
+				"crop-right-by-pixel", G_TYPE_INT,
+				((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270)) ?
+					(crop_right_len + 7) / 8 * 8 : (crop_bottom_len + 7) / 8 * 8,
+				"crop-bottom-by-pixel", G_TYPE_INT,
+				((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270)) ?
+					crop_right_len : crop_bottom_len,
+				"num-buffers-required", G_TYPE_INT, needFrameBufCount,
+				"framerate", GST_TYPE_FRACTION, vpu_dec->frame_rate_nu, vpu_dec->frame_rate_de,
+				NULL);
 
 		if (!(gst_pad_set_caps(vpu_dec->srcpad, caps))) {
 			GST_ERROR
@@ -1855,28 +1844,16 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 
 			/* set the capabilites on the source pad */
 			caps = gst_caps_new_simple("video/x-raw-yuv",
-						   "format", GST_TYPE_FOURCC,
-						   fourcc, "width", G_TYPE_INT,
-						   vpu_dec->initialInfo->
-						   picWidth, "height",
-						   G_TYPE_INT,
-						   vpu_dec->initialInfo->
-						   picHeight,
-						   "pixel-aspect-ratio",
-						   GST_TYPE_FRACTION, 1, 1,
-						   "crop-top-by-pixel",
-						   G_TYPE_INT, crop_top_len,
-						   "crop-left-by-pixel",
-						   G_TYPE_INT,
-						   (crop_left_len + 7) / 8 * 8,
-						   "crop-right-by-pixel",
-						   G_TYPE_INT,
-						   (crop_right_len + 7) / 8 * 8,
-						   "crop-bottom-by-pixel",
-						   G_TYPE_INT, crop_bottom_len,
-						   "num-buffers-required",
-						   G_TYPE_INT,
-						   needFrameBufCount, NULL);
+					"format", GST_TYPE_FOURCC, fourcc,
+					"width", G_TYPE_INT, vpu_dec->initialInfo->picWidth,
+					"height", G_TYPE_INT, vpu_dec->initialInfo->picHeight,
+					"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
+					"crop-top-by-pixel", G_TYPE_INT, crop_top_len,
+					"crop-left-by-pixel", G_TYPE_INT, (crop_left_len + 7) / 8 * 8,
+					"crop-right-by-pixel", G_TYPE_INT, (crop_right_len + 7) / 8 * 8,
+					"crop-bottom-by-pixel", G_TYPE_INT, crop_bottom_len,
+					"num-buffers-required", G_TYPE_INT, needFrameBufCount,
+					NULL);
 			if (!(gst_pad_set_caps(vpu_dec->srcpad, caps))) {
 				GST_ERROR
 				    ("\nCould not set the caps for the VPU decoder's src pad\n");
@@ -2707,8 +2684,6 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 {
 	MfwGstVPU_Dec *vpu_dec = NULL;
 	const gchar *mime;
-	gint32 frame_rate_de = 0;
-	gint32 frame_rate_nu = 0;
 	GstStructure *structure = gst_caps_get_structure(caps, 0);
 	vpu_dec = MFW_GST_VPU_DEC(gst_pad_get_parent(pad));
 	mime = gst_structure_get_name(structure);
@@ -2740,11 +2715,14 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 		gst_pad_set_chain_function(vpu_dec->sinkpad,
 					   mfw_gst_vpudec_chain_stream_mode);
 
-	gst_structure_get_fraction(structure, "framerate", &frame_rate_nu,
-				   &frame_rate_de);
-	if (frame_rate_de != 0) {
-		vpu_dec->frame_rate = (gfloat) (frame_rate_nu) / frame_rate_de;
-	}
+	gst_structure_get_fraction(structure, "framerate",
+			&vpu_dec->frame_rate_nu, &vpu_dec->frame_rate_de);
+
+	if (vpu_dec->frame_rate_de != 0)
+		vpu_dec->frame_rate =
+			((gfloat) vpu_dec->frame_rate_nu /
+			 vpu_dec->frame_rate_de);
+
 	GST_DEBUG(" Frame Rate = %f \n", vpu_dec->frame_rate);
 	gst_structure_get_int(structure, "width", &vpu_dec->picWidth);
 	GST_DEBUG("\nInput Width is %d\n", vpu_dec->picWidth);

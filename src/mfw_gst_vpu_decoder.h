@@ -82,7 +82,7 @@ G_BEGIN_DECLS
 /*=============================================================================
                                  STRUCTURES AND OTHER TYPEDEFS
 =============================================================================*/
-    typedef enum {
+typedef enum {
 	FB_STATE_ILLEGAL,
 	FB_STATE_ALLOCTED,	/* buffer is in allocated */
 	FB_STATE_DISPLAY,	/* buffer is in display */
@@ -156,6 +156,8 @@ typedef struct _MfwGstVPU_Dec {
 	guint64 no_ts_frames;	/*number of no timestamp frames, for mpeg2 */
 	GstClockTime base_ts;	/*the latest valid timestamp */
 	gfloat frame_rate;	/* Frame rate of display */
+	gint32 frame_rate_de;
+	gint32 frame_rate_nu;	
 	gboolean profiling;	/* enable profiling */
 	guint64 chain_Time;	/* time spent in the chain function */
 	guint64 decode_wait_time;
