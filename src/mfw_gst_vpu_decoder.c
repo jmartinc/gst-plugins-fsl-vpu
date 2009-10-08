@@ -29,7 +29,7 @@
  */
 
 /*
- * Changelog: 
+ * Changelog:
  *
  */
 
@@ -374,11 +374,11 @@ mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 /*=============================================================================
 FUNCTION:           mfw_gst_vpudec_post_fatal_error_msg
 
-DESCRIPTION:        This function is used to post a fatal error message and 
+DESCRIPTION:        This function is used to post a fatal error message and
                     terminate the pipeline during an unrecoverable error.
-                        
-ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context error_msg message to be posted 
-        
+
+ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context error_msg message to be posted
+
 RETURN VALUE:       None
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
@@ -418,12 +418,12 @@ vpu_mutex_unlock(GMutex * mutex)
 /*=============================================================================
 FUNCTION:           mfw_gst_VC1_Create_RCVheader
 
-DESCRIPTION:        This function is used to create the RCV header 
-                    for integration with the ASF demuxer using the width,height and the 
+DESCRIPTION:        This function is used to create the RCV header
+                    for integration with the ASF demuxer using the width,height and the
                     Header Extension data recived through caps negotiation.
-                        
+
 ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-        
+
 RETURN VALUE:       GstBuffer
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
@@ -491,9 +491,9 @@ mfw_gst_VC1_Create_RCVheader(MfwGstVPU_Dec * vpu_dec, GstBuffer * inbuffer)
 FUNCTION:           mfw_gst_vpudec_FrameBufferClose
 
 DESCRIPTION:        This function frees the allocated frame buffers
-                        
+
 ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-        
+
 RETURN VALUE:       None
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
@@ -554,11 +554,11 @@ FUNCTION:           mfw_gst_vpudec_FrameBufferInit
 DESCRIPTION:        This function allocates the outbut buffer for the decoder
 
 ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-                    frameBuf - VPU's Output Frame Buffer to be 
+                    frameBuf - VPU's Output Frame Buffer to be
                                    allocated.
-                        
+
                     num_buffers number of frame buffers to be allocated
-        
+
 RETURN VALUE:       0 (SUCCESS)/ -1 (FAILURE)
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
@@ -618,7 +618,7 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 			vpu_dec->direct_render = TRUE;
 		}
 		/* else allocate The Hardware buffer through IOGetPhyMem
-		   Note this to support writing the output to a file in case of 
+		   Note this to support writing the output to a file in case of
 		   File Sink */
 		else {
 			if (outbuffer != NULL) {
@@ -760,7 +760,7 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
     /******************************************************************************/
     /********           Fill and update bitstreambuf           ********************/
     /******************************************************************************/
-	/*Time stamp Buffer is a circular buffer to store the timestamps which are later 
+	/*Time stamp Buffer is a circular buffer to store the timestamps which are later
 	   used while pushing the decoded frame onto the Sink element */
 	if (G_LIKELY(vpu_dec->eos != TRUE)) {
 		if (vpu_dec->codec != STD_MPEG2
@@ -782,7 +782,7 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 				vpu_dec->first = TRUE;
 			}
 
-			/* The Size of the input stream is appended with the input stream 
+			/* The Size of the input stream is appended with the input stream
 			   for integration with ASF */
 			else {
 				GstBuffer *SrcFrameSize = NULL;
@@ -816,7 +816,7 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 
 		/* Check if there is enough space for input buffer */
 		if (space >= GST_BUFFER_SIZE(buffer)) {
-			/* The buffer read by the VPU follows a circular buffer approach 
+			/* The buffer read by the VPU follows a circular buffer approach
 			   this block of code handles that */
 			if ((vpu_dec->start_addr + GST_BUFFER_SIZE(buffer)) <=
 			    vpu_dec->end_addr) {
@@ -935,7 +935,7 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 
 			//H.264 will have to wait if all the buffers are busy with decode or display
 			if (numFreeBufs < 1) {
-				// wait for the buffers to be free 
+				// wait for the buffers to be free
 				//g_print (" sleeping because - %d buffers are free %d are busy\n", numFreeBufs, numBusyBufs);
 				usleep(30);
 				loop_cnt--;
@@ -954,7 +954,7 @@ FUNCTION:           mfw_gst_vpudec_vpu_init
 DESCRIPTION:        Initialize VPU
 
 ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
- 
+
 RETURN VALUE:       GstFlowReturn - Success of Failure.
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
@@ -1206,8 +1206,8 @@ mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_chain_stream_mode
 
-DESCRIPTION:        The main processing function where the data comes in as buffer. This 
-                    data is decoded, and then pushed onto the next element for further 
+DESCRIPTION:        The main processing function where the data comes in as buffer. This
+                    data is decoded, and then pushed onto the next element for further
                     processing.
 
 ARGUMENTS PASSED:   pad - pointer to the sinkpad of this element
@@ -1272,7 +1272,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			goto done;
 		}
 		// don't exit instead start the first decode
-		//return GST_FLOW_OK;  
+		//return GST_FLOW_OK;
 	}
 	// Keep looping while there is enough in bitstream to decode
 	while (1) {
@@ -1455,7 +1455,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			    (vpu_dec->outputInfo->indexFrameDisplay == -1))
 				break;	/* decoding done */
 
-			// BIT don't have picture to be displayed 
+			// BIT don't have picture to be displayed
 			if (G_UNLIKELY
 			    (vpu_dec->outputInfo->indexFrameDisplay == -3)
 			    || G_UNLIKELY(vpu_dec->outputInfo->
@@ -1491,8 +1491,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 								indexFrameDisplay];
 				}
 			} else {
-				// Incase of the Filesink the output in the hardware buffer is copied onto the 
-				//  buffer allocated by filesink 
+				// Incase of the Filesink the output in the hardware buffer is copied onto the
+				//  buffer allocated by filesink
 				retval =
 				    gst_pad_alloc_buffer_and_set_caps(vpu_dec->
 								      srcpad, 0,
@@ -1516,7 +1516,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 				       vpu_dec->outsize);
 			}
 
-			// Update the time stamp base on the frame-rate 
+			// Update the time stamp base on the frame-rate
 			GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
 			if (vpu_dec->codec == STD_MPEG2) {
 				GstClockTime ts;
@@ -1608,7 +1608,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_chain_file_mode
 
-DESCRIPTION:        The main processing function where the data comes in as buffer. This 
+DESCRIPTION:        The main processing function where the data comes in as buffer. This
                     data is decoded, and then pushed onto the next element for further
                     processing.
 
@@ -1700,7 +1700,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_dec->vpu_opened = TRUE;
 	}
 
-	/*Time stamp Buffer is a circular buffer to store the timestamps which are later 
+	/*Time stamp Buffer is a circular buffer to store the timestamps which are later
 	   used while pushing the decoded frame onto the Sink element */
 	vpu_dec->timestamp_buffer[vpu_dec->ts_rx] =
 	    GST_BUFFER_TIMESTAMP(buffer);
@@ -1718,7 +1718,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 			vpu_dec->first = TRUE;
 		}
 
-		/* The Size of the input stream is appended with the input stream 
+		/* The Size of the input stream is appended with the input stream
 		   for integration with ASF */
 		else {
 			SrcFrameSize = gst_buffer_new_and_alloc(4);
@@ -1973,7 +1973,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 			vpu_dec->decode_wait_time += time_after - time_before;
 		}
 
-		/* get the output information as to which index of the Framebuffers the 
+		/* get the output information as to which index of the Framebuffers the
 		   output is written onto */
 		vpu_ret =
 		    vpu_DecGetOutputInfo(*(vpu_dec->handle),
@@ -2024,7 +2024,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 			    vpu_dec->outbuffers[vpu_dec->outputInfo->
 						indexFrameDisplay];
 		}
-		/* Incase of the Filesink the output in the hardware buffer is copied onto the 
+		/* Incase of the Filesink the output in the hardware buffer is copied onto the
 		   buffer allocated by filesink */
 		else {
 			retval =
@@ -2580,7 +2580,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 				vpu_dec->handle = NULL;
 			}
 
-			/* Unlock the mutex to free the mutex 
+			/* Unlock the mutex to free the mutex
 			 * in case of date terminated.
 			 */
 			vpu_mutex_unlock(vpu_dec->vpu_mutex);
@@ -2799,12 +2799,12 @@ mfw_gst_vpudec_base_init(MfwGstVPU_DecClass * klass)
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_codec_get_type
 
-DESCRIPTION:        Gets an enumeration for the different 
+DESCRIPTION:        Gets an enumeration for the different
                     codec standars supported by the decoder
 
 ARGUMENTS PASSED:   None
 
-RETURN VALUE:       enumerated type of the codec standards 
+RETURN VALUE:       enumerated type of the codec standards
                     supported by the decoder
 
 PRE-CONDITIONS:     None
@@ -3034,7 +3034,7 @@ DESCRIPTION:        Interfaces are initiated in this function.you can register o
 
 ARGUMENTS PASSED:   None
 
-RETURN VALUE:       A numerical value ,which represents the unique identifier 
+RETURN VALUE:       A numerical value ,which represents the unique identifier
                     of this element.
 
 PRE-CONDITIONS:     None

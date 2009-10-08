@@ -21,16 +21,16 @@
  */
 
 /*
- * Module Name:    mfw_gst_vpu_decoder.h  
+ * Module Name:    mfw_gst_vpu_decoder.h
  *
- * Description:    Include File for Hardware (VPU) Decoder Plugin 
- *                 for Gstreamer  
+ * Description:    Include File for Hardware (VPU) Decoder Plugin
+ *                 for Gstreamer
  *
  * Portability:    This code is written for Linux OS and Gstreamer
  */
 
 /*
- * Changelog: 
+ * Changelog:
  *
  */
 
@@ -109,7 +109,7 @@ typedef struct _MfwGstVPU_Dec {
 	guint buffered_size;
 	guint frame_sizes_buffer[MAX_STREAM_BUF];
 	guint buffidx_in;
-	guint buffidx_out;	/* members to handle input 
+	guint buffidx_out;	/* members to handle input
 				   buffer management */
 	gboolean buf_empty;
 
@@ -118,7 +118,7 @@ typedef struct _MfwGstVPU_Dec {
 	DecOpenParam *decOP;
 	DecInitialInfo *initialInfo;
 	DecOutputInfo *outputInfo;
-	DecParam *decParam;	/* Data Structures associated with 
+	DecParam *decParam;	/* Data Structures associated with
 				   VPU API */
 	vpu_mem_desc bit_stream_buf;	/* Structure for Bitstream buffer parameters */
 	guint8 *start_addr;	/* start addres of the Hardware input buffer */
@@ -131,19 +131,19 @@ typedef struct _MfwGstVPU_Dec {
 	FB_STATE fb_state_plugin[NUM_FRAME_BUF];
 	CodStd codec;		/* codec standard to be selected */
 	gboolean vpu_wait;	/* Flag for the VPU wait call */
-	PhysicalAddress base_write;	/* Base address (Physical) 
+	PhysicalAddress base_write;	/* Base address (Physical)
 					   of the input ring buffer */
-	PhysicalAddress end_write;	/* End address (Physical) 
+	PhysicalAddress end_write;	/* End address (Physical)
 					   of the input ring buffer */
-	gint picWidth;		/* Width of the Image obtained through 
+	gint picWidth;		/* Width of the Image obtained through
 				   Caps Neogtiation */
-	gint picHeight;		/* Height of the Image obtained through 
+	gint picHeight;		/* Height of the Image obtained through
 				   Caps Neogtiation */
 	GstBuffer *HdrExtData;
-	guint HdrExtDataLen;	/* Heafer Extension Data and length 
+	guint HdrExtDataLen;	/* Heafer Extension Data and length
 				   obtained through Caps Neogtiation */
 	vpu_mem_desc frame_mem[NUM_FRAME_BUF];
-	/* Structure for Frame buffer parameters 
+	/* Structure for Frame buffer parameters
 	   if not used with V4LSink */
 	guint numframebufs;	/* Number of Frame buffers */
 	gboolean file_play_mode;	/* Flag for file play mode */
@@ -157,7 +157,7 @@ typedef struct _MfwGstVPU_Dec {
 	GstClockTime base_ts;	/*the latest valid timestamp */
 	gfloat frame_rate;	/* Frame rate of display */
 	gint32 frame_rate_de;
-	gint32 frame_rate_nu;	
+	gint32 frame_rate_nu;
 	gboolean profiling;	/* enable profiling */
 	guint64 chain_Time;	/* time spent in the chain function */
 	guint64 decode_wait_time;
@@ -167,9 +167,9 @@ typedef struct _MfwGstVPU_Dec {
 	/* average fps of decoding  */
 	gboolean direct_render;
 	/* enable direct rendering in case of V4L */
-	gboolean first;		/* Flag for inserting the RCV Header 
+	gboolean first;		/* Flag for inserting the RCV Header
 				   fot the first time */
-	gboolean loopback;	/* Flag to turn of parallelism in case of 
+	gboolean loopback;	/* Flag to turn of parallelism in case of
 				   loop back */
 	gboolean framebufinit_done;
 	/* Flag to initialise the Frame buffers */
@@ -179,7 +179,7 @@ typedef struct _MfwGstVPU_Dec {
 	GMutex *vpu_mutex;
 	gboolean lastframedropped;
 	gboolean flush;		// Flag to indicate the flush event
-	gboolean rotation_angle;	// rotation angle used for VPU to rotate 
+	gboolean rotation_angle;	// rotation angle used for VPU to rotate
 	guint rot_buff_idx;	// rotator buf index
 	MirrorDirection mirror_dir;	// VPU mirror direction
 	gboolean dbk_enabled;
