@@ -1,3 +1,4 @@
+noinst_HEADERS = mfw_gst_utils.h
 
 MAINTAINERCLEANFILES = \
 	gst-plugins-fsl-vpu_config.h.in \
