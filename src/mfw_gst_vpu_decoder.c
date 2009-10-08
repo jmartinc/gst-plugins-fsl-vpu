@@ -1112,15 +1112,10 @@ mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	// for rotation - only register minimum as extra two buffers will be used for display separately
 
 	vpu_ret = vpu_DecRegisterFrameBuffer(*(vpu_dec->handle),
-					     vpu_dec->frameBuf,
-					     (vpu_dec->rotation_angle
-					      || vpu_dec->
-					      mirror_dir) ? vpu_dec->
-					     initialInfo->
-					     minFrameBufferCount : vpu_dec->
-					     numframebufs,
-					     vpu_dec->initialInfo->picWidth,
-					     &bufinfo);
+			vpu_dec->frameBuf,
+			(vpu_dec->rotation_angle || vpu_dec-> mirror_dir) ?
+			vpu_dec->initialInfo->minFrameBufferCount : vpu_dec->numframebufs,
+			vpu_dec->initialInfo->picWidth, &bufinfo);
 	if (vpu_ret != RETCODE_SUCCESS) {
 		GST_ERROR
 		    ("vpu_DecRegisterFrameBuffer failed. Error code is %d \n",
@@ -1473,17 +1468,13 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 					// switch output buffer for every other frame so we don't overwrite display data in v4lsink
 					// this way VPU can still decode while v4l sink is displaying
 					vpu_dec->rot_buff_idx =
-					    (vpu_dec->rot_buff_idx ==
-					     vpu_dec->initialInfo->
-					     minFrameBufferCount) ? vpu_dec->
-					    initialInfo->minFrameBufferCount +
-					    1 : vpu_dec->initialInfo->
-					    minFrameBufferCount;
+						(vpu_dec->rot_buff_idx == vpu_dec->initialInfo-> minFrameBufferCount) ?
+						vpu_dec->initialInfo->minFrameBufferCount + 1 :
+						vpu_dec->initialInfo->minFrameBufferCount;
 					vpu_DecGiveCommand(*(vpu_dec->handle),
-							   SET_ROTATOR_OUTPUT,
-							   &vpu_dec->
-							   frameBuf[vpu_dec->
-								    rot_buff_idx]);
+						SET_ROTATOR_OUTPUT,
+						&vpu_dec->
+						frameBuf[vpu_dec->rot_buff_idx]);
 				} else {
 					vpu_dec->pushbuff =
 					    vpu_dec->outbuffers[vpu_dec->
@@ -1524,8 +1515,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 					/* no timestamp found */
 					vpu_dec->no_ts_frames++;
 					if (g_compare_float
-					    (vpu_dec->frame_rate,
-					     0) != FLOAT_MATCH) {
+						(vpu_dec->frame_rate, 0)
+						!= FLOAT_MATCH) {
 						/* calculating timestamp for decoded data */
 						time_val =
 						    ((gfloat) vpu_dec->no_ts_frames /
@@ -1917,9 +1908,8 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 					vpu_dec->fb_state_plugin[i] =
 					    FB_STATE_ALLOCTED;
 					vpu_ret =
-					    vpu_DecClrDispFlag(*
-							       (vpu_dec->
-								handle), i);
+					    vpu_DecClrDispFlag
+					    (*(vpu_dec->handle), i);
 					if (vpu_ret != RETCODE_SUCCESS) {
 						GST_ERROR
 						    ("vpu_DecClrDispFlag failed. Error code is %d \n",
