@@ -503,7 +503,7 @@ IMPORTANT NOTES:    None
 static void
 mfw_gst_vpudec_FrameBufferClose(MfwGstVPU_Dec * vpu_dec)
 {
-	guint i;
+	gint i;
 
 	for (i = 0; i < vpu_dec->numframebufs; i++) {
 		if (vpu_dec->frame_mem[i].phy_addr != 0) {
@@ -893,7 +893,7 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 			}
 		}
 	} else {
-		guint i = 0;
+		gint i = 0;
 		gint loop_cnt = 5;
 		while (loop_cnt) {
 			int numFreeBufs = 0;
@@ -2145,7 +2145,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		}
 	case GST_EVENT_FLUSH_STOP:
 		{
-			guint idx;
+			gint idx;
 
 			vpu_dec->buffidx_in = 0;
 			vpu_dec->buffidx_out = 0;
@@ -2496,7 +2496,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 
 			{
 				/* release framebuffers hold by vpu */
-				guint cnt;
+				gint cnt;
 				for (cnt = 0; cnt < vpu_dec->numframebufs;
 				     cnt++) {
 					if (vpu_dec->outbuffers[cnt])

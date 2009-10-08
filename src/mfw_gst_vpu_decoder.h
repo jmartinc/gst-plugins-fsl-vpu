@@ -145,7 +145,7 @@ typedef struct _MfwGstVPU_Dec {
 	vpu_mem_desc frame_mem[NUM_FRAME_BUF];
 	/* Structure for Frame buffer parameters
 	   if not used with V4LSink */
-	guint numframebufs;	/* Number of Frame buffers */
+	gint numframebufs;	/* Number of Frame buffers */
 	gboolean file_play_mode;	/* Flag for file play mode */
 	gboolean eos;		/* Flag for end of stream */
 	vpu_mem_desc ps_mem_desc;	/* ps save buffer */
@@ -180,7 +180,7 @@ typedef struct _MfwGstVPU_Dec {
 	gboolean lastframedropped;
 	gboolean flush;		// Flag to indicate the flush event
 	gboolean rotation_angle;	// rotation angle used for VPU to rotate
-	guint rot_buff_idx;	// rotator buf index
+	gint rot_buff_idx;	// rotator buf index
 	MirrorDirection mirror_dir;	// VPU mirror direction
 	gboolean dbk_enabled;
 	gint dbk_offset_a;
