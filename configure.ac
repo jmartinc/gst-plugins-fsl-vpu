@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.59)
 
-AC_INIT([gst-plugins-fsl-vpu], [0.1.0], [bugs@pengutronix.de])
+AC_INIT([gst-plugins-fsl-vpu], [0.2.0], [bugs@pengutronix.de])
 AC_CONFIG_HEADERS([include/gst-plugins-fsl-vpu_config.h])
 AC_CONFIG_SRCDIR([src/mfw_gst_vpu_encoder.c])
 AC_CONFIG_MACRO_DIR([config/m4])
@@ -199,6 +199,15 @@ AC_SUBST(plugindir)
 dnl set proper LDFLAGS for plugins
 GST_PLUGIN_LDFLAGS='-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*'
 AC_SUBST(GST_PLUGIN_LDFLAGS)
+
+dnl we need the vpu library, no need to link them though.
+FSL_VPU_LIBS_REQUIRED_VERSION=0.2.0
+PKG_CHECK_MODULES(FSL_VPU_LIBS, libfsl-vpu >= $FSL_VPU_LIBS_REQUIRED_VERSION,
+                  HAVE_FSL_VPU_LIBS=yes, HAVE_FSL_VPU_LIBS=no)
+if test "x$HAVE_FSL_VPU_LIBS" = "xno"; then
+  AC_MSG_ERROR([Please install libfsl-vpu version $FSL_VPU_LIBS_REQUIRED_VERSION
+	      or later])
+fi
 
 AC_CONFIG_FILES([
 	GNUmakefile
