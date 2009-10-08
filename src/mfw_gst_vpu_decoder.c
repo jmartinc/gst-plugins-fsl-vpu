@@ -1528,18 +1528,15 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 					     0) != FLOAT_MATCH) {
 						/* calculating timestamp for decoded data */
 						time_val =
-						    (gfloat) ((gfloat) vpu_dec->
-							      no_ts_frames /
-							      (gfloat) vpu_dec->
-							      frame_rate);
+						    ((gfloat) vpu_dec->no_ts_frames /
+							      vpu_dec->frame_rate);
 						ts = vpu_dec->base_ts +
 						    time_val * 1000 * 1000 *
 						    1000;
 					} else {
 						/* calculating timestamp for decoded data at 25.0 fps */
 						time_val =
-						    (gfloat) ((gfloat) vpu_dec->
-							      no_ts_frames /
+						    ((gfloat) vpu_dec->no_ts_frames /
 							      25.0);
 						ts = vpu_dec->base_ts +
 						    time_val * 1000 * 1000 *
