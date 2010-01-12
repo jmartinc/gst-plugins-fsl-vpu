@@ -37,6 +37,7 @@
                             INCLUDE FILES
 =============================================================================*/
 #include <string.h>
+#include <unistd.h>
 #include <gst/gst.h>
 #include "mp4_parser/MP4Parser.h"
 #include "mfw_gst_mp4demuxer.h"
@@ -178,12 +179,10 @@ IMPORTANT NOTES:     None
 static gboolean mfw_gst_mp4demuxer_parse(MFW_GST_MP4DEMUX_INFO_T * demuxer)
 {
 
-    GstPad *src_pad;
     gboolean ret_value;
     MP4Err Err;			/* MP4Parser error */
     guint track_count;		/* track counter */
     guint total_tracks;		/* total number of tracks */
-    guint stream_count;		/* number of streams */
 	guint64 duration;     /* stream duration */ 
     FILE *fp;			/* file pointer      */
 	gchar *text_msg=NULL;
@@ -584,8 +583,8 @@ void mfw_gst_mp4demuxer_taskfunc(GstPad    *src_pad)
 	gboolean  ret_value;
 	FILE      *fp;
 //	GstPad    *src_pad;
-	guint     track_index;
-	guint     track_count,i;
+	guint     track_index = 0;
+	guint     track_count;
 	MFW_GST_MP4DEMUX_INFO_T *demuxer =	MFW_GST_MP4_DEMUXER(GST_PAD_PARENT(src_pad));
 	
 	Err = MP4NoErr;
@@ -811,7 +810,6 @@ static gboolean mp4_demuxer_fill_stream_info(MFW_GST_MP4DEMUX_INFO_T *
     GstPadTemplate *templ = NULL;
     GstPad *pad = NULL;
     gchar *padname = NULL;
-    guint total_pads;
     guint count;
     GstPad *src_pad;
     guint32 version;
@@ -846,7 +844,7 @@ static gboolean mp4_demuxer_fill_stream_info(MFW_GST_MP4DEMUX_INFO_T *
 
 	    if (demuxer->parser_info.mp4_parser_object_type->trak[count+audio_offset]->tracktype == MP4_AUDIO) {
     	    src_pad = demuxer->srcpad[count];
-    	    padname = g_strdup_printf("audio/mpeg", 0);
+    	    padname = g_strdup_printf("audio/mpeg");
 
     		demuxer->srcpadnum2trackindex[count].trackindex = count+audio_offset;
 
@@ -1171,7 +1169,6 @@ static GstPadTemplate *audio_src_templ(void)
 	GstCaps *caps = NULL;
 	GstCaps *caps_amr_wb = NULL;
 	GstCaps *caps_amr_nb = NULL;
-	GstStructure *structure;
 
 	caps = gst_caps_new_simple("audio/mpeg",
 				   "mpegversion", GST_TYPE_INT_RANGE, 1, 4,
@@ -1234,7 +1231,6 @@ static GstPadTemplate *video_src_templ()
 	GstCaps *caps      = NULL;
 	GstCaps *caps_h264 = NULL;
 	GstCaps *caps_h263 = NULL;
-	GstStructure *structure;
 
 	caps     = gst_caps_new_simple("video/mpeg",
 				   "mpegversion", GST_TYPE_INT_RANGE, 1, 4,
@@ -1433,7 +1429,6 @@ static gboolean mp4_write_video_data(MFW_GST_MP4DEMUX_INFO_T *mp4_demuxer,
 {
     GstClockTime stream_time;
     GstPad *src_pad;
-    GstEvent *event;
 	
     GstCaps *src_caps = NULL;
     GstBuffer *src_data_buf = NULL;
@@ -1957,10 +1952,6 @@ IMPORTANT NOTES:     None
 void app_MP4LocalSeekFile(FILE * fileHandle, int offset, int origin,
 				 void *app_context)
 {
-    int seekStatus = 0;
-    GstBuffer *tmpbuf = NULL;
-    int file_read = 0;
-    int index = 0;
     int moved_loc = 0;
 	MFW_GST_MP4DEMUX_INFO_T *mp4_demuxer = NULL;
 
@@ -2146,7 +2137,7 @@ mfw_gst_mp4demuxer_activate_pull(GstPad * pad, gboolean active)
     gboolean ret_val = TRUE;
     MFW_GST_MP4DEMUX_INFO_T *demuxer_data =
 		MFW_GST_MP4_DEMUXER(GST_PAD_PARENT(pad));
-	gint track_count;
+	guint track_count;
 	guint video_offset=0;
 	guint audio_offset=0;
 	
@@ -2460,12 +2451,6 @@ mfw_gst_mp4demuxer_change_state(GstElement * element,
 {
     GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
     MFW_GST_MP4DEMUX_INFO_T *mp4_demuxer = MFW_GST_MP4_DEMUXER(element);
-    guint32 stream_count;
-
-    GstFormat fmt = GST_FORMAT_TIME;
-    gint64 pos = 0, len = 0;
-    gboolean ret_value;
-    guint count;
 
 	/***** UPWARDS *****/
     switch (transition) {
@@ -2669,7 +2654,6 @@ static gboolean mfw_gst_mp4demuxer_handle_src_query(GstPad * pad,
 						    GstQuery * query)
 {
     GstFormat format = GST_FORMAT_TIME;
-    gint64 dest_value;
 
     MFW_GST_MP4DEMUX_INFO_T *demuxer_info;
     gboolean res = TRUE;
@@ -2745,7 +2729,7 @@ IMPORTANT NOTES:   None
 static gboolean mfw_gst_mp4demuxer_handle_src_event(GstPad* src_pad, GstEvent* event)
 {
     gboolean res = TRUE;
-	gint i;
+	guint i;
 
 	MFW_GST_MP4DEMUX_INFO_T *demuxer_info = MFW_GST_MP4_DEMUXER(GST_PAD_PARENT (src_pad));
  
@@ -2965,8 +2949,6 @@ mfw_gst_mp4demuxer_seek(MFW_GST_MP4DEMUX_INFO_T* demuxer_info, GstEvent * event)
 	gdouble      rate;
     gint64       stop;
 	gfloat       seek_sec;
-	gboolean     ret_value;
-	guint        track_count; 
 			
 	MP4Err       Err;
 	    		
@@ -3023,8 +3005,6 @@ IMPORTANT NOTES:     None
 
 void mfw_gst_mp4_demuxer_close(MFW_GST_MP4DEMUX_INFO_T *mp4_demuxer)
 {
-    guint32 stream_count;
-    
 
     GST_DEBUG("Freeing all the allocated memories()\n");
 
@@ -3236,13 +3216,6 @@ mfw_gst_mp4_demuxer_init(MFW_GST_MP4DEMUX_INFO_T * demuxer_info,
 			 MFW_GST_MP4DEMUX_INFO_CLASS_T * gclass)
 {
 
-    gchar *padname = NULL;
-    GstCaps *caps = NULL;
-    GstPadTemplate *templ = NULL;
-    GstPad *pad = NULL;
-    gboolean set;
-
-
     GstElementClass *klass = GST_ELEMENT_GET_CLASS(demuxer_info);
     
 
@@ -3308,7 +3281,6 @@ static gboolean mfw_gst_mp4_demuxer_set_caps(GstPad * pad, GstCaps * caps)
 
     MFW_GST_MP4DEMUX_INFO_T *demuxer_info;
 
-    GstStructure *structure = gst_caps_get_structure(caps, 0);
     demuxer_info = MFW_GST_MP4_DEMUXER(gst_pad_get_parent(pad));
 
     gst_object_unref(demuxer_info);
