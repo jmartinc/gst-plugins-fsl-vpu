@@ -1,4 +1,4 @@
-SUBDIRS = include config src
+SUBDIRS = include config src libs
 
 EXTRA_DIST = \
 	autogen.sh \
