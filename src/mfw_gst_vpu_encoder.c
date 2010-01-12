@@ -36,7 +36,7 @@ Portability:    compatable with Linux OS and Gstreamer 10.11 and below
 #include <fcntl.h>		/* fcntl */
 #include <sys/mman.h>		/* mmap */
 #include <sys/ioctl.h>		/* fopen/fread */
-#include <gst-plugins-fsl-vpu_config.h>
+#include <gst-plugins-fsl_config.h>
 #include "vpu_io.h"
 #include "vpu_lib.h"
 #include "mfw_gst_vpu_encoder.h"

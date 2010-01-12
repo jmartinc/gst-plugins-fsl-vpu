@@ -41,7 +41,7 @@
 #include "mp4_parser/MP4Parser.h"
 #include "mfw_gst_mp4demuxer.h"
 #include "mfw_gst_utils.h"
-#include "gst-plugins-fsl-parser_config.h"
+#include "gst-plugins-fsl_config.h"
 
 //#define _ORIG_ONE_TASK 1
 /*=============================================================================

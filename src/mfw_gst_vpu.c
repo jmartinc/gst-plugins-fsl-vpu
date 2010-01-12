@@ -19,7 +19,7 @@
  * Boston, MA 02111-1307, USA.
  */
 #include <gst/gst.h>
-#include <gst-plugins-fsl-vpu_config.h>
+#include <gst-plugins-fsl_config.h>
 #include "vpu_io.h"
 #include "vpu_lib.h"
 #include "mfw_gst_vpu_encoder.h"
