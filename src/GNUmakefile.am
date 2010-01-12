@@ -1,9 +1,9 @@
 noinst_HEADERS = mfw_gst_vpu_encoder.h \
 		mfw_gst_vpu_decoder.h
 
-
 lib_LTLIBRARIES = libgst-plugins-fsl-vpu.la \
-	libgst-plugins-fsl-parser.la
+	libgst-plugins-fsl-parser.la \
+	libgst-plugins-fsl-v4lsrc.la
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/include \
@@ -16,6 +16,9 @@ libgst_plugins_fsl_vpu_la_SOURCES = \
 
 libgst_plugins_fsl_parser_la_SOURCES = \
 	mfw_gst_mp4demuxer.c
+
+libgst_plugins_fsl_v4lsrc_la_SOURCES = \
+	mfw_gst_v4lsrc.c
 
 common_ldflags = \
 		$(GST_PLUGIN_LDFLAGS) -lgstriff-@GST_MAJORMINOR@
@@ -44,6 +47,14 @@ libgst_plugins_fsl_parser_la_LIBADD = \
 libgst_plugins_fsl_parser_la_LDFLAGS = \
 	$(common_ldflags) -lmp4_parser_arm11_elinux
 
+libgst_plugins_fsl_v4lsrc_la_CFLAGS = \
+	$(common_cflags)
+
+libgst_plugins_fsl_v4lsrc_la_LIBADD = \
+	$(common_libadd)
+
+libgst_plugins_fsl_v4lsrc_la_LDFLAGS = \
+	$(common_ldflags)
 
 MAINTAINERCLEANFILES = \
 	GNUmakefile.in
