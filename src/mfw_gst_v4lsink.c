@@ -45,6 +45,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <string.h>
+#include <unistd.h>
 #include "mfw_gst_utils.h"
 #include "mfw_gst_v4lsink.h"
 #include "gst-plugins-fsl_config.h"
@@ -216,7 +217,7 @@ static gboolean mfw_gst_v4lsink_output_init(MFW_GST_V4LSINK_INFO_T *,
                                             guint, guint, guint);
 static gboolean mfw_gst_v4lsink_output_setup(struct v4l2_format *,
                                              MFW_GST_V4LSINK_INFO_T *);
-static MFWGstV4LSinkBuffer* mfw_gst_v4lsink_hwbuffer_new(MFW_GST_V4LSINK_INFO_T *);
+/* static MFWGstV4LSinkBuffer* mfw_gst_v4lsink_hwbuffer_new(MFW_GST_V4LSINK_INFO_T *); */
 
 static GstFlowReturn mfw_gst_v4lsink_buffer_alloc(GstBaseSink * bsink, 
                                                   guint64 offset,
@@ -607,7 +608,6 @@ IMPORTANT NOTES:    None
 static void mfw_gst_v4lsink_close(MFW_GST_V4LSINK_INFO_T * v4l_sink_info)
 {
     MFWGstV4LSinkBuffer *v4lsink_buffer = NULL;
-    GstBuffer ** pbuffer;
     gint type;
     gint totalbuffernum = (v4l_sink_info->buffers_required+v4l_sink_info->swbuffer_max);
     gint i;
@@ -788,7 +788,6 @@ MFWGstV4LSinkBuffer *mfw_gst_v4lsink_new_hwbuffer(MFW_GST_V4LSINK_INFO_T* v4l_si
 {
     MFWGstV4LSinkBuffer *v4lsink_buffer = NULL;
     guint image_width = 0;
-    gint extra_pixel = 0;
     struct v4l2_buffer *v4lbuf;
     gint cr_left = 0, cr_right = 0, cr_top = 0;
     
@@ -863,9 +862,7 @@ IMPORTANT NOTES:    None
 
 MFWGstV4LSinkBuffer *mfw_gst_v4lsink_new_buffer(MFW_GST_V4LSINK_INFO_T* v4l_sink_info)
 {
-    gint type = 0;
     MFWGstV4LSinkBuffer *v4lsink_buffer = NULL;
-    struct v4l2_buffer *v4lbuf = NULL;
 
     {
         int loopcount = 0;
@@ -874,8 +871,13 @@ MFWGstV4LSinkBuffer *mfw_gst_v4lsink_new_buffer(MFW_GST_V4LSINK_INFO_T* v4l_sink
         struct v4l2_buffer v4l2buf;
 
         g_mutex_lock(v4l_sink_info->pool_lock);
-
-        if ((IS_RESERVEDHWBUFFER_FULL(v4l_sink_info)) && (tmp = v4l_sink_info->free_pool)){
+	/* XXX: the code used to be :
+	 *  if ((IS_RESERVEDHWBUFFER_FULL(v4l_sink_info)) && (tmp = v4l_sink_info->free_pool)){ 
+	 *  which is really bad. since the v4l_sink_info is not check anyway. We
+	 *  don't add a check here and assign tmp to v4l_sink_info->free_pool
+	 *  directly */
+	tmp = v4l_sink_info->free_pool;
+        if ((IS_RESERVEDHWBUFFER_FULL(v4l_sink_info)) && (tmp)){
                 v4lsink_buffer = (MFWGstV4LSinkBuffer *)tmp->data;
                     v4lsink_buffer->bufstate = BUF_STATE_ALLOCATED;
                 v4l_sink_info->free_pool = g_slist_delete_link(v4l_sink_info->free_pool, tmp);
@@ -901,8 +903,9 @@ MFWGstV4LSinkBuffer *mfw_gst_v4lsink_new_buffer(MFW_GST_V4LSINK_INFO_T* v4l_sink
                     g_mutex_lock(v4l_sink_info->pool_lock);
                     }
             }
-           
-            if (tmp = v4l_sink_info->free_pool){
+            tmp = v4l_sink_info->free_pool;
+
+            if (tmp){
                 v4lsink_buffer = (MFWGstV4LSinkBuffer *)tmp->data;
                 v4lsink_buffer->bufstate = BUF_STATE_ALLOCATED;
                 v4l_sink_info->free_pool = g_slist_delete_link(v4l_sink_info->free_pool, tmp);
@@ -958,7 +961,7 @@ mfw_gst_v4lsink_output_setup(struct v4l2_format *fmt,
 
 	int ret;
 
-    if (ret=ioctl(v4l_sink_info->v4l_id, VIDIOC_S_FMT, fmt) < 0) {
+    if ((ret=ioctl(v4l_sink_info->v4l_id, VIDIOC_S_FMT, fmt)) < 0) {
 	g_print("set format failed %d\n",ret);
 	return FALSE;
     }
@@ -1022,13 +1025,10 @@ gboolean mfw_gst_v4lsink_output_init(MFW_GST_V4LSINK_INFO_T *v4l_sink_info,
                                      guint disp_width, guint disp_height)
 {
     struct v4l2_control ctrl;
-    struct v4l2_framebuffer fb;
     struct v4l2_cropcap cropcap;
     struct v4l2_crop crop;
     struct v4l2_format fmt;
     gboolean retval = TRUE;
-    struct v4l2_buffer buf;
-    gint i;
     gchar v4l_device1[100] = "/dev/video16";
     guint in_fmt = V4L2_PIX_FMT_YUV420;
     guint in_width = 0, display_width = 0;
@@ -1295,7 +1295,7 @@ mfw_gst_v4lsink_buffer_alloc(GstBaseSink * bsink, guint64 offset,
     GstStructure *s = NULL;
     
     gint frame_buffer_size;
-    gint max_frames;
+    guint max_frames;
     gint hwbuffernumforcodec;
     
     gboolean result = FALSE;
@@ -1320,7 +1320,7 @@ mfw_gst_v4lsink_buffer_alloc(GstBaseSink * bsink, guint64 offset,
 			      &v4l_sink_info->cr_right_bypixel);
         gst_structure_get_int(s, "crop-bottom-by-pixel",
 			      &v4l_sink_info->cr_bottom_bypixel);
-        gst_structure_get_int(s, "num-buffers-required",
+        gst_structure_get_uint(s, "num-buffers-required",
 			      &v4l_sink_info->buffers_required);
 
         gst_structure_get_fourcc(s, "format",
@@ -1471,7 +1471,9 @@ mfw_gst_v4lsink_buffer_alloc(GstBaseSink * bsink, guint64 offset,
         }
 
         {
-            GValue value = {G_TYPE_INT, hwbuffernumforcodec};
+            GValue value = {0};
+	    g_value_init (&value, G_TYPE_INT);
+	    g_value_set_int (&value, hwbuffernumforcodec);
             gst_structure_set_value(s,  "num-buffers-required", &value);  
         }
 
@@ -1513,7 +1515,7 @@ mfw_gst_v4lsink_buffer_alloc(GstBaseSink * bsink, guint64 offset,
                 }
             }
 
-            while (v4l_sink_info->querybuf_index < v4l_sink_info->buffers_required) 
+            while ((guint)v4l_sink_info->querybuf_index < v4l_sink_info->buffers_required) 
             {    
                 tmpbuffer = mfw_gst_v4lsink_new_hwbuffer(v4l_sink_info);
                 if (tmpbuffer){
@@ -1773,7 +1775,6 @@ static GstFlowReturn mfw_gst_v4lsink_show_frame(GstBaseSink * basesink,
     MFW_GST_V4LSINK_INFO_T *mfw_gst_v4lsink = MFW_GST_V4LSINK(basesink);
     struct v4l2_buffer *v4l_buf=NULL;
     GstBuffer *outbuffer=NULL;
-    GSList *searchlist;
     gint type;
 
     guint8 i = 0;
@@ -1937,7 +1938,7 @@ static GstFlowReturn mfw_gst_v4lsink_show_frame(GstBaseSink * basesink,
     if (G_UNLIKELY(mfw_gst_v4lsink->qbuff_count == 1)) {
     	type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
     	if (ioctl(mfw_gst_v4lsink->v4l_id, VIDIOC_STREAMON, &type) < 0) {
-    	    g_print("Could not start stream %d\n");
+    	    g_print("Could not start stream\n");
             
         }
     }
@@ -2010,7 +2011,6 @@ static gboolean mfw_gst_v4lsink_setcaps(GstBaseSink * basesink,
                                         GstCaps * vscapslist)
 {
     MFW_GST_V4LSINK_INFO_T *mfw_gst_v4lsink = MFW_GST_V4LSINK(basesink);
-    guint32 format = 0;
     GstStructure *structure = NULL;
     mfw_gst_v4lsink->store_caps = vscapslist;
 
@@ -2077,7 +2077,6 @@ static GstStateChangeReturn mfw_gst_v4lsink_change_state(GstElement * element,
 {
     MFW_GST_V4LSINK_INFO_T *v4l_sink_info = MFW_GST_V4LSINK(element);
     GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
-    guint8 index;
     switch (transition) {
         case GST_STATE_CHANGE_NULL_TO_READY:
             v4l_sink_info->width = -1;
@@ -2374,7 +2373,7 @@ static void mfw_gst_v4lsink_base_init(gpointer g_class)
     GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
     GstCaps *capslist;
     GstPadTemplate *sink_template = NULL;
-    gint i;
+    guint i;
     guint32 formats[] = {
 	GST_MAKE_FOURCC('I', '4', '2', '0'),
 	GST_MAKE_FOURCC('Y', 'V', '1', '2'),
