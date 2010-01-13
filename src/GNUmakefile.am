@@ -1,9 +1,13 @@
 noinst_HEADERS = mfw_gst_vpu_encoder.h \
-		mfw_gst_vpu_decoder.h
+		mfw_gst_vpu_decoder.h \
+		mfw_gst_mp4demuxer.h \
+		mfw_gst_v4lsrc.h \
+		mfw_gst_v4lsink.h
 
 lib_LTLIBRARIES = libgst-plugins-fsl-vpu.la \
 	libgst-plugins-fsl-parser.la \
-	libgst-plugins-fsl-v4lsrc.la
+	libgst-plugins-fsl-v4lsrc.la \
+	libgst-plugins-fsl-v4lsink.la 
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/include \
@@ -19,6 +23,9 @@ libgst_plugins_fsl_parser_la_SOURCES = \
 
 libgst_plugins_fsl_v4lsrc_la_SOURCES = \
 	mfw_gst_v4lsrc.c
+
+libgst_plugins_fsl_v4lsink_la_SOURCES = \
+	mfw_gst_v4lsink.c
 
 common_ldflags = \
 		$(GST_PLUGIN_LDFLAGS) -lgstriff-@GST_MAJORMINOR@
@@ -49,6 +56,15 @@ libgst_plugins_fsl_parser_la_LDFLAGS = \
 
 libgst_plugins_fsl_v4lsrc_la_CFLAGS = \
 	$(common_cflags)
+
+libgst_plugins_fsl_v4lsrc_la_LIBADD = \
+	$(common_libadd)
+
+libgst_plugins_fsl_v4lsrc_la_LDFLAGS = \
+	$(common_ldflags)
+
+libgst_plugins_fsl_v4lsink_la_CFLAGS = \
+	$(common_cflags) -DENABLE_TVOUT
 
 libgst_plugins_fsl_v4lsrc_la_LIBADD = \
 	$(common_libadd)
