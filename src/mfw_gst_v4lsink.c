@@ -47,6 +47,7 @@
 #include <string.h>
 #include "mfw_gst_utils.h"
 #include "mfw_gst_v4lsink.h"
+#include "gst-plugins-fsl_config.h"
 
 #if defined(ENABLE_TVOUT) && defined (_MX27)
 /*For TV-Out & change para on-the-fly*/
