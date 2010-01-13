@@ -44,6 +44,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <linux/videodev.h>
 #include <sys/mman.h>
 #include <string.h>
@@ -774,10 +775,8 @@ IMPORTANT NOTES:     None
 static gboolean
 mfw_gst_v4lsrc_set_caps (GstBaseSrc * src, GstCaps * caps)
 {
-    MFWGstV4LSrc *v4l_src = MFW_GST_V4LSRC(src);
     
     return TRUE;
-    
     
 }
 
@@ -810,7 +809,6 @@ IMPORTANT NOTES:     None
 gboolean 
 mfw_gst_v4lsrc_overlay_setup(MFWGstV4LSrc *v4l_src, struct v4l2_format *fmt)
 {
-        struct v4l2_streamparm parm;
         v4l2_std_id id;
         struct v4l2_control ctl;
         struct v4l2_crop crop;
@@ -819,8 +817,6 @@ mfw_gst_v4lsrc_overlay_setup(MFWGstV4LSrc *v4l_src, struct v4l2_format *fmt)
         int g_sensor_top = 0;
         int g_sensor_left = 0;
         int g_display_lcd = 0;
-        int g_overlay = 0;
-        int g_camera_color = 0;
         int g_rotate = 0;
         int fd_v4l = v4l_src->fd_v4l;
 
@@ -1020,13 +1016,11 @@ mfw_gst_v4lsrc_start (GstBaseSrc * src)
     unsigned int * cur_fb32;
     __u32 screen_size;
     int h, w;
-    int ret = 0;
     int g_overlay = 0;
     int g_display_width = 0;
     int g_display_height = 0;
     int g_display_top = 0;
     int g_display_left = 0;
-    char v4l_device[100] = "/dev/v4l/video0";
 
     
     
@@ -1288,7 +1282,6 @@ mfw_gst_v4lsrc_buffer_new(MFWGstV4LSrc *v4l_src,gint num)
 {
 
     GstBuffer *buf;
-    gint fps_n, fps_d;
     struct v4l2_buffer v4lbuf;
     
     
@@ -1359,7 +1352,9 @@ mfw_gst_v4lsrc_create (GstPushSrc * src, GstBuffer ** buf)
 {
 
   MFWGstV4LSrc *v4l_src = MFW_GST_V4LSRC(src);
-  gint num;
+  /* XXX: num used to be uninitialized, it's unused in to callback
+   * anyway */
+  gint num = 0;
   *buf = mfw_gst_v4lsrc_buffer_new (v4l_src, num);
   return GST_FLOW_OK;
 
@@ -1395,11 +1390,8 @@ static GstCaps *
 mfw_gst_v4lsrc_get_caps (GstBaseSrc * src)
 {
     
-    GstCaps *list;
-    MFWGstV4LSrc *v4l_src =	MFW_GST_V4LSRC(src);
     GstCaps *capslist;
-    GstPadTemplate *src_template = NULL;
-    gint i;
+
 #ifndef MX51    
     guint32 format = GST_MAKE_FOURCC('I', '4', '2', '0');
 #else
@@ -1456,7 +1448,7 @@ static void
 mfw_gst_v4lsrc_fixate(GstPad * pad, GstCaps * caps)
 {
   
-    gint i=0;
+    guint i=0;
     GstStructure *structure=NULL;
     MFWGstV4LSrc *v4l_src =	
         MFW_GST_V4LSRC(gst_pad_get_parent (pad));
@@ -1466,7 +1458,6 @@ mfw_gst_v4lsrc_fixate(GstPad * pad, GstCaps * caps)
     guint32 fourcc = GST_MAKE_FOURCC('N', 'V', '1', '2');
 #endif
 
-    const GValue *v=NULL;
     for (i = 0; i < gst_caps_get_size (caps); ++i) {
         structure = gst_caps_get_structure (caps, i);
         gst_structure_fixate_field_nearest_int (structure, "width", 
