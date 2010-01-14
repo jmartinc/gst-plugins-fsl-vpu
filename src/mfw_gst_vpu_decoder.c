@@ -2096,11 +2096,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 {
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	gboolean result = TRUE;
-	guint height = 0, width = 0;
 	RetCode vpu_ret = RETCODE_SUCCESS;
-
-	width = vpu_dec->initialInfo->picWidth;
-	height = vpu_dec->initialInfo->picHeight;
 
 	switch (GST_EVENT_TYPE(event)) {
 
