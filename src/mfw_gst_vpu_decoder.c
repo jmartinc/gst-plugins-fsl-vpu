@@ -1402,32 +1402,22 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		}
 
 		vpu_dec->decoded_frames++;
-		vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
-					 indexFrameDisplay] =
-		    FB_STATE_DISPLAY;
+		vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_DISPLAY;
 
 		gst_buffer_ref(vpu_dec->pushbuff);
 		GST_DEBUG("frame decoded : %lld",
 			  vpu_dec->decoded_frames);
-		retval =
-		    gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
+		retval = gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
 		if (retval != GST_FLOW_OK) {
-			GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d",
-				retval);
-			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
-						 indexFrameDisplay] =
-			    FB_STATE_ALLOCTED;
+			GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d", retval);
+			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_ALLOCTED;
 			// Make sure we clear and release the buffer since it can't be displayed
-			vpu_DecClrDispFlag(*(vpu_dec->handle),
-					   vpu_dec->outputInfo->
-					   indexFrameDisplay);
+			vpu_DecClrDispFlag(*vpu_dec->handle, vpu_dec->outputInfo->indexFrameDisplay);
 		}
 		/* get output */
 		if (vpu_dec->buffered_size > 0) {
-			vpu_dec->buffered_size = vpu_dec->buffered_size -
-			    vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_out];
-			vpu_dec->buffidx_out =
-			    (vpu_dec->buffidx_out + 1) % MAX_STREAM_BUF;
+			vpu_dec->buffered_size = vpu_dec->buffered_size - vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_out];
+			vpu_dec->buffidx_out = (vpu_dec->buffidx_out + 1) % MAX_STREAM_BUF;
 		}
 		retval = GST_FLOW_OK;
 	}
