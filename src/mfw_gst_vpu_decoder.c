@@ -803,16 +803,12 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 					     24);
 			buffer = gst_buffer_join(SrcFrameSize, buffer);
 		}
-		vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_in] =
-		    GST_BUFFER_SIZE(buffer);
-		vpu_dec->buffidx_in =
-		    (vpu_dec->buffidx_in + 1) % MAX_STREAM_BUF;
-	} else {
-		vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_in] =
-		    GST_BUFFER_SIZE(buffer);
-		vpu_dec->buffidx_in =
-		    (vpu_dec->buffidx_in + 1) % MAX_STREAM_BUF;
 	}
+
+	vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_in] =
+	    GST_BUFFER_SIZE(buffer);
+	vpu_dec->buffidx_in =
+	    (vpu_dec->buffidx_in + 1) % MAX_STREAM_BUF;
 
 	vpu_DecGetBitstreamBuffer(*(vpu_dec->handle), &p1, &p2, &space);
 
