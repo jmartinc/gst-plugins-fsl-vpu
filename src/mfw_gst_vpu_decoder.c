@@ -861,7 +861,7 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 				GST_ERROR
 				    ("vpu_DecClrDispFlag failed. Error code is %d \n",
 				     vpu_ret);
-				return (GST_FLOW_ERROR);
+				return GST_FLOW_ERROR;
 			}
 		}
 	} else {
@@ -890,7 +890,7 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 							GST_ERROR
 							    ("vpu_DecClrDispFlag failed. Error code is %d \n",
 							     vpu_ret);
-							return (GST_FLOW_ERROR);
+							return GST_FLOW_ERROR;
 						}
 						numFreeBufs++;
 					} else if (vpu_dec->
@@ -962,7 +962,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 			  vpu_ret);
 		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 						    "VPU Decoder Initialization failed ");
-		return (GST_FLOW_ERROR);
+		return GST_FLOW_ERROR;
 	}
 	GST_DEBUG("Dec: min buffer count= %d\n",
 		  vpu_dec->initialInfo->minFrameBufferCount);
@@ -984,14 +984,14 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		gst_element_post_message(GST_ELEMENT(vpu_dec), message);
 		g_error_free(gerror);
 
-		return (GST_FLOW_ERROR);
+		return GST_FLOW_ERROR;
 	}
 
 	if (vpu_dec->initialInfo->minFrameBufferCount > NUM_MAX_VPU_REQUIRED) {
 		g_print
 		    ("vpu required frames number exceed max limitation, required %d.",
 		     vpu_dec->initialInfo->minFrameBufferCount);
-		return (GST_FLOW_ERROR);
+		return GST_FLOW_ERROR;
 	}
 
 	needFrameBufCount = vpu_dec->initialInfo->minFrameBufferCount + 2;
@@ -1053,7 +1053,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 							    "Allocation of the Frame Buffers Failed");
 
-			return (GST_FLOW_ERROR);
+			return GST_FLOW_ERROR;
 		}
 		vpu_dec->framebufinit_done = TRUE;
 	}
@@ -1077,7 +1077,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		     vpu_ret);
 		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 						    "Registration of the Allocated Frame Buffers Failed ");
-		return (GST_FLOW_ERROR);
+		return GST_FLOW_ERROR;
 	}
 	// Setup rotation or mirroring which will be output to separate buffers for display
 	if (vpu_dec->rotation_angle || vpu_dec->mirror_dir) {
@@ -1110,7 +1110,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 			     vpu_ret);
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 							    "VPU SET_ROTATOR_STRIDE failed ");
-			return (GST_FLOW_ERROR);
+			return GST_FLOW_ERROR;
 		}
 		vpu_dec->rot_buff_idx =
 		    vpu_dec->initialInfo->minFrameBufferCount;
