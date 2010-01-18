@@ -867,9 +867,8 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 			int numBusyBufs = 0;
 			for (i = 0; i < vpu_dec->numframebufs; i++) {
 				GstBuffer *pBuffer = vpu_dec->outbuffers[i];
-				if (gst_buffer_is_writable(pBuffer)) {
-					if (vpu_dec->fb_state_plugin[i] ==
-					    FB_STATE_ALLOCTED)
+				if (pBuffer && gst_buffer_is_writable(pBuffer)) {
+					if (vpu_dec->fb_state_plugin[i] == FB_STATE_ALLOCTED)
 						numFreeBufs++;
 					else if (vpu_dec->fb_state_plugin[i] ==
 						 FB_STATE_DISPLAY) {
