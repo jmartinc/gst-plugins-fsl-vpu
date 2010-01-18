@@ -684,10 +684,7 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 	vpu_dec->decOP->chromaInterleave = 1;
 	if (vpu_dec->codec == STD_AVC)
 		vpu_dec->decOP->reorderEnable = 1;
-	if (vpu_dec->codec == STD_MPEG2)
-		vpu_dec->decOP->filePlayEnable = 0;
 #else
-	vpu_dec->decOP->filePlayEnable = 0;
 	vpu_dec->decOP->reorderEnable = 0;
 #endif
 
@@ -1500,8 +1497,6 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
 #if defined (VPU_MX37) || defined (VPU_MX51)
 		vpu_dec->decOP->filePlayEnable = 1;
-#else
-		vpu_dec->decOP->filePlayEnable = 0;
 #endif
 		vpu_dec->decOP->picWidth = vpu_dec->picWidth;
 		vpu_dec->decOP->picHeight = vpu_dec->picHeight;
