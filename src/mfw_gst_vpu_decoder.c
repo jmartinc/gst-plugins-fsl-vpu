@@ -1356,190 +1356,187 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			}
 		}
 		// Wait for output from decode
-		if (G_LIKELY(vpu_dec->is_startframe == TRUE)) {
-			if (G_UNLIKELY(vpu_dec->profiling)) {
-				gettimeofday(&tv_prof, 0);
-			}
-			while (vpu_IsBusy()) {
-				vpu_WaitForInt(1000);
-			};
-			if (G_UNLIKELY(vpu_dec->profiling)) {
-				gettimeofday(&tv_prof1, 0);
-				time_before =
-				    (tv_prof.tv_sec * 1000000) +
-				    tv_prof.tv_usec;
-				time_after =
-				    (tv_prof1.tv_sec * 1000000) +
-				    tv_prof1.tv_usec;
-				vpu_dec->decode_wait_time +=
-				    time_after - time_before;
-			}
-			// Get the VPU output from decoding
-			vpu_ret =
-			    vpu_DecGetOutputInfo(*(vpu_dec->handle),
-						 vpu_dec->outputInfo);
+		if (G_UNLIKELY(vpu_dec->profiling)) {
+			gettimeofday(&tv_prof, 0);
+		}
+		while (vpu_IsBusy()) {
+			vpu_WaitForInt(1000);
+		};
+		if (G_UNLIKELY(vpu_dec->profiling)) {
+			gettimeofday(&tv_prof1, 0);
+			time_before =
+			    (tv_prof.tv_sec * 1000000) +
+			    tv_prof.tv_usec;
+			time_after =
+			    (tv_prof1.tv_sec * 1000000) +
+			    tv_prof1.tv_usec;
+			vpu_dec->decode_wait_time +=
+			    time_after - time_before;
+		}
+		// Get the VPU output from decoding
+		vpu_ret =
+		    vpu_DecGetOutputInfo(*(vpu_dec->handle),
+					 vpu_dec->outputInfo);
 
-			vpu_dec->is_startframe = FALSE;
-			vpu_mutex_unlock(vpu_dec->vpu_mutex);
+		vpu_dec->is_startframe = FALSE;
+		vpu_mutex_unlock(vpu_dec->vpu_mutex);
 
 #if 0
-			g_print("Get output--\nprescan%d,dec result:%d\n",
-				vpu_dec->outputInfo->prescanresult,
-				vpu_dec->outputInfo->decodingSuccess);
+		g_print("Get output--\nprescan%d,dec result:%d\n",
+			vpu_dec->outputInfo->prescanresult,
+			vpu_dec->outputInfo->decodingSuccess);
 #endif
-			if ((vpu_dec->decParam->prescanEnable == 1)
-			    && (vpu_dec->outputInfo->prescanresult == 0)) {
-				GST_WARNING
-				    ("The prescan result is zero, all the output information have no meaning.\n");
-				// Return for more data as this is incomplete - but do not process as an error
-				retval = GST_FLOW_OK;
-				goto done;
-			}
+		if ((vpu_dec->decParam->prescanEnable == 1)
+		    && (vpu_dec->outputInfo->prescanresult == 0)) {
+			GST_WARNING
+			    ("The prescan result is zero, all the output information have no meaning.\n");
+			// Return for more data as this is incomplete - but do not process as an error
+			retval = GST_FLOW_OK;
+			goto done;
+		}
 
-			if (vpu_ret != RETCODE_SUCCESS) {
-				GST_ERROR
-				    ("vpu_DecGetOutputInfo failed. Error code is %d \n",
-				     vpu_ret);
-				retval = GST_FLOW_ERROR;
-				goto done;
-			}
-			//g_print (" --DEC disp=%d decode=%d\n",vpu_dec->outputInfo->indexFrameDisplay,vpu_dec->outputInfo->indexFrameDecoded);
-			if (vpu_dec->outputInfo->indexFrameDecoded >= 0) {
-				if (vpu_dec->
-				    fb_state_plugin[vpu_dec->outputInfo->
-						    indexFrameDecoded] ==
-				    FB_STATE_DISPLAY) {
-					//g_print ("***** Decoded returned was in display mode \n");
-					vpu_DecClrDispFlag(*(vpu_dec->handle),
-							   vpu_dec->outputInfo->
-							   indexFrameDecoded);
-				}
-				vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
-							 indexFrameDecoded] =
-				    FB_STATE_DECODED;
-			}
-			if (G_UNLIKELY
-			    (vpu_dec->outputInfo->indexFrameDisplay == -1))
-				break;	/* decoding done */
-
-			// BIT don't have picture to be displayed
-			if (G_UNLIKELY
-			    (vpu_dec->outputInfo->indexFrameDisplay == -3)
-			    || G_UNLIKELY(vpu_dec->outputInfo->
-					  indexFrameDisplay == -2)) {
-				GST_DEBUG("Decoded frame not to display!\n");
-				continue;
-			}
-
-			if (G_LIKELY(vpu_dec->direct_render == TRUE)) {
-				if (vpu_dec->rotation_angle
-				    || vpu_dec->mirror_dir) {
-					vpu_dec->pushbuff =
-					    vpu_dec->outbuffers[vpu_dec->
-								rot_buff_idx];
-					// switch output buffer for every other frame so we don't overwrite display data in v4lsink
-					// this way VPU can still decode while v4l sink is displaying
-					vpu_dec->rot_buff_idx =
-						(vpu_dec->rot_buff_idx == vpu_dec->initialInfo-> minFrameBufferCount) ?
-						vpu_dec->initialInfo->minFrameBufferCount + 1 :
-						vpu_dec->initialInfo->minFrameBufferCount;
-					vpu_DecGiveCommand(*(vpu_dec->handle),
-						SET_ROTATOR_OUTPUT,
-						&vpu_dec->
-						frameBuf[vpu_dec->rot_buff_idx]);
-				} else {
-					vpu_dec->pushbuff =
-					    vpu_dec->outbuffers[vpu_dec->
-								outputInfo->
-								indexFrameDisplay];
-				}
-			} else {
-				// Incase of the Filesink the output in the hardware buffer is copied onto the
-				//  buffer allocated by filesink
-				retval =
-				    gst_pad_alloc_buffer_and_set_caps(vpu_dec->
-								      srcpad, 0,
-								      vpu_dec->
-								      outsize,
-								      GST_PAD_CAPS
-								      (vpu_dec->
-								       srcpad),
-								      &vpu_dec->
-								      pushbuff);
-				if (retval != GST_FLOW_OK) {
-					GST_ERROR
-					    ("Error in allocating the Framebuffer[%d],"
-					     " error is %d",
-					     vpu_dec->prv_use_idx, retval);
-					goto done;
-				}
-				memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
-				       vpu_dec->frame_virt[vpu_dec->outputInfo->
-							   indexFrameDisplay],
-				       vpu_dec->outsize);
-			}
-
-			// Update the time stamp base on the frame-rate
-			GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
-			if (vpu_dec->codec == STD_MPEG2) {
-				GstClockTime ts;
-				if (!(mfw_gst_get_timestamp(vpu_dec, &ts))) {
-					/* no timestamp found */
-					vpu_dec->no_ts_frames++;
-					if (g_compare_float
-						(vpu_dec->frame_rate, 0)
-						!= FLOAT_MATCH) {
-						/* calculating timestamp for decoded data */
-						time_val =
-						    ((gfloat) vpu_dec->no_ts_frames /
-							      vpu_dec->frame_rate);
-						ts = vpu_dec->base_ts +
-						    time_val * 1000 * 1000 *
-						    1000;
-					} else {
-						/* calculating timestamp for decoded data at 25.0 fps */
-						time_val =
-						    ((gfloat) vpu_dec->no_ts_frames /
-							      25.0);
-						ts = vpu_dec->base_ts +
-						    time_val * 1000 * 1000 *
-						    1000;
-					}
-				} else {
-					vpu_dec->base_ts = ts;
-					vpu_dec->no_ts_frames = 0;
-				}
-
-				GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) = ts;
-			} else {
-				GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) =
-				    vpu_dec->timestamp_buffer[vpu_dec->ts_tx];
-				vpu_dec->ts_tx =
-				    (vpu_dec->ts_tx + 1) % MAX_STREAM_BUF;
-			}
-
-			vpu_dec->decoded_frames++;
-			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
-						 indexFrameDisplay] =
-			    FB_STATE_DISPLAY;
-
-			gst_buffer_ref(vpu_dec->pushbuff);
-			GST_DEBUG("frame decoded : %lld\n",
-				  vpu_dec->decoded_frames);
-			retval =
-			    gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
-			if (retval != GST_FLOW_OK) {
-				GST_ERROR
-				    ("Error in Pushing the Output onto the Source Pad,error is %d \n",
-				     retval);
-				vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
-							 indexFrameDisplay] =
-				    FB_STATE_ALLOCTED;
-				// Make sure we clear and release the buffer since it can't be displayed
+		if (vpu_ret != RETCODE_SUCCESS) {
+			GST_ERROR
+			    ("vpu_DecGetOutputInfo failed. Error code is %d \n",
+			     vpu_ret);
+			retval = GST_FLOW_ERROR;
+			goto done;
+		}
+		//g_print (" --DEC disp=%d decode=%d\n",vpu_dec->outputInfo->indexFrameDisplay,vpu_dec->outputInfo->indexFrameDecoded);
+		if (vpu_dec->outputInfo->indexFrameDecoded >= 0) {
+			if (vpu_dec->
+			    fb_state_plugin[vpu_dec->outputInfo->
+					    indexFrameDecoded] ==
+			    FB_STATE_DISPLAY) {
+				//g_print ("***** Decoded returned was in display mode \n");
 				vpu_DecClrDispFlag(*(vpu_dec->handle),
 						   vpu_dec->outputInfo->
-						   indexFrameDisplay);
+						   indexFrameDecoded);
 			}
+			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
+						 indexFrameDecoded] =
+			    FB_STATE_DECODED;
+		}
+		if (G_UNLIKELY
+		    (vpu_dec->outputInfo->indexFrameDisplay == -1))
+			break;	/* decoding done */
+
+		// BIT don't have picture to be displayed
+		if (G_UNLIKELY
+		    (vpu_dec->outputInfo->indexFrameDisplay == -3)
+		    || G_UNLIKELY(vpu_dec->outputInfo->
+				  indexFrameDisplay == -2)) {
+			GST_DEBUG("Decoded frame not to display!\n");
+			continue;
+		}
+
+		if (G_LIKELY(vpu_dec->direct_render == TRUE)) {
+			if (vpu_dec->rotation_angle
+			    || vpu_dec->mirror_dir) {
+				vpu_dec->pushbuff =
+				    vpu_dec->outbuffers[vpu_dec->
+							rot_buff_idx];
+				// switch output buffer for every other frame so we don't overwrite display data in v4lsink
+				// this way VPU can still decode while v4l sink is displaying
+				vpu_dec->rot_buff_idx =
+					(vpu_dec->rot_buff_idx == vpu_dec->initialInfo-> minFrameBufferCount) ?
+					vpu_dec->initialInfo->minFrameBufferCount + 1 :
+					vpu_dec->initialInfo->minFrameBufferCount;
+				vpu_DecGiveCommand(*(vpu_dec->handle),
+					SET_ROTATOR_OUTPUT,
+					&vpu_dec->
+					frameBuf[vpu_dec->rot_buff_idx]);
+			} else {
+				vpu_dec->pushbuff =
+				    vpu_dec->outbuffers[vpu_dec->
+							outputInfo->
+							indexFrameDisplay];
+			}
+		} else {
+			// Incase of the Filesink the output in the hardware buffer is copied onto the
+			//  buffer allocated by filesink
+			retval =
+			    gst_pad_alloc_buffer_and_set_caps(vpu_dec->
+							      srcpad, 0,
+							      vpu_dec->
+							      outsize,
+							      GST_PAD_CAPS
+							      (vpu_dec->
+							       srcpad),
+							      &vpu_dec->
+							      pushbuff);
+			if (retval != GST_FLOW_OK) {
+				GST_ERROR
+				    ("Error in allocating the Framebuffer[%d],"
+				     " error is %d",
+				     vpu_dec->prv_use_idx, retval);
+				goto done;
+			}
+			memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
+			       vpu_dec->frame_virt[vpu_dec->outputInfo->
+						   indexFrameDisplay],
+			       vpu_dec->outsize);
+		}
+
+		// Update the time stamp base on the frame-rate
+		GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
+		if (vpu_dec->codec == STD_MPEG2) {
+			GstClockTime ts;
+			if (!(mfw_gst_get_timestamp(vpu_dec, &ts))) {
+				/* no timestamp found */
+				vpu_dec->no_ts_frames++;
+				if (g_compare_float
+					(vpu_dec->frame_rate, 0)
+					!= FLOAT_MATCH) {
+					/* calculating timestamp for decoded data */
+					time_val =
+					    ((gfloat) vpu_dec->no_ts_frames /
+						      vpu_dec->frame_rate);
+					ts = vpu_dec->base_ts +
+					    time_val * 1000 * 1000 *
+					    1000;
+				} else {
+					/* calculating timestamp for decoded data at 25.0 fps */
+					time_val =
+					    ((gfloat) vpu_dec->no_ts_frames /
+						      25.0);
+					ts = vpu_dec->base_ts +
+					    time_val * 1000 * 1000 *
+					    1000;
+				}
+			} else {
+				vpu_dec->base_ts = ts;
+				vpu_dec->no_ts_frames = 0;
+			}
+				GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) = ts;
+		} else {
+			GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) =
+			    vpu_dec->timestamp_buffer[vpu_dec->ts_tx];
+			vpu_dec->ts_tx =
+			    (vpu_dec->ts_tx + 1) % MAX_STREAM_BUF;
+		}
+
+		vpu_dec->decoded_frames++;
+		vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
+					 indexFrameDisplay] =
+		    FB_STATE_DISPLAY;
+
+		gst_buffer_ref(vpu_dec->pushbuff);
+		GST_DEBUG("frame decoded : %lld\n",
+			  vpu_dec->decoded_frames);
+		retval =
+		    gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
+		if (retval != GST_FLOW_OK) {
+			GST_ERROR
+			    ("Error in Pushing the Output onto the Source Pad,error is %d \n",
+			     retval);
+			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
+						 indexFrameDisplay] =
+			    FB_STATE_ALLOCTED;
+			// Make sure we clear and release the buffer since it can't be displayed
+			vpu_DecClrDispFlag(*(vpu_dec->handle),
+					   vpu_dec->outputInfo->
+					   indexFrameDisplay);
 		}
 		/* get output */
 		if (vpu_dec->buffered_size > 0) {
