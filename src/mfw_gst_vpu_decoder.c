@@ -1054,7 +1054,7 @@ PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
-GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
+GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstCaps *caps;
@@ -1129,16 +1129,23 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		crop_bottom_len = vpu_dec->initialInfo->picHeight - orgPicH;
 	}
 
-	if (vpu_dec->rotation_angle == 90 || vpu_dec->rotation_angle == 270) {
-		width = vpu_dec->initialInfo->picHeight;
-		height = vpu_dec->initialInfo->picWidth;
-		crop_right_by_pixel = (crop_right_len + 7) / 8 * 8;
-		crop_bottom_by_pixel = crop_right_len;
-	} else {
+	if (filemode) {
 		width = vpu_dec->initialInfo->picWidth;
 		height = vpu_dec->initialInfo->picHeight;
-		crop_right_by_pixel = (crop_bottom_len + 7) / 8 * 8;
+		crop_right_by_pixel = (crop_right_len + 7) / 8 * 8;
 		crop_bottom_by_pixel = crop_bottom_len;
+	} else {
+		if (vpu_dec->rotation_angle == 90 || vpu_dec->rotation_angle == 270) {
+			width = vpu_dec->initialInfo->picHeight;
+			height = vpu_dec->initialInfo->picWidth;
+			crop_right_by_pixel = (crop_right_len + 7) / 8 * 8;
+			crop_bottom_by_pixel = crop_right_len;
+		} else {
+			width = vpu_dec->initialInfo->picWidth;
+			height = vpu_dec->initialInfo->picHeight;
+			crop_right_by_pixel = (crop_bottom_len + 7) / 8 * 8;
+			crop_bottom_by_pixel = crop_bottom_len;
+		}
 	}
 
 	/* set the capabilites on the source pad */
@@ -1191,6 +1198,12 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 						    "Registration of the Allocated Frame Buffers Failed ");
 		return GST_FLOW_ERROR;
 	}
+
+	if (filemode) {
+		vpu_dec->init = TRUE;
+		return GST_FLOW_OK;
+	}
+
 	// Setup rotation or mirroring which will be output to separate buffers for display
 	if (vpu_dec->rotation_angle || vpu_dec->mirror_dir) {
 		int rotStride = width;
@@ -1307,7 +1320,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	}
 	// Initialize VPU
 	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
-		retval = mfw_gst_vpudec_vpu_init(vpu_dec);
+		retval = mfw_gst_vpudec_vpu_init(vpu_dec, 0);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR
 			    ("mfw_gst_vpudec_vpu_init failed initializing VPU\n");
