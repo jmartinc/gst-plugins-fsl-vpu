@@ -1278,28 +1278,16 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		};
 		if (G_UNLIKELY(vpu_dec->profiling)) {
 			gettimeofday(&tv_prof1, 0);
-			time_before =
-			    (tv_prof.tv_sec * 1000000) +
-			    tv_prof.tv_usec;
-			time_after =
-			    (tv_prof1.tv_sec * 1000000) +
-			    tv_prof1.tv_usec;
-			vpu_dec->decode_wait_time +=
-			    time_after - time_before;
+			time_before = (tv_prof.tv_sec * 1000000) + tv_prof.tv_usec;
+			time_after = (tv_prof1.tv_sec * 1000000) + tv_prof1.tv_usec;
+			vpu_dec->decode_wait_time += time_after - time_before;
 		}
 		// Get the VPU output from decoding
-		vpu_ret =
-		    vpu_DecGetOutputInfo(*(vpu_dec->handle),
-					 vpu_dec->outputInfo);
+		vpu_ret = vpu_DecGetOutputInfo(*(vpu_dec->handle), vpu_dec->outputInfo);
 
 		vpu_dec->is_startframe = FALSE;
 		vpu_mutex_unlock(vpu_dec->vpu_mutex);
 
-#if 0
-		g_print("Get output--\nprescan%d,dec result:%d\n",
-			vpu_dec->outputInfo->prescanresult,
-			vpu_dec->outputInfo->decodingSuccess);
-#endif
 		if ((vpu_dec->decParam->prescanEnable == 1)
 		    && (vpu_dec->outputInfo->prescanresult == 0)) {
 			GST_WARNING("The prescan result is zero, all the output information have no meaning.");
@@ -1313,7 +1301,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
-		//g_print (" --DEC disp=%d decode=%d\n",vpu_dec->outputInfo->indexFrameDisplay,vpu_dec->outputInfo->indexFrameDecoded);
+
 		if (vpu_dec->outputInfo->indexFrameDecoded >= 0) {
 			if (vpu_dec->
 			    fb_state_plugin[vpu_dec->outputInfo->
@@ -1405,8 +1393,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_DISPLAY;
 
 		gst_buffer_ref(vpu_dec->pushbuff);
-		GST_DEBUG("frame decoded : %lld",
-			  vpu_dec->decoded_frames);
+		GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
 		retval = gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d", retval);
@@ -1484,8 +1471,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_dec->file_play_mode = TRUE;
 		vpu_dec->bit_stream_buf.size = BUFF_FILL_SIZE;
 		IOGetPhyMem(&vpu_dec->bit_stream_buf);
-		virt_bit_stream_buf =
-		    (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
+		virt_bit_stream_buf = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
 		vpu_dec->start_addr = vpu_dec->base_addr = virt_bit_stream_buf;
 		vpu_dec->end_addr = virt_bit_stream_buf + BUFF_FILL_SIZE;
 
@@ -1632,10 +1618,8 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 
 		if (G_UNLIKELY(vpu_dec->profiling)) {
 			gettimeofday(&tv_prof1, 0);
-			time_before =
-			    (tv_prof.tv_sec * 1000000) + tv_prof.tv_usec;
-			time_after =
-			    (tv_prof1.tv_sec * 1000000) + tv_prof1.tv_usec;
+			time_before = (tv_prof.tv_sec * 1000000) + tv_prof.tv_usec;
+			time_after = (tv_prof1.tv_sec * 1000000) + tv_prof1.tv_usec;
 			vpu_dec->decode_wait_time += time_after - time_before;
 		}
 
@@ -2537,8 +2521,7 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 	vpu_mutex_unlock(vpu_dec->vpu_mutex);
 
 	vpu_dec->dbk_enabled = FALSE;
-	vpu_dec->dbk_offset_a = vpu_dec->dbk_offset_b =
-	    DEFAULT_DBK_OFFSET_VALUE;
+	vpu_dec->dbk_offset_a = vpu_dec->dbk_offset_b = DEFAULT_DBK_OFFSET_VALUE;
 
 }
 
