@@ -591,13 +591,12 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 							   &outbuffer);
 
 		if (retval != GST_FLOW_OK) {
-			GST_ERROR("Error in allocating the Framebuffer[%d], error is %d", i, retval);
+			GST_ERROR("Error in allocating the Framebuffer[%d] 1, error is %d", i, retval);
 			return -1;
 		}
 
 		/* if the buffer allocated is the Hardware Buffer use it as it is */
-		if (GST_BUFFER_FLAG_IS_SET(outbuffer, GST_BUFFER_FLAG_LAST) ==
-		    TRUE) {
+		if (GST_BUFFER_FLAG_IS_SET(outbuffer, GST_BUFFER_FLAG_LAST) == TRUE) {
 #if defined (VPU_MX37) || defined (VPU_MX51)
 			vpu_dec->frame_mem[i].size = mvsize;
 			IOGetPhyMem(&vpu_dec->frame_mem[i]);
@@ -637,16 +636,12 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 				return -1;
 			}
 			frameBuf[i].bufY = vpu_dec->frame_mem[i].phy_addr;
-			frameBuf[i].bufCb =
-			    frameBuf[i].bufY + (strideY * height);
-			frameBuf[i].bufCr =
-			    frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
+			frameBuf[i].bufCb = frameBuf[i].bufY + (strideY * height);
+			frameBuf[i].bufCr = frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
 #if defined (VPU_MX37) || defined (VPU_MX51)
-			frameBuf[i].bufMvCol =
-			    frameBuf[i].bufCr + ((strideY / 2) * (height / 2));
+			frameBuf[i].bufMvCol = frameBuf[i].bufCr + ((strideY / 2) * (height / 2));
 #endif
-			vpu_dec->frame_virt[i] =
-			    (guint8 *) IOGetVirtMem(&vpu_dec->frame_mem[i]);
+			vpu_dec->frame_virt[i] = (guint8 *) IOGetVirtMem(&vpu_dec->frame_mem[i]);
 			vpu_dec->direct_render = FALSE;
 		}
 	}
@@ -1365,15 +1360,12 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 						 indexFrameDecoded] =
 			    FB_STATE_DECODED;
 		}
-		if (G_UNLIKELY
-		    (vpu_dec->outputInfo->indexFrameDisplay == -1))
+		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -1))
 			break;	/* decoding done */
 
 		// BIT don't have picture to be displayed
-		if (G_UNLIKELY
-		    (vpu_dec->outputInfo->indexFrameDisplay == -3)
-		    || G_UNLIKELY(vpu_dec->outputInfo->
-				  indexFrameDisplay == -2)) {
+		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -3)
+		    || G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -2)) {
 			GST_DEBUG("Decoded frame not to display!");
 			continue;
 		}
@@ -1398,18 +1390,12 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		} else {
 			// Incase of the Filesink the output in the hardware buffer is copied onto the
 			//  buffer allocated by filesink
-			retval =
-			    gst_pad_alloc_buffer_and_set_caps(vpu_dec->
-							      srcpad, 0,
-							      vpu_dec->
-							      outsize,
-							      GST_PAD_CAPS
-							      (vpu_dec->
-							       srcpad),
-							      &vpu_dec->
-							      pushbuff);
+			retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
+							      vpu_dec->outsize,
+							      GST_PAD_CAPS(vpu_dec->srcpad),
+							      &vpu_dec->pushbuff);
 			if (retval != GST_FLOW_OK) {
-				GST_ERROR("Error in allocating the Framebuffer[%d], error is %d",
+				GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
 				     vpu_dec->prv_use_idx, retval);
 				goto done;
 			}
@@ -1426,24 +1412,14 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			if (!(mfw_gst_get_timestamp(vpu_dec, &ts))) {
 				/* no timestamp found */
 				vpu_dec->no_ts_frames++;
-				if (g_compare_float
-					(vpu_dec->frame_rate, 0)
-					!= FLOAT_MATCH) {
+				if (g_compare_float(vpu_dec->frame_rate, 0) != FLOAT_MATCH) {
 					/* calculating timestamp for decoded data */
-					time_val =
-					    ((gfloat) vpu_dec->no_ts_frames /
-						      vpu_dec->frame_rate);
-					ts = vpu_dec->base_ts +
-					    time_val * 1000 * 1000 *
-					    1000;
+					time_val = ((gfloat) vpu_dec->no_ts_frames / vpu_dec->frame_rate);
+					ts = vpu_dec->base_ts + time_val * 1000 * 1000 * 1000;
 				} else {
 					/* calculating timestamp for decoded data at 25.0 fps */
-					time_val =
-					    ((gfloat) vpu_dec->no_ts_frames /
-						      25.0);
-					ts = vpu_dec->base_ts +
-					    time_val * 1000 * 1000 *
-					    1000;
+					time_val = ((gfloat) vpu_dec->no_ts_frames / 25.0);
+					ts = vpu_dec->base_ts + time_val * 1000 * 1000 * 1000;
 				}
 			} else {
 				vpu_dec->base_ts = ts;
@@ -1757,15 +1733,12 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		   buffer allocated by filesink */
 		else {
 			retval =
-			    gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad,
-							      0,
+			    gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
 							      vpu_dec->outsize,
-							      GST_PAD_CAPS
-							      (vpu_dec->srcpad),
-							      &vpu_dec->
-							      pushbuff);
+							      GST_PAD_CAPS(vpu_dec->srcpad),
+							      &vpu_dec->pushbuff);
 			if (retval != GST_FLOW_OK) {
-				GST_ERROR("Error in allocating the Framebuffer[%d], error is %d", i, retval);
+				GST_ERROR("Error in allocating the Framebuffer[%d] 3, error is %d", i, retval);
 				break;
 			}
 			memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
