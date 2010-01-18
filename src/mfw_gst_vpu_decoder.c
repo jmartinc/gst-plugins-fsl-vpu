@@ -303,8 +303,7 @@ mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
 			break;
 		default:
 			vpu_dec->rotation_angle = 0;
-			G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id,
-							  pspec);
+			G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 			break;
 		}
 		break;
@@ -463,26 +462,19 @@ mfw_gst_VC1_Create_RCVheader(MfwGstVPU_Dec * vpu_dec, GstBuffer * inbuffer)
 	i += vpu_dec->HdrExtDataLen;
 	//Height
 	RCVHeaderData[i++] = (unsigned char) vpu_dec->picHeight;
-	RCVHeaderData[i++] =
-	    (unsigned char) (((vpu_dec->picHeight >> 8) & 0xff));
-	RCVHeaderData[i++] =
-	    (unsigned char) (((vpu_dec->picHeight >> 16) & 0xff));
-	RCVHeaderData[i++] =
-	    (unsigned char) (((vpu_dec->picHeight >> 24) & 0xff));
+	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picHeight >> 8) & 0xff));
+	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picHeight >> 16) & 0xff));
+	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picHeight >> 24) & 0xff));
 	//Width
 	RCVHeaderData[i++] = (unsigned char) vpu_dec->picWidth;
-	RCVHeaderData[i++] =
-	    (unsigned char) (((vpu_dec->picWidth >> 8) & 0xff));
-	RCVHeaderData[i++] =
-	    (unsigned char) (((vpu_dec->picWidth >> 16) & 0xff));
-	RCVHeaderData[i++] =
-	    (unsigned char) (((vpu_dec->picWidth >> 24) & 0xff));
+	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picWidth >> 8) & 0xff));
+	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picWidth >> 16) & 0xff));
+	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picWidth >> 24) & 0xff));
 	//Frame Size
 	RCVHeaderData[i++] = (unsigned char) GST_BUFFER_SIZE(inbuffer);
 	RCVHeaderData[i++] = (unsigned char) (GST_BUFFER_SIZE(inbuffer) >> 8);
 	RCVHeaderData[i++] = (unsigned char) (GST_BUFFER_SIZE(inbuffer) >> 16);
-	RCVHeaderData[i++] =
-	    (unsigned char) ((GST_BUFFER_SIZE(inbuffer) >> 24) | 0x80);
+	RCVHeaderData[i++] = (unsigned char) ((GST_BUFFER_SIZE(inbuffer) >> 24) | 0x80);
 
 	return RCVHeader;
 }
@@ -846,13 +838,9 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 		// In rotation case we only output the rotation buffer so clear it now
 		// and below we have to wait for it it be displayed as we do not have a pipeline
 		if (vpu_dec->outputInfo->indexFrameDisplay >= 0) {
-			vpu_ret =
-			    vpu_DecClrDispFlag(*(vpu_dec->handle),
-					       vpu_dec->outputInfo->
-					       indexFrameDisplay);
-			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
-						 indexFrameDisplay] =
-			    FB_STATE_ALLOCTED;
+			vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle),
+					       vpu_dec->outputInfo->indexFrameDisplay);
+			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_ALLOCTED;
 			if (vpu_ret != RETCODE_SUCCESS) {
 				GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d", vpu_ret);
 				return GST_FLOW_ERROR;
@@ -1653,8 +1641,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_dec->prv_use_idx = i;
 
 		/* Decoder API to decode one Frame at a time */
-		vpu_ret =
-		    vpu_DecStartOneFrame(*(vpu_dec->handle), vpu_dec->decParam);
+		vpu_ret = vpu_DecStartOneFrame(*(vpu_dec->handle), vpu_dec->decParam);
 		if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
 			retval = GST_FLOW_OK;
 			break;
@@ -1684,9 +1671,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 
 		/* get the output information as to which index of the Framebuffers the
 		   output is written onto */
-		vpu_ret =
-		    vpu_DecGetOutputInfo(*(vpu_dec->handle),
-					 vpu_dec->outputInfo);
+		vpu_ret = vpu_DecGetOutputInfo(*(vpu_dec->handle), vpu_dec->outputInfo);
 		if (vpu_ret != RETCODE_SUCCESS) {
 			GST_ERROR("vpu_DecGetOutputInfo failed. Error code is %d", vpu_ret);
 			retval = GST_FLOW_ERROR;
@@ -1694,9 +1679,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		}
 
 		if (vpu_dec->outputInfo->indexFrameDecoded >= 0) {
-			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
-						 indexFrameDecoded] =
-			    FB_STATE_DECODED;
+			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDecoded] = FB_STATE_DECODED;
 		}
 #ifndef VPU_MX27
 		if ((vpu_dec->outputInfo->interlacedFrame)
