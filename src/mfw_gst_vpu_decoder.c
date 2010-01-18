@@ -938,6 +938,8 @@ GstFlowReturn mfw_gst_vpudec_vpu_init_filemode(MfwGstVPU_Dec * vpu_dec)
 
 	vpu_DecSetEscSeqInit(*(vpu_dec->handle), 1);
 	vpu_ret = vpu_DecGetInitialInfo(*(vpu_dec->handle), vpu_dec->initialInfo);
+	vpu_DecSetEscSeqInit(*(vpu_dec->handle), 0);
+
 	if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
 		return GST_FLOW_OK;
 	}
@@ -1007,7 +1009,6 @@ GstFlowReturn mfw_gst_vpudec_vpu_init_filemode(MfwGstVPU_Dec * vpu_dec)
 		GST_ERROR("Could not set the caps for the VPU decoder's src pad\n");
 	gst_caps_unref(caps);
 
-	vpu_DecSetEscSeqInit(*(vpu_dec->handle), 0);
 	vpu_dec->outsize = (vpu_dec->initialInfo->picWidth * vpu_dec->initialInfo->picHeight * 3) / 2;
 	vpu_dec->numframebufs = needFrameBufCount;
 	/* Allocate the Frame buffers requested by the Decoder */
