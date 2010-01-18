@@ -1201,52 +1201,32 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 						vpu_dec->start_addr +=
 						    GST_BUFFER_SIZE(buffer);
 					} else {
-						guint residue =
-						    (vpu_dec->end_addr -
-						     vpu_dec->start_addr);
-						memcpy(vpu_dec->start_addr,
-						       GST_BUFFER_DATA(buffer),
-						       residue);
+						guint residue = vpu_dec->end_addr - vpu_dec->start_addr;
+						memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), residue);
 						memcpy(vpu_dec->base_addr,
-						       GST_BUFFER_DATA(buffer) +
-						       residue,
-						       GST_BUFFER_SIZE(buffer) -
-						       residue);
-						vpu_dec->start_addr =
-						    vpu_dec->base_addr +
-						    GST_BUFFER_SIZE(buffer) -
-						    residue;
+								GST_BUFFER_DATA(buffer) + residue,
+								GST_BUFFER_SIZE(buffer) - residue);
+						vpu_dec->start_addr = vpu_dec->base_addr + GST_BUFFER_SIZE(buffer) -
+								residue;
 					}
 
-					vpu_ret =
-					    vpu_DecUpdateBitstreamBuffer(*
-									 (vpu_dec->
-									  handle),
-									 GST_BUFFER_SIZE
-									 (buffer));
+					vpu_ret = vpu_DecUpdateBitstreamBuffer(*vpu_dec->handle, GST_BUFFER_SIZE(buffer));
 					if (vpu_ret != RETCODE_SUCCESS) {
-						GST_ERROR
-						    ("vpu_DecUpdateBitstreamBuffer failed. Error code is %d",
-						     vpu_ret);
+						GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d",
+							vpu_ret);
 						retval = GST_FLOW_ERROR;
 						goto done;
 					}
 
-					vpu_dec->buffered_size +=
-					    GST_BUFFER_SIZE(buffer);
+					vpu_dec->buffered_size += GST_BUFFER_SIZE(buffer);
 					gst_buffer_unref(buffer);
 					buffer = NULL;
 				}
 			} else {
-				if ((vpu_dec->buffered_size <
-				     (vpu_dec->
-				      frame_sizes_buffer[vpu_dec->buffidx_out] +
-				      1024))) {
+				if (vpu_dec->buffered_size < vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_out] + 1024)
 					break;
-				}
-				if (vpu_dec->buffered_size < 2048) {
+				if (vpu_dec->buffered_size < 2048)
 					break;
-				}
 			}
 		}
 		// Start Decoding One frame in VPU if not already started
@@ -2172,9 +2152,7 @@ src_templ(void)
 	static GstPadTemplate *templ = NULL;
 	GstCaps *caps;
 	GstStructure *structure;
-	GValue list = { 0 }, fps = {
-	0}, fmt = {
-	0};
+	GValue list = { 0 }, fps = {0}, fmt = {0};
 
 	char *fmts[] = { "YV12", "I420", "Y42B", "NV12", NULL };
 	guint n;
