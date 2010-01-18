@@ -920,128 +920,6 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 	return GST_FLOW_OK;
 }
 
-GstFlowReturn mfw_gst_vpudec_vpu_init_filemode(MfwGstVPU_Dec * vpu_dec)
-{
-	RetCode vpu_ret = RETCODE_SUCCESS;
-	GstCaps *caps;
-	gint crop_top_len, crop_left_len;
-	gint crop_right_len, crop_bottom_len;
-	gint orgPicW, orgPicH;
-
-#if (defined (VPU_MX37) || defined (VPU_MX51)) && defined (CHROMA_INTERLEAVE)
-	gint fourcc = GST_STR_FOURCC("NV12");
-#else
-	gint fourcc = GST_STR_FOURCC("I420");
-#endif
-	DecBufInfo bufinfo;
-	guint needFrameBufCount = 0;
-
-	vpu_DecSetEscSeqInit(*(vpu_dec->handle), 1);
-	vpu_ret = vpu_DecGetInitialInfo(*(vpu_dec->handle), vpu_dec->initialInfo);
-	vpu_DecSetEscSeqInit(*(vpu_dec->handle), 0);
-
-	if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-		return GST_FLOW_OK;
-	}
-	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_DecGetInitialInfo failed. Error code is %d \n", vpu_ret);
-		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec, "VPU Decoder Initialisation failed ");
-		return GST_FLOW_ERROR;
-	}
-	GST_DEBUG("Dec: min buffer count= %d\n", vpu_dec->initialInfo->minFrameBufferCount);
-	GST_DEBUG("Dec InitialInfo =>\npicWidth: %u, picHeight: %u, frameRate: %u\n",
-			vpu_dec->initialInfo->picWidth,
-			vpu_dec->initialInfo->picHeight,
-			(unsigned int) vpu_dec->initialInfo->frameRateInfo);
-
-	/* Check: Minimum resolution limitation */
-	if (vpu_dec->initialInfo->picWidth < MIN_WIDTH || vpu_dec->initialInfo->picHeight < MIN_HEIGHT) {
-		GstMessage *message = NULL;
-		GError *gerror = NULL;
-		gchar *text_msg = "unsupported video resolution.";
-		gerror = g_error_new_literal(1, 0, text_msg);
-		message = gst_message_new_error(GST_OBJECT(GST_ELEMENT(vpu_dec)), gerror, "debug none");
-		gst_element_post_message(GST_ELEMENT(vpu_dec), message);
-		g_error_free(gerror);
-
-		return GST_FLOW_ERROR;
-	}
-
-	if (vpu_dec->initialInfo->minFrameBufferCount > NUM_MAX_VPU_REQUIRED) {
-		g_print("vpu required frames number exceed max limitation, required %d.",
-		     vpu_dec->initialInfo->minFrameBufferCount);
-		return GST_FLOW_ERROR;
-	}
-
-	needFrameBufCount = vpu_dec->initialInfo->minFrameBufferCount + 2;
-
-	/* Padding the width and height to 16 */
-	orgPicW = vpu_dec->initialInfo->picWidth;
-	orgPicH = vpu_dec->initialInfo->picHeight;
-	vpu_dec->initialInfo->picWidth = (vpu_dec->initialInfo->picWidth + 15) / 16 * 16;
-	vpu_dec->initialInfo->picHeight = (vpu_dec->initialInfo->picHeight + 15) / 16 * 16;
-	if (vpu_dec->codec == STD_AVC && (vpu_dec->initialInfo->picCropRect.right > 0
-			&& vpu_dec->initialInfo->picCropRect.bottom > 0)) {
-		crop_top_len = vpu_dec->initialInfo->picCropRect.top;
-		crop_left_len = vpu_dec->initialInfo->picCropRect.left;
-		crop_right_len = vpu_dec->initialInfo->picWidth - vpu_dec->initialInfo->picCropRect.right;
-		crop_bottom_len = vpu_dec->initialInfo->picHeight - vpu_dec->initialInfo->picCropRect.bottom;
-	} else {
-		crop_top_len = 0;
-		crop_left_len = 0;
-		crop_right_len = vpu_dec->initialInfo->picWidth - orgPicW;
-		crop_bottom_len = vpu_dec->initialInfo->picHeight - orgPicH;
-	}
-
-	/* set the capabilites on the source pad */
-	caps = gst_caps_new_simple("video/x-raw-yuv",
-			"format", GST_TYPE_FOURCC, fourcc,
-			"width", G_TYPE_INT, vpu_dec->initialInfo->picWidth,
-			"height", G_TYPE_INT, vpu_dec->initialInfo->picHeight,
-			"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
-			"crop-top-by-pixel", G_TYPE_INT, crop_top_len,
-			"crop-left-by-pixel", G_TYPE_INT, (crop_left_len + 7) / 8 * 8,
-			"crop-right-by-pixel", G_TYPE_INT, (crop_right_len + 7) / 8 * 8,
-			"crop-bottom-by-pixel", G_TYPE_INT, crop_bottom_len,
-			"num-buffers-required", G_TYPE_INT, needFrameBufCount,
-			NULL);
-	if (!(gst_pad_set_caps(vpu_dec->srcpad, caps)))
-		GST_ERROR("Could not set the caps for the VPU decoder's src pad\n");
-	gst_caps_unref(caps);
-
-	vpu_dec->outsize = (vpu_dec->initialInfo->picWidth * vpu_dec->initialInfo->picHeight * 3) / 2;
-	vpu_dec->numframebufs = needFrameBufCount;
-	/* Allocate the Frame buffers requested by the Decoder */
-	if (vpu_dec->framebufinit_done == FALSE) {
-		if ((mfw_gst_vpudec_FrameBufferInit(vpu_dec, vpu_dec->frameBuf, needFrameBufCount)) < 0) {
-			GST_ERROR("Mem system allocation failed!\n");
-			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
-							    "Allocation of the Frame Buffers Failed");
-
-			return GST_FLOW_ERROR;
-		}
-		vpu_dec->framebufinit_done = TRUE;
-	}
-
-	memset(&bufinfo, 0, sizeof (bufinfo));
-	bufinfo.avcSliceBufInfo.sliceSaveBuffer = vpu_dec->slice_mem_desc.phy_addr;
-	bufinfo.avcSliceBufInfo.sliceSaveBufferSize = SLICE_SAVE_SIZE;
-
-	/* Register the Allocated Frame buffers with the decoder */
-	vpu_ret = vpu_DecRegisterFrameBuffer(*(vpu_dec->handle),
-					     vpu_dec->frameBuf,
-					     vpu_dec->numframebufs,
-					     vpu_dec->initialInfo->picWidth, &bufinfo);
-
-	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_DecRegisterFrameBuffer failed. Error code is %d \n", vpu_ret);
-		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
-						    "Registration of the Allocated Frame Buffers Failed ");
-		return GST_FLOW_ERROR;
-	}
-	vpu_dec->init = TRUE;
-	return GST_FLOW_OK;}
-
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_vpu_init
 
@@ -1789,7 +1667,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
-		retval = mfw_gst_vpudec_vpu_init_filemode(vpu_dec);
+		retval = mfw_gst_vpudec_vpu_init(vpu_dec, 1);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR
 			    ("mfw_gst_vpudec_vpu_init failed initializing VPU\n");
