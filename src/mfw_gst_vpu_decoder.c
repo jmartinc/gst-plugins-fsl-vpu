@@ -950,36 +950,30 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	vpu_DecSetEscSeqInit(*(vpu_dec->handle), 1);
 
-	vpu_ret =
-	    vpu_DecGetInitialInfo(*(vpu_dec->handle), vpu_dec->initialInfo);
+	vpu_ret = vpu_DecGetInitialInfo(*(vpu_dec->handle), vpu_dec->initialInfo);
 	vpu_DecSetEscSeqInit(*(vpu_dec->handle), 0);
 
 	if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
 		return GST_FLOW_OK;
 	}
 	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_DecGetInitialInfo failed. Error code is %d \n",
-			  vpu_ret);
-		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
-						    "VPU Decoder Initialization failed ");
+		GST_ERROR("vpu_DecGetInitialInfo failed. Error code is %d \n", vpu_ret);
+		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec, "VPU Decoder Initialization failed ");
 		return GST_FLOW_ERROR;
 	}
 	GST_DEBUG("Dec: min buffer count= %d\n",
 		  vpu_dec->initialInfo->minFrameBufferCount);
-	GST_DEBUG
-	    ("Dec InitialInfo =>\npicWidth: %u, picHeight: %u, frameRate: %u\n",
-	     vpu_dec->initialInfo->picWidth, vpu_dec->initialInfo->picHeight,
-	     (unsigned int) vpu_dec->initialInfo->frameRateInfo);
+	GST_DEBUG("Dec InitialInfo =>\npicWidth: %u, picHeight: %u, frameRate: %u\n",
+		vpu_dec->initialInfo->picWidth, vpu_dec->initialInfo->picHeight,
+		(unsigned int) vpu_dec->initialInfo->frameRateInfo);
 
 	/* Check: Minimum resolution limitation */
-	if (vpu_dec->initialInfo->picWidth < MIN_WIDTH
-	    || vpu_dec->initialInfo->picHeight < MIN_HEIGHT) {
+	if (vpu_dec->initialInfo->picWidth < MIN_WIDTH || vpu_dec->initialInfo->picHeight < MIN_HEIGHT) {
 		GstMessage *message = NULL;
 		GError *gerror = NULL;
 		gchar *text_msg = "unsupported video resolution.";
 		gerror = g_error_new_literal(1, 0, text_msg);
-		message =
-		    gst_message_new_error(GST_OBJECT(GST_ELEMENT(vpu_dec)),
+		message = gst_message_new_error(GST_OBJECT(GST_ELEMENT(vpu_dec)),
 					  gerror, "debug none");
 		gst_element_post_message(GST_ELEMENT(vpu_dec), message);
 		g_error_free(gerror);
@@ -988,8 +982,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	}
 
 	if (vpu_dec->initialInfo->minFrameBufferCount > NUM_MAX_VPU_REQUIRED) {
-		g_print
-		    ("vpu required frames number exceed max limitation, required %d.",
+		g_print("vpu required frames number exceed max limitation, required %d.",
 		     vpu_dec->initialInfo->minFrameBufferCount);
 		return GST_FLOW_ERROR;
 	}
@@ -1047,8 +1040,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	/* Allocate the Frame buffers requested by the Decoder */
 	if (vpu_dec->framebufinit_done == FALSE) {
-		if ((mfw_gst_vpudec_FrameBufferInit
-		     (vpu_dec, vpu_dec->frameBuf, needFrameBufCount)) < 0) {
+		if ((mfw_gst_vpudec_FrameBufferInit(vpu_dec, vpu_dec->frameBuf, needFrameBufCount)) < 0) {
 			GST_ERROR("Mem system allocation failed!\n");
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 							    "Allocation of the Frame Buffers Failed");
@@ -1059,8 +1051,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	}
 
 	memset(&bufinfo, 0, sizeof (bufinfo));
-	bufinfo.avcSliceBufInfo.sliceSaveBuffer =
-	    vpu_dec->slice_mem_desc.phy_addr;
+	bufinfo.avcSliceBufInfo.sliceSaveBuffer = vpu_dec->slice_mem_desc.phy_addr;
 	bufinfo.avcSliceBufInfo.sliceSaveBufferSize = SLICE_SAVE_SIZE;
 
 	// Register the Allocated Frame buffers with the decoder
@@ -1072,9 +1063,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 			vpu_dec->initialInfo->minFrameBufferCount : vpu_dec->numframebufs,
 			vpu_dec->initialInfo->picWidth, &bufinfo);
 	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR
-		    ("vpu_DecRegisterFrameBuffer failed. Error code is %d \n",
-		     vpu_ret);
+		GST_ERROR("vpu_DecRegisterFrameBuffer failed. Error code is %d \n", vpu_ret);
 		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 						    "Registration of the Allocated Frame Buffers Failed ");
 		return GST_FLOW_ERROR;
@@ -1084,48 +1073,34 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		int rotStride = vpu_dec->initialInfo->picWidth;
 		if (vpu_dec->rotation_angle) {
 			// must set angle before rotator stride since the stride uses angle for error checking
-			vpu_ret =
-			    vpu_DecGiveCommand(*(vpu_dec->handle),
+			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle),
 					       SET_ROTATION_ANGLE,
 					       &vpu_dec->rotation_angle);
 
 			// Do a 90 degree rotation - buffer is allocated in FrameBufferInit at end
 			// for rotation, set stride, rotation angle and initial buffer output
-			if ((vpu_dec->rotation_angle == 90)
-			    || (vpu_dec->rotation_angle == 270))
+			if ((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270))
 				rotStride = vpu_dec->initialInfo->picHeight;
 		}
 		if (vpu_dec->mirror_dir) {
-			vpu_ret =
-			    vpu_DecGiveCommand(*(vpu_dec->handle),
+			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle),
 					       SET_MIRROR_DIRECTION,
 					       &vpu_dec->mirror_dir);
 		}
-		vpu_ret =
-		    vpu_DecGiveCommand(*(vpu_dec->handle), SET_ROTATOR_STRIDE,
-				       &rotStride);
+		vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle), SET_ROTATOR_STRIDE, &rotStride);
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_Dec SET_ROTATOR_STRIDE failed. ret=%d \n",
-			     vpu_ret);
+			GST_ERROR("vpu_Dec SET_ROTATOR_STRIDE failed. ret=%d \n", vpu_ret);
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 							    "VPU SET_ROTATOR_STRIDE failed ");
 			return GST_FLOW_ERROR;
 		}
-		vpu_dec->rot_buff_idx =
-		    vpu_dec->initialInfo->minFrameBufferCount;
-		vpu_ret =
-		    vpu_DecGiveCommand(*(vpu_dec->handle), SET_ROTATOR_OUTPUT,
-				       &vpu_dec->frameBuf[vpu_dec->
-							  rot_buff_idx]);
+		vpu_dec->rot_buff_idx = vpu_dec->initialInfo->minFrameBufferCount;
+		vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle), SET_ROTATOR_OUTPUT,
+				       &vpu_dec->frameBuf[vpu_dec->rot_buff_idx]);
 		if (vpu_dec->rotation_angle)
-			vpu_ret =
-			    vpu_DecGiveCommand(*(vpu_dec->handle),
-					       ENABLE_ROTATION, 0);
+			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle), ENABLE_ROTATION, 0);
 		if (vpu_dec->mirror_dir)
-			vpu_ret =
-			    vpu_DecGiveCommand(*(vpu_dec->handle),
-					       ENABLE_MIRRORING, 0);
+			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle), ENABLE_MIRRORING, 0);
 	}
 
 	vpu_dec->decParam->prescanEnable = 1;
