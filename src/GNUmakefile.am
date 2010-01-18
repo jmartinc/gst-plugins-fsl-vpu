@@ -66,11 +66,11 @@ libgst_plugins_fsl_v4lsrc_la_LDFLAGS = \
 libgst_plugins_fsl_v4lsink_la_CFLAGS = \
 	$(common_cflags) -DENABLE_TVOUT
 
-libgst_plugins_fsl_v4lsrc_la_LIBADD = \
+libgst_plugins_fsl_v4lsink_la_LIBADD = \
 	$(common_libadd)
 
-libgst_plugins_fsl_v4lsrc_la_LDFLAGS = \
-	$(common_ldflags)
+libgst_plugins_fsl_v4lsink_la_LDFLAGS = \
+	$(common_ldflags) -lgstvideo-0.10
 
 MAINTAINERCLEANFILES = \
 	GNUmakefile.in
