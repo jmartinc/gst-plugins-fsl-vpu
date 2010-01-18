@@ -605,16 +605,13 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 			frameBuf[i].bufMvCol = vpu_dec->frame_mem[i].phy_addr;
 #endif
 			vpu_dec->outbuffers[i] = outbuffer;
-			GST_BUFFER_SIZE(vpu_dec->outbuffers[i]) =
-			    vpu_dec->outsize;
+			GST_BUFFER_SIZE(vpu_dec->outbuffers[i]) = vpu_dec->outsize;
 			GST_BUFFER_OFFSET_END(vpu_dec->outbuffers[i]) = i;
 			vpu_dec->fb_state_plugin[i] = FB_STATE_ALLOCTED;
 
 			frameBuf[i].bufY = GST_BUFFER_OFFSET(outbuffer);
-			frameBuf[i].bufCb =
-			    frameBuf[i].bufY + (strideY * height);
-			frameBuf[i].bufCr =
-			    frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
+			frameBuf[i].bufCb = frameBuf[i].bufY + (strideY * height);
+			frameBuf[i].bufCr = frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
 			vpu_dec->direct_render = TRUE;
 		}
 		/* else allocate The Hardware buffer through IOGetPhyMem
@@ -858,9 +855,7 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 						 indexFrameDisplay] =
 			    FB_STATE_ALLOCTED;
 			if (vpu_ret != RETCODE_SUCCESS) {
-				GST_ERROR
-				    ("vpu_DecClrDispFlag failed. Error code is %d \n",
-				     vpu_ret);
+				GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d \n", vpu_ret);
 				return GST_FLOW_ERROR;
 			}
 		}
@@ -881,11 +876,7 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 						vpu_dec->fb_state_plugin[i] =
 						    FB_STATE_ALLOCTED;
 						//g_print (" clearing buffer %d \n", i);
-						vpu_ret =
-						    vpu_DecClrDispFlag(*
-								       (vpu_dec->
-									handle),
-								       i);
+						vpu_ret = vpu_DecClrDispFlag(*vpu_dec->handle, i);
 						if (vpu_ret != RETCODE_SUCCESS) {
 							GST_ERROR
 							    ("vpu_DecClrDispFlag failed. Error code is %d \n",
@@ -1399,9 +1390,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		if (G_LIKELY(vpu_dec->direct_render == TRUE)) {
 			if (vpu_dec->rotation_angle
 			    || vpu_dec->mirror_dir) {
-				vpu_dec->pushbuff =
-				    vpu_dec->outbuffers[vpu_dec->
-							rot_buff_idx];
+				vpu_dec->pushbuff = vpu_dec->outbuffers[vpu_dec->rot_buff_idx];
 				// switch output buffer for every other frame so we don't overwrite display data in v4lsink
 				// this way VPU can still decode while v4l sink is displaying
 				vpu_dec->rot_buff_idx =
@@ -1413,10 +1402,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 					&vpu_dec->
 					frameBuf[vpu_dec->rot_buff_idx]);
 			} else {
-				vpu_dec->pushbuff =
-				    vpu_dec->outbuffers[vpu_dec->
-							outputInfo->
-							indexFrameDisplay];
+				vpu_dec->pushbuff = vpu_dec->outbuffers[vpu_dec->outputInfo->indexFrameDisplay];
 			}
 		} else {
 			// Incase of the Filesink the output in the hardware buffer is copied onto the
@@ -1782,11 +1768,9 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 			goto done;
 		}
 
-		if (G_LIKELY(vpu_dec->direct_render == TRUE)) {
-			vpu_dec->pushbuff =
-			    vpu_dec->outbuffers[vpu_dec->outputInfo->
-						indexFrameDisplay];
-		}
+		if (G_LIKELY(vpu_dec->direct_render == TRUE))
+			vpu_dec->pushbuff = vpu_dec->outbuffers[vpu_dec->outputInfo->indexFrameDisplay];
+
 		/* Incase of the Filesink the output in the hardware buffer is copied onto the
 		   buffer allocated by filesink */
 		else {
