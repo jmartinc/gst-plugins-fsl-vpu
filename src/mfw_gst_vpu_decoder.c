@@ -1941,20 +1941,14 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		for (cnt = 0; cnt < NUM_FRAME_BUF; cnt++)
 			vpu_dec->outbuffers[cnt] = NULL;
 
-		memset(&vpu_dec->bit_stream_buf, 0,
-		       sizeof (vpu_mem_desc));
-		memset(&vpu_dec->frame_sizes_buffer[0], 0,
-		       MAX_STREAM_BUF * sizeof (guint));
-		memset(&vpu_dec->timestamp_buffer[0], 0,
-		       MAX_STREAM_BUF * sizeof (GstClockTime));
-		memset(&vpu_dec->frameBuf[0], 0,
-		       NUM_FRAME_BUF * sizeof (FrameBuffer));
-		memset(&vpu_dec->frame_mem[0], 0,
-		       NUM_FRAME_BUF * sizeof (vpu_mem_desc));
+		memset(&vpu_dec->bit_stream_buf, 0, sizeof (vpu_mem_desc));
+		memset(&vpu_dec->frame_sizes_buffer[0], 0, MAX_STREAM_BUF * sizeof (guint));
+		memset(&vpu_dec->timestamp_buffer[0], 0, MAX_STREAM_BUF * sizeof (GstClockTime));
+		memset(&vpu_dec->frameBuf[0], 0, NUM_FRAME_BUF * sizeof (FrameBuffer));
+		memset(&vpu_dec->frame_mem[0], 0, NUM_FRAME_BUF * sizeof (vpu_mem_desc));
 		/* Handle the decoder Initialization over here. */
 		vpu_dec->decOP = g_malloc(sizeof (DecOpenParam));
-		vpu_dec->initialInfo =
-		    g_malloc(sizeof (DecInitialInfo));
+		vpu_dec->initialInfo = g_malloc(sizeof (DecInitialInfo));
 		vpu_dec->decParam = g_malloc(sizeof (DecParam));
 		vpu_dec->handle = g_malloc(sizeof (DecHandle));
 		vpu_dec->outputInfo = g_malloc(sizeof (DecOutputInfo));
