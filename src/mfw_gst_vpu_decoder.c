@@ -1659,12 +1659,11 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 
 	/*Time stamp Buffer is a circular buffer to store the timestamps which are later
 	   used while pushing the decoded frame onto the Sink element */
-	vpu_dec->timestamp_buffer[vpu_dec->ts_rx] =
-	    GST_BUFFER_TIMESTAMP(buffer);
+	vpu_dec->timestamp_buffer[vpu_dec->ts_rx] = GST_BUFFER_TIMESTAMP(buffer);
 	vpu_dec->ts_rx = (vpu_dec->ts_rx + 1) % MAX_STREAM_BUF;
-    /******************************************************************************/
-    /********           Fill and update bitstreambuf           ********************/
-    /******************************************************************************/
+	/******************************************************************************/
+	/********           Fill and update bitstreambuf           ********************/
+	/******************************************************************************/
 	if ((vpu_dec->codec == STD_VC1) && (vpu_dec->picWidth != 0)) {
 		/* Creation of RCV Header is done in case of ASF Playback pf VC-1 streams
 		   from the parameters like width height and Header Extension Data */
@@ -1679,74 +1678,55 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		   for integration with ASF */
 		else {
 			SrcFrameSize = gst_buffer_new_and_alloc(4);
-			GST_BUFFER_DATA(SrcFrameSize)[0] =
-			    (unsigned char) GST_BUFFER_SIZE(buffer);
-			GST_BUFFER_DATA(SrcFrameSize)[1] =
-			    (unsigned char) (GST_BUFFER_SIZE(buffer) >> 8);
-			GST_BUFFER_DATA(SrcFrameSize)[2] =
-			    (unsigned char) (GST_BUFFER_SIZE(buffer) >> 16);
-			GST_BUFFER_DATA(SrcFrameSize)[3] =
-			    (unsigned char) (GST_BUFFER_SIZE(buffer) >> 24);
+			GST_BUFFER_DATA(SrcFrameSize)[0] = (unsigned char) GST_BUFFER_SIZE(buffer);
+			GST_BUFFER_DATA(SrcFrameSize)[1] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 8);
+			GST_BUFFER_DATA(SrcFrameSize)[2] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 16);
+			GST_BUFFER_DATA(SrcFrameSize)[3] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 24);
 			buffer = gst_buffer_join(SrcFrameSize, buffer);
 		}
 	}
 
-	memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer),
-	       GST_BUFFER_SIZE(buffer));
+	memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
 	vpu_dec->decParam->chunkSize = GST_BUFFER_SIZE(buffer);
 
 	/* Initializion of the VPU decoder and the output buffers for the VPU
 	   is done here */
 	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
-		vpu_ret =
-		    vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle),
-						 GST_BUFFER_SIZE(buffer));
+		vpu_ret = vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle), GST_BUFFER_SIZE(buffer));
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_DecUpdateBitstreamBuffer failed. Error code is %d \n",
-			     vpu_ret);
+			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d \n", vpu_ret);
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
 		vpu_DecSetEscSeqInit(*(vpu_dec->handle), 1);
 		/* Decoder API to parse the input and get some initial parameters like height
 		   width and number of output buffers to be allocated */
-		vpu_ret = vpu_DecGetInitialInfo(*(vpu_dec->handle),
-						vpu_dec->initialInfo);
+		vpu_ret = vpu_DecGetInitialInfo(*(vpu_dec->handle), vpu_dec->initialInfo);
 		if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
 			retval = GST_FLOW_OK;
 			goto done;
 		}
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_DecGetInitialInfo failed. Error code is %d \n",
-			     vpu_ret);
-			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
-							    "VPU Decoder Initialisation failed ");
+			GST_ERROR("vpu_DecGetInitialInfo failed. Error code is %d \n", vpu_ret);
+			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec, "VPU Decoder Initialisation failed ");
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
-		GST_DEBUG("Dec: min buffer count= %d\n",
-			  vpu_dec->initialInfo->minFrameBufferCount);
-		GST_DEBUG
-		    ("Dec InitialInfo =>\npicWidth: %u, picHeight: %u, frameRate: %u\n",
-		     vpu_dec->initialInfo->picWidth,
-		     vpu_dec->initialInfo->picHeight,
-		     (unsigned int) vpu_dec->initialInfo->frameRateInfo);
+		GST_DEBUG("Dec: min buffer count= %d\n", vpu_dec->initialInfo->minFrameBufferCount);
+		GST_DEBUG("Dec InitialInfo =>\npicWidth: %u, picHeight: %u, frameRate: %u\n",
+				vpu_dec->initialInfo->picWidth,
+				vpu_dec->initialInfo->picHeight,
+				(unsigned int) vpu_dec->initialInfo->frameRateInfo);
 
 		/*
 		 * ENGR78843: 64x64 resolution limitation
 		 */
-		if (vpu_dec->initialInfo->picWidth < MIN_WIDTH
-		    || vpu_dec->initialInfo->picHeight < MIN_HEIGHT) {
+		if (vpu_dec->initialInfo->picWidth < MIN_WIDTH || vpu_dec->initialInfo->picHeight < MIN_HEIGHT) {
 			GstMessage *message = NULL;
 			GError *gerror = NULL;
 			gchar *text_msg = "unsupported video resolution.";
 			gerror = g_error_new_literal(1, 0, text_msg);
-			message =
-			    gst_message_new_error(GST_OBJECT
-						  (GST_ELEMENT(vpu_dec)),
-						  gerror, "debug none");
+			message = gst_message_new_error(GST_OBJECT(GST_ELEMENT(vpu_dec)), gerror, "debug none");
 			gst_element_post_message(GST_ELEMENT(vpu_dec), message);
 			g_error_free(gerror);
 
@@ -1754,17 +1734,14 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 			goto done;
 		}
 
-		if (vpu_dec->initialInfo->minFrameBufferCount >
-		    NUM_MAX_VPU_REQUIRED) {
-			g_print
-			    ("vpu required frames number exceed max limitation, required %d.",
+		if (vpu_dec->initialInfo->minFrameBufferCount > NUM_MAX_VPU_REQUIRED) {
+			g_print("vpu required frames number exceed max limitation, required %d.",
 			     vpu_dec->initialInfo->minFrameBufferCount);
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
 
-		needFrameBufCount =
-		    vpu_dec->initialInfo->minFrameBufferCount + 2;
+		needFrameBufCount = vpu_dec->initialInfo->minFrameBufferCount + 2;
 
 		/* Padding the width and height to 16 */
 		{
@@ -1825,9 +1802,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_dec->numframebufs = needFrameBufCount;
 		/* Allocate the Frame buffers requested by the Decoder */
 		if (vpu_dec->framebufinit_done == FALSE) {
-			if ((mfw_gst_vpudec_FrameBufferInit
-			     (vpu_dec, vpu_dec->frameBuf,
-			      needFrameBufCount)) < 0) {
+			if ((mfw_gst_vpudec_FrameBufferInit(vpu_dec, vpu_dec->frameBuf, needFrameBufCount)) < 0) {
 				GST_ERROR("Mem system allocation failed!\n");
 				mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 								    "Allocation of the Frame Buffers Failed");
@@ -1838,8 +1813,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 			vpu_dec->framebufinit_done = TRUE;
 		}
 		// empty for other codecs but H.264 (avc)
-		bufinfo.avcSliceBufInfo.sliceSaveBuffer =
-		    vpu_dec->slice_mem_desc.phy_addr;
+		bufinfo.avcSliceBufInfo.sliceSaveBuffer = vpu_dec->slice_mem_desc.phy_addr;
 		bufinfo.avcSliceBufInfo.sliceSaveBufferSize = SLICE_SAVE_SIZE;
 
 		/* Register the Allocated Frame buffers wit the decoder */
@@ -1850,9 +1824,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 						     picWidth, &bufinfo);
 
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_DecRegisterFrameBuffer failed. Error code is %d \n",
-			     vpu_ret);
+			GST_ERROR("vpu_DecRegisterFrameBuffer failed. Error code is %d \n", vpu_ret);
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 							    "Registration of the Allocated Frame Buffers Failed ");
 			retval = GST_FLOW_ERROR;
@@ -1870,19 +1842,12 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 			GstBuffer *pBuffer = vpu_dec->outbuffers[i];
 			if (gst_buffer_is_metadata_writable(pBuffer) &&
 			    vpu_dec->fb_state_plugin[i] == FB_STATE_DISPLAY) {
-				if (!(vpu_dec->codec == STD_VC1
-				      && i ==
-				      vpu_dec->outputInfo->indexFrameDisplay)) {
+				if (!(vpu_dec->codec == STD_VC1 && i == vpu_dec->outputInfo->indexFrameDisplay)) {
 					/* don't clear the frame buffer when it just displayed for vc1 clips */
-					vpu_dec->fb_state_plugin[i] =
-					    FB_STATE_ALLOCTED;
-					vpu_ret =
-					    vpu_DecClrDispFlag
-					    (*(vpu_dec->handle), i);
+					vpu_dec->fb_state_plugin[i] = FB_STATE_ALLOCTED;
+					vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle), i);
 					if (vpu_ret != RETCODE_SUCCESS) {
-						GST_ERROR
-						    ("vpu_DecClrDispFlag failed. Error code is %d \n",
-						     vpu_ret);
+						GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d \n", vpu_ret);
 						retval = GST_FLOW_ERROR;
 						goto done;
 					}
