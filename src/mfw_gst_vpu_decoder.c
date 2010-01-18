@@ -679,14 +679,7 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 	vpu_dec->decOP->bitstreamBuffer = vpu_dec->bit_stream_buf.phy_addr;
 	vpu_dec->decOP->bitstreamBufferSize = BUFF_FILL_SIZE;
 
-#if (defined (VPU_MX37) || defined (VPU_MX51)) && defined (CHROMA_INTERLEAVE)
-	g_print("set chromainterleave\n");
-	vpu_dec->decOP->chromaInterleave = 1;
-	if (vpu_dec->codec == STD_AVC)
-		vpu_dec->decOP->reorderEnable = 1;
-#else
 	vpu_dec->decOP->reorderEnable = 0;
-#endif
 
 	vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
 
@@ -914,11 +907,8 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
 	gint width, height;
 	gint crop_right_by_pixel, crop_bottom_by_pixel;
 
-#if (defined (VPU_MX37) || defined (VPU_MX51)) && defined (CHROMA_INTERLEAVE)
-	gint fourcc = GST_STR_FOURCC("NV12");
-#else
 	gint fourcc = GST_STR_FOURCC("I420");
-#endif
+
 	DecBufInfo bufinfo;
 	guint needFrameBufCount = 0;
 
@@ -1443,11 +1433,8 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 	GstFlowReturn retval = GST_FLOW_OK;
 	gint i = 0;
 	guint needFrameBufCount = 0;
-#if (defined (VPU_MX37) || defined (VPU_MX51)) && defined (CHROMA_INTERLEAVE)
-	gint fourcc = GST_STR_FOURCC("NV12");
-#else
 	gint fourcc = GST_STR_FOURCC("I420");
-#endif
+
 	GstCaps *caps = NULL;
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
@@ -1471,11 +1458,6 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		virt_bit_stream_buf = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
 		vpu_dec->start_addr = vpu_dec->base_addr = virt_bit_stream_buf;
 		vpu_dec->end_addr = virt_bit_stream_buf + BUFF_FILL_SIZE;
-
-#if (defined (VPU_MX37) || defined (VPU_MX51)) && defined (CHROMA_INTERLEAVE)
-		g_print("set chromainterleave\n");
-		vpu_dec->decOP->chromaInterleave = 1;
-#endif
 
 		if (vpu_dec->codec == STD_AVC) {
 			vpu_dec->ps_mem_desc.size = PS_SAVE_SIZE;
