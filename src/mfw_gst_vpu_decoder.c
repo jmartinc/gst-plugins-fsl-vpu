@@ -2084,8 +2084,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 			  GST_TIME_ARGS(position));
 		vpu_dec->flush = FALSE;
 		if (GST_FORMAT_TIME == format) {
-			result =
-			    gst_pad_push_event(vpu_dec->srcpad, event);
+			result = gst_pad_push_event(vpu_dec->srcpad, event);
 			if (TRUE != result) {
 				GST_ERROR
 				    ("\n Error in pushing the event,result	is %d\n",
@@ -2097,10 +2096,8 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		vpu_dec->buffidx_in = 0;
 		vpu_dec->buffidx_out = 0;
 		vpu_dec->buffered_size = 0;
-		memset(&vpu_dec->frame_sizes_buffer[0], 0,
-		       MAX_STREAM_BUF);
-		memset(&vpu_dec->timestamp_buffer[0], 0,
-		       MAX_STREAM_BUF);
+		memset(&vpu_dec->frame_sizes_buffer[0], 0, MAX_STREAM_BUF);
+		memset(&vpu_dec->timestamp_buffer[0], 0, MAX_STREAM_BUF);
 		vpu_dec->ts_rx = 0;
 		vpu_dec->ts_tx = 0;
 		vpu_dec->vpu_wait = FALSE;
@@ -2110,105 +2107,66 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		vpu_dec->base_ts = 0;
 
 		if (vpu_dec->is_startframe) {
-			vpu_DecGetOutputInfo(*vpu_dec->handle,
-					     vpu_dec->outputInfo);
+			vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
 			vpu_dec->is_startframe = FALSE;
 			vpu_mutex_unlock(vpu_dec->vpu_mutex);
 		}
 
 		if (vpu_dec->file_play_mode == FALSE) {
 			/* The below block of code is used to Flush the buffered input stream data */
-			if (vpu_dec->codec == STD_VC1
-			    || vpu_dec->codec == STD_AVC) {
-				vpu_ret =
-				    vpu_DecClose(*vpu_dec->handle);
-				if (vpu_ret ==
-				    RETCODE_FRAME_NOT_COMPLETE) {
-					vpu_DecGetOutputInfo(*vpu_dec->
-							     handle,
-							     vpu_dec->
-							     outputInfo);
-					vpu_ret =
-					    vpu_DecClose(*vpu_dec->
-							 handle);
+			if (vpu_dec->codec == STD_VC1 || vpu_dec->codec == STD_AVC) {
+				vpu_ret = vpu_DecClose(*vpu_dec->handle);
+				if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
+					vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
+					vpu_ret = vpu_DecClose(*vpu_dec->handle);
 				}
-				if (RETCODE_SUCCESS != vpu_ret) {
-					GST_ERROR
-					    (" error in vpu_DecClose ");
-				}
+
+				if (RETCODE_SUCCESS != vpu_ret)
+					GST_ERROR("error in vpu_DecClose\n");
+
 				vpu_dec->init = FALSE;
+
 				if (vpu_dec->codec == STD_VC1)
 					vpu_dec->first = FALSE;
-				vpu_ret =
-				    vpu_DecOpen(vpu_dec->handle,
-						vpu_dec->decOP);
-				if (vpu_ret != RETCODE_SUCCESS) {
-					GST_ERROR
-					    ("vpu_DecOpen failed. Error code is %d \n",
-					     vpu_ret);
 
-				}
-
+				vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
+				if (vpu_ret != RETCODE_SUCCESS)
+					GST_ERROR("vpu_DecOpen failed. Error code is %d \n", vpu_ret);
 			} else {
-				vpu_ret =
-				    vpu_DecBitBufferFlush(*vpu_dec->
-							  handle);
-				if (vpu_ret ==
-				    RETCODE_FRAME_NOT_COMPLETE) {
-					vpu_DecGetOutputInfo(*vpu_dec->
-							     handle,
-							     vpu_dec->
-							     outputInfo);
-					vpu_ret =
-					    vpu_DecBitBufferFlush
-					    (*vpu_dec->handle);
+				vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
+				if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
+					vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
+					vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
 				}
-				if (RETCODE_SUCCESS != vpu_ret) {
-					GST_ERROR
-					    (" error in flushing the bitstream buffer");
-				}
-
+				if (RETCODE_SUCCESS != vpu_ret)
+					GST_ERROR("error in flushing the bitstream buffer\n");
 			}
 			vpu_dec->start_addr = vpu_dec->base_addr;
 		}
 
 		/* clear all the framebuffer which not in display state */
-		if (vpu_dec->codec == STD_MPEG2
-		    || vpu_dec->codec == STD_MPEG4) {
-			for (idx = 0; idx < vpu_dec->numframebufs;
-			     idx++) {
-				if (vpu_dec->fb_state_plugin[idx] !=
-				    FB_STATE_DISPLAY) {
-					vpu_ret =
-					    vpu_DecClrDispFlag(*
-							       (vpu_dec->
-								handle),
-							       idx);
-					vpu_dec->fb_state_plugin[idx] =
-					    FB_STATE_ALLOCTED;
+		if (vpu_dec->codec == STD_MPEG2 || vpu_dec->codec == STD_MPEG4) {
+			for (idx = 0; idx < vpu_dec->numframebufs; idx++) {
+				if (vpu_dec->fb_state_plugin[idx] != FB_STATE_DISPLAY) {
+					vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle), idx);
+					vpu_dec->fb_state_plugin[idx] = FB_STATE_ALLOCTED;
 				}
 			}
 		}
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result) {
-			GST_ERROR
-			    ("\n Error in pushing the event,result	is %d\n",
-			     result);
+			GST_ERROR("Error in pushing the event,result is %d\n", result);
 			gst_event_unref(event);
 		}
 		break;
 	case GST_EVENT_EOS:
 		if (vpu_dec->file_play_mode == FALSE)
-			mfw_gst_vpudec_chain_stream_mode(vpu_dec->
-							 sinkpad, NULL);
+			mfw_gst_vpudec_chain_stream_mode(vpu_dec->sinkpad, NULL);
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
-		if (TRUE != result) {
-			GST_ERROR
-			    ("\n Error in pushing the event,result	is %d\n",
-			     result);
-		}
+		if (TRUE != result)
+			GST_ERROR("Error in pushing the event,result is %d\n", result);
 		break;
 	default:
 		result = gst_pad_event_default(pad, event);
