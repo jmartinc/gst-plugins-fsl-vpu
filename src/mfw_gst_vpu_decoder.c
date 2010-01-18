@@ -1480,16 +1480,14 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		if (vpu_dec->codec == STD_AVC) {
 			vpu_dec->ps_mem_desc.size = PS_SAVE_SIZE;
 			IOGetPhyMem(&vpu_dec->ps_mem_desc);
-			vpu_dec->decOP->psSaveBuffer =
-			    vpu_dec->ps_mem_desc.phy_addr;
+			vpu_dec->decOP->psSaveBuffer = vpu_dec->ps_mem_desc.phy_addr;
 			vpu_dec->decOP->psSaveBufferSize = PS_SAVE_SIZE;
 
 			vpu_dec->slice_mem_desc.size = SLICE_SAVE_SIZE;
 			IOGetPhyMem(&vpu_dec->slice_mem_desc);
 		}
 
-		vpu_dec->decOP->bitstreamBuffer =
-		    vpu_dec->bit_stream_buf.phy_addr;
+		vpu_dec->decOP->bitstreamBuffer = vpu_dec->bit_stream_buf.phy_addr;
 		vpu_dec->decOP->bitstreamBufferSize = BUFF_FILL_SIZE;
 		if (vpu_dec->codec == STD_AVC)
 			vpu_dec->decOP->reorderEnable = 1;
@@ -1501,8 +1499,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_dec->decOP->picWidth = vpu_dec->picWidth;
 		vpu_dec->decOP->picHeight = vpu_dec->picHeight;
 		vpu_dec->base_write = vpu_dec->bit_stream_buf.phy_addr;
-		vpu_dec->end_write =
-		    vpu_dec->bit_stream_buf.phy_addr + BUFF_FILL_SIZE;
+		vpu_dec->end_write = vpu_dec->bit_stream_buf.phy_addr + BUFF_FILL_SIZE;
 
 		/* open a VPU's decoder instance */
 		vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
