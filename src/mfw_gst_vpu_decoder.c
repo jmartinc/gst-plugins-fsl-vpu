@@ -757,58 +757,46 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 		}
 	}
 
-    /******************************************************************************/
-    /********           Fill and update bitstreambuf           ********************/
-    /******************************************************************************/
+	/******************************************************************************/
+	/********           Fill and update bitstreambuf           ********************/
+	/******************************************************************************/
+
 	/*Time stamp Buffer is a circular buffer to store the timestamps which are later
 	   used while pushing the decoded frame onto the Sink element */
 	if (G_UNLIKELY(vpu_dec->eos == TRUE))
 		return GST_FLOW_OK;
 
-	if (vpu_dec->codec != STD_MPEG2
-	    || GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(buffer))) {
+	if (vpu_dec->codec != STD_MPEG2 || GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(buffer))) {
 		/* for mpeg2, we only store valid timestamp */
-		vpu_dec->timestamp_buffer[vpu_dec->ts_rx] =
-		    GST_BUFFER_TIMESTAMP((buffer));
+		vpu_dec->timestamp_buffer[vpu_dec->ts_rx] = GST_BUFFER_TIMESTAMP((buffer));
 		vpu_dec->ts_rx = (vpu_dec->ts_rx + 1) % MAX_STREAM_BUF;
 	}
+
 	if ((vpu_dec->codec == STD_VC1) && (vpu_dec->picWidth != 0)) {
 		/* Creation of RCV Header is done in case of ASF Playback pf VC-1 streams
 		   from the parameters like width height and Header Extension Data */
 		if (vpu_dec->first == FALSE) {
 			GstBuffer *tempBuf;
-			tempBuf =
-			    mfw_gst_VC1_Create_RCVheader(vpu_dec,
-							 buffer);
+			tempBuf = mfw_gst_VC1_Create_RCVheader(vpu_dec, buffer);
 			buffer = gst_buffer_join(tempBuf, buffer);
 			vpu_dec->first = TRUE;
-		}
+		} else {
+			/* The Size of the input stream is appended with the input stream
+			   for integration with ASF */
 
-		/* The Size of the input stream is appended with the input stream
-		   for integration with ASF */
-		else {
 			GstBuffer *SrcFrameSize = NULL;
 
 			SrcFrameSize = gst_buffer_new_and_alloc(4);
-			GST_BUFFER_DATA(SrcFrameSize)[0] =
-			    (unsigned char) GST_BUFFER_SIZE(buffer);
-			GST_BUFFER_DATA(SrcFrameSize)[1] =
-			    (unsigned char) (GST_BUFFER_SIZE(buffer) >>
-					     8);
-			GST_BUFFER_DATA(SrcFrameSize)[2] =
-			    (unsigned char) (GST_BUFFER_SIZE(buffer) >>
-					     16);
-			GST_BUFFER_DATA(SrcFrameSize)[3] =
-			    (unsigned char) (GST_BUFFER_SIZE(buffer) >>
-					     24);
+			GST_BUFFER_DATA(SrcFrameSize)[0] = (unsigned char) GST_BUFFER_SIZE(buffer);
+			GST_BUFFER_DATA(SrcFrameSize)[1] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 8);
+			GST_BUFFER_DATA(SrcFrameSize)[2] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 16);
+			GST_BUFFER_DATA(SrcFrameSize)[3] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 24);
 			buffer = gst_buffer_join(SrcFrameSize, buffer);
 		}
 	}
 
-	vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_in] =
-	    GST_BUFFER_SIZE(buffer);
-	vpu_dec->buffidx_in =
-	    (vpu_dec->buffidx_in + 1) % MAX_STREAM_BUF;
+	vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_in] = GST_BUFFER_SIZE(buffer);
+	vpu_dec->buffidx_in = (vpu_dec->buffidx_in + 1) % MAX_STREAM_BUF;
 
 	vpu_DecGetBitstreamBuffer(*(vpu_dec->handle), &p1, &p2, &space);
 
@@ -816,34 +804,20 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 	if (space >= GST_BUFFER_SIZE(buffer)) {
 		/* The buffer read by the VPU follows a circular buffer approach
 		   this block of code handles that */
-		if ((vpu_dec->start_addr + GST_BUFFER_SIZE(buffer)) <=
-		    vpu_dec->end_addr) {
-			memcpy(vpu_dec->start_addr,
-			       GST_BUFFER_DATA(buffer),
-			       GST_BUFFER_SIZE(buffer));
+		if ((vpu_dec->start_addr + GST_BUFFER_SIZE(buffer)) <= vpu_dec->end_addr) {
+			memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
 			vpu_dec->start_addr += GST_BUFFER_SIZE(buffer);
 		} else {
-			guint residue =
-			    (vpu_dec->end_addr - vpu_dec->start_addr);
-			memcpy(vpu_dec->start_addr,
-			       GST_BUFFER_DATA(buffer), residue);
-			memcpy(vpu_dec->base_addr,
-			       GST_BUFFER_DATA(buffer) + residue,
-			       GST_BUFFER_SIZE(buffer) - residue);
-			vpu_dec->start_addr =
-			    vpu_dec->base_addr +
-			    GST_BUFFER_SIZE(buffer) - residue;
+			guint residue = vpu_dec->end_addr - vpu_dec->start_addr;
+			memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), residue);
+			memcpy(vpu_dec->base_addr, GST_BUFFER_DATA(buffer) + residue, GST_BUFFER_SIZE(buffer) - residue);
+			vpu_dec->start_addr = vpu_dec->base_addr + GST_BUFFER_SIZE(buffer) - residue;
 		}
 
-		vpu_ret =
-		    vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle),
-						 GST_BUFFER_SIZE
-						 (buffer));
+		vpu_ret = vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle), GST_BUFFER_SIZE(buffer));
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_DecUpdateBitstreamBuffer failed. Error code is %d \n",
-			     vpu_ret);
-			return (GST_FLOW_ERROR);
+			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d \n", vpu_ret);
+			return GST_FLOW_ERROR;
 		}
 
 		vpu_dec->buffered_size += GST_BUFFER_SIZE(buffer);
