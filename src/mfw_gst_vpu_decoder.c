@@ -1061,6 +1061,8 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	gint crop_top_len, crop_left_len;
 	gint crop_right_len, crop_bottom_len;
 	gint orgPicW, orgPicH;
+	gint width, height;
+	gint crop_right_by_pixel, crop_bottom_by_pixel;
 
 #if (defined (VPU_MX37) || defined (VPU_MX51)) && defined (CHROMA_INTERLEAVE)
 	gint fourcc = GST_STR_FOURCC("NV12");
@@ -1127,24 +1129,28 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		crop_bottom_len = vpu_dec->initialInfo->picHeight - orgPicH;
 	}
 
+	if (vpu_dec->rotation_angle == 90 || vpu_dec->rotation_angle == 270) {
+		width = vpu_dec->initialInfo->picHeight;
+		height = vpu_dec->initialInfo->picWidth;
+		crop_right_by_pixel = (crop_right_len + 7) / 8 * 8;
+		crop_bottom_by_pixel = crop_right_len;
+	} else {
+		width = vpu_dec->initialInfo->picWidth;
+		height = vpu_dec->initialInfo->picHeight;
+		crop_right_by_pixel = (crop_bottom_len + 7) / 8 * 8;
+		crop_bottom_by_pixel = crop_bottom_len;
+	}
+
 	/* set the capabilites on the source pad */
 	caps = gst_caps_new_simple("video/x-raw-yuv",
 			"format", GST_TYPE_FOURCC, fourcc,
-			"width", G_TYPE_INT,
-			((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270)) ?
-				vpu_dec->initialInfo-> picHeight : vpu_dec->initialInfo->picWidth,
-			"height", G_TYPE_INT,
-			((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270)) ?
-				vpu_dec->initialInfo->picWidth : vpu_dec->initialInfo->picHeight,
+			"width", G_TYPE_INT, width,
+			"height", G_TYPE_INT, height,
 			"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
 			"crop-top-by-pixel", G_TYPE_INT, crop_top_len,
 			"crop-left-by-pixel", G_TYPE_INT, (crop_left_len + 7) / 8 * 8,
-			"crop-right-by-pixel", G_TYPE_INT,
-			((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270)) ?
-				(crop_right_len + 7) / 8 * 8 : (crop_bottom_len + 7) / 8 * 8,
-			"crop-bottom-by-pixel", G_TYPE_INT,
-			((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270)) ?
-				crop_right_len : crop_bottom_len,
+			"crop-right-by-pixel", G_TYPE_INT, crop_right_by_pixel,
+			"crop-bottom-by-pixel", G_TYPE_INT, crop_bottom_by_pixel,
 			"num-buffers-required", G_TYPE_INT, needFrameBufCount,
 			"framerate", GST_TYPE_FRACTION, vpu_dec->frame_rate_nu, vpu_dec->frame_rate_de,
 			NULL);
