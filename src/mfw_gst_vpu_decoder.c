@@ -1193,17 +1193,12 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	}
 	// Setup rotation or mirroring which will be output to separate buffers for display
 	if (vpu_dec->rotation_angle || vpu_dec->mirror_dir) {
-		int rotStride = vpu_dec->initialInfo->picWidth;
+		int rotStride = width;
 		if (vpu_dec->rotation_angle) {
 			// must set angle before rotator stride since the stride uses angle for error checking
 			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle),
 					       SET_ROTATION_ANGLE,
 					       &vpu_dec->rotation_angle);
-
-			// Do a 90 degree rotation - buffer is allocated in FrameBufferInit at end
-			// for rotation, set stride, rotation angle and initial buffer output
-			if ((vpu_dec->rotation_angle == 90) || (vpu_dec->rotation_angle == 270))
-				rotStride = vpu_dec->initialInfo->picHeight;
 		}
 		if (vpu_dec->mirror_dir) {
 			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle),
