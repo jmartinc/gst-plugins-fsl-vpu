@@ -2202,109 +2202,102 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(element);
 	gint vpu_ret = RETCODE_SUCCESS;
+	vpu_versioninfo ver;
+	gfloat avg_mcps = 0, avg_plugin_time = 0, avg_dec_time = 0;
+	gint cnt;
 	// gint i=0,err;
 
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
-		{
-			vpu_versioninfo ver;
 
-			GST_DEBUG("\nVPU State: Null to Ready\n");
-			vpu_ret = vpu_Init((PhysicalAddress) (NULL));
-			if (vpu_ret < 0) {
-				GST_DEBUG
-				    ("Error in initializing the VPU\n,error is %d",
-				     vpu_ret);
-				return GST_STATE_CHANGE_FAILURE;
-			}
+		GST_DEBUG("\nVPU State: Null to Ready\n");
+		vpu_ret = vpu_Init((PhysicalAddress) (NULL));
+		if (vpu_ret < 0) {
+			GST_DEBUG
+			    ("Error in initializing the VPU\n,error is %d",
+			     vpu_ret);
+			return GST_STATE_CHANGE_FAILURE;
+		}
 
-			vpu_ret = vpu_GetVersionInfo(&ver);
-			if (vpu_ret) {
-				GST_DEBUG
-				    ("Error in geting the VPU version\n,error is %d",
-				     vpu_ret);
-				vpu_UnInit();
-				return GST_STATE_CHANGE_FAILURE;
-			}
+		vpu_ret = vpu_GetVersionInfo(&ver);
+		if (vpu_ret) {
+			GST_DEBUG
+			    ("Error in geting the VPU version\n,error is %d",
+			     vpu_ret);
+			vpu_UnInit();
+			return GST_STATE_CHANGE_FAILURE;
+		}
 
-			g_print(YELLOW_STR
-				("VPU Version: firmware %d.%d.%d; libvpu: %d.%d.%d \n",
-				 ver.fw_major, ver.fw_minor, ver.fw_release,
-				 ver.lib_major, ver.lib_minor,
-				 ver.lib_release));
+		g_print(YELLOW_STR
+			("VPU Version: firmware %d.%d.%d; libvpu: %d.%d.%d \n",
+			 ver.fw_major, ver.fw_minor, ver.fw_release,
+			 ver.lib_major, ver.lib_minor,
+			 ver.lib_release));
 
 #define MFW_GST_VPU_DECODER_PLUGIN VERSION
-			PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);
-			break;
-		}
+		PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);
+		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
-		{
-			GST_DEBUG("\nVPU State: Ready to Paused\n\n");
-			vpu_dec->init = FALSE;
-			vpu_dec->vpu_opened = FALSE;
-			vpu_dec->start_addr = NULL;
-			vpu_dec->end_addr = NULL;
-			vpu_dec->base_addr = NULL;
-			vpu_dec->outsize = 0;
-			vpu_dec->decode_wait_time = 0;
-			vpu_dec->chain_Time = 0;
-			vpu_dec->decoded_frames = 0;
-			vpu_dec->avg_fps_decoding = 0.0;
-			vpu_dec->frames_dropped = 0;
-			vpu_dec->direct_render = FALSE;
-			vpu_dec->vpu_wait = FALSE;
-			vpu_dec->buffered_size = 0;
-			vpu_dec->first = FALSE;
-			vpu_dec->buffidx_in = 0;
-			vpu_dec->buffidx_out = 0;
-			vpu_dec->ts_rx = 0;
-			vpu_dec->ts_tx = 0;
-			vpu_dec->framebufinit_done = FALSE;
-			vpu_dec->file_play_mode = FALSE;
-			vpu_dec->eos = FALSE;
-			vpu_dec->no_ts_frames = 0;
-			vpu_dec->base_ts = 0;
-			vpu_dec->prv_use_idx = 0;
+		GST_DEBUG("\nVPU State: Ready to Paused\n\n");
+		vpu_dec->init = FALSE;
+		vpu_dec->vpu_opened = FALSE;
+		vpu_dec->start_addr = NULL;
+		vpu_dec->end_addr = NULL;
+		vpu_dec->base_addr = NULL;
+		vpu_dec->outsize = 0;
+		vpu_dec->decode_wait_time = 0;
+		vpu_dec->chain_Time = 0;
+		vpu_dec->decoded_frames = 0;
+		vpu_dec->avg_fps_decoding = 0.0;
+		vpu_dec->frames_dropped = 0;
+		vpu_dec->direct_render = FALSE;
+		vpu_dec->vpu_wait = FALSE;
+		vpu_dec->buffered_size = 0;
+		vpu_dec->first = FALSE;
+		vpu_dec->buffidx_in = 0;
+		vpu_dec->buffidx_out = 0;
+		vpu_dec->ts_rx = 0;
+		vpu_dec->ts_tx = 0;
+		vpu_dec->framebufinit_done = FALSE;
+		vpu_dec->file_play_mode = FALSE;
+		vpu_dec->eos = FALSE;
+		vpu_dec->no_ts_frames = 0;
+		vpu_dec->base_ts = 0;
+		vpu_dec->prv_use_idx = 0;
 
-			{
-				int cnt = 0;
-				for (cnt = 0; cnt < NUM_FRAME_BUF; cnt++)
-					vpu_dec->outbuffers[cnt] = NULL;
-			}
+		for (cnt = 0; cnt < NUM_FRAME_BUF; cnt++)
+			vpu_dec->outbuffers[cnt] = NULL;
 
-			memset(&vpu_dec->bit_stream_buf, 0,
-			       sizeof (vpu_mem_desc));
-			memset(&vpu_dec->frame_sizes_buffer[0], 0,
-			       MAX_STREAM_BUF * sizeof (guint));
-			memset(&vpu_dec->timestamp_buffer[0], 0,
-			       MAX_STREAM_BUF * sizeof (GstClockTime));
-			memset(&vpu_dec->frameBuf[0], 0,
-			       NUM_FRAME_BUF * sizeof (FrameBuffer));
-			memset(&vpu_dec->frame_mem[0], 0,
-			       NUM_FRAME_BUF * sizeof (vpu_mem_desc));
-			/* Handle the decoder Initialization over here. */
-			vpu_dec->decOP = g_malloc(sizeof (DecOpenParam));
-			vpu_dec->initialInfo =
-			    g_malloc(sizeof (DecInitialInfo));
-			vpu_dec->decParam = g_malloc(sizeof (DecParam));
-			vpu_dec->handle = g_malloc(sizeof (DecHandle));
-			vpu_dec->outputInfo = g_malloc(sizeof (DecOutputInfo));
-			memset(vpu_dec->decOP, 0, sizeof (DecOpenParam));
-			memset(vpu_dec->handle, 0, sizeof (DecHandle));
-			memset(vpu_dec->decParam, 0, sizeof (DecParam));
-			memset(vpu_dec->outputInfo, 0, sizeof (DecOutputInfo));
-			memset(&vpu_dec->ps_mem_desc, 0, sizeof (vpu_mem_desc));
-			memset(&vpu_dec->slice_mem_desc, 0,
-			       sizeof (vpu_mem_desc));
-			memset(vpu_dec->initialInfo, 0,
-			       sizeof (DecInitialInfo));
-			break;
-		}
+		memset(&vpu_dec->bit_stream_buf, 0,
+		       sizeof (vpu_mem_desc));
+		memset(&vpu_dec->frame_sizes_buffer[0], 0,
+		       MAX_STREAM_BUF * sizeof (guint));
+		memset(&vpu_dec->timestamp_buffer[0], 0,
+		       MAX_STREAM_BUF * sizeof (GstClockTime));
+		memset(&vpu_dec->frameBuf[0], 0,
+		       NUM_FRAME_BUF * sizeof (FrameBuffer));
+		memset(&vpu_dec->frame_mem[0], 0,
+		       NUM_FRAME_BUF * sizeof (vpu_mem_desc));
+		/* Handle the decoder Initialization over here. */
+		vpu_dec->decOP = g_malloc(sizeof (DecOpenParam));
+		vpu_dec->initialInfo =
+		    g_malloc(sizeof (DecInitialInfo));
+		vpu_dec->decParam = g_malloc(sizeof (DecParam));
+		vpu_dec->handle = g_malloc(sizeof (DecHandle));
+		vpu_dec->outputInfo = g_malloc(sizeof (DecOutputInfo));
+		memset(vpu_dec->decOP, 0, sizeof (DecOpenParam));
+		memset(vpu_dec->handle, 0, sizeof (DecHandle));
+		memset(vpu_dec->decParam, 0, sizeof (DecParam));
+		memset(vpu_dec->outputInfo, 0, sizeof (DecOutputInfo));
+		memset(&vpu_dec->ps_mem_desc, 0, sizeof (vpu_mem_desc));
+		memset(&vpu_dec->slice_mem_desc, 0,
+		       sizeof (vpu_mem_desc));
+		memset(vpu_dec->initialInfo, 0,
+		       sizeof (DecInitialInfo));
+		break;
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-		{
-			GST_DEBUG("\nVPU State: Paused to Playing\n");
-			break;
-		}
+		GST_DEBUG("\nVPU State: Paused to Playing\n");
+		break;
 	default:
 		break;
 	}
@@ -2314,187 +2307,174 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 
 	switch (transition) {
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-		{
-			GST_DEBUG("\nVPU State: Playing to Paused\n");
-			break;
-		}
+		GST_DEBUG("\nVPU State: Playing to Paused\n");
+		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
-		{
-			gfloat avg_mcps = 0, avg_plugin_time = 0, avg_dec_time =
-			    0;
-			GST_DEBUG("\nVPU State: Paused to Ready\n");
-			if (vpu_dec->profiling) {
+		GST_DEBUG("\nVPU State: Paused to Ready\n");
+		if (vpu_dec->profiling) {
+			g_print
+			    ("PROFILE FIGURES OF VPU DECODER PLUGIN");
+			g_print
+			    ("\nTotal decode wait time is            %fus",
+			     (gfloat) vpu_dec->decode_wait_time);
+			g_print
+			    ("\nTotal plugin time is                 %lldus",
+			     vpu_dec->chain_Time);
+			g_print
+			    ("\nTotal number of frames decoded is    %lld",
+			     vpu_dec->decoded_frames);
+			g_print
+			    ("\nTotal number of frames dropped is    %lld\n",
+			     vpu_dec->frames_dropped);
+			if (g_compare_float(vpu_dec->frame_rate, 0) !=
+			    FLOAT_MATCH) {
+				avg_mcps =
+				    ((float) vpu_dec->decode_wait_time *
+				     PROCESSOR_CLOCK / (1000000 *
+							(vpu_dec->
+							 decoded_frames
+							 -
+							 vpu_dec->
+							 frames_dropped)))
+				    * vpu_dec->frame_rate;
 				g_print
-				    ("PROFILE FIGURES OF VPU DECODER PLUGIN");
-				g_print
-				    ("\nTotal decode wait time is            %fus",
-				     (gfloat) vpu_dec->decode_wait_time);
-				g_print
-				    ("\nTotal plugin time is                 %lldus",
-				     vpu_dec->chain_Time);
-				g_print
-				    ("\nTotal number of frames decoded is    %lld",
-				     vpu_dec->decoded_frames);
-				g_print
-				    ("\nTotal number of frames dropped is    %lld\n",
-				     vpu_dec->frames_dropped);
-				if (g_compare_float(vpu_dec->frame_rate, 0) !=
-				    FLOAT_MATCH) {
+				    ("\nAverage decode WAIT MCPS is          %f",
+				     avg_mcps);
 					avg_mcps =
-					    ((float) vpu_dec->decode_wait_time *
-					     PROCESSOR_CLOCK / (1000000 *
-								(vpu_dec->
-								 decoded_frames
-								 -
-								 vpu_dec->
-								 frames_dropped)))
-					    * vpu_dec->frame_rate;
-					g_print
-					    ("\nAverage decode WAIT MCPS is          %f",
-					     avg_mcps);
-
-					avg_mcps =
-					    ((float) vpu_dec->chain_Time *
-					     PROCESSOR_CLOCK / (1000000 *
-								(vpu_dec->
-								 decoded_frames
-								 -
-								 vpu_dec->
-								 frames_dropped)))
-					    * vpu_dec->frame_rate;
-					g_print
-					    ("\nAverage plug-in MCPS is              %f",
-					     avg_mcps);
-				} else {
-					g_print
-					    ("enable the Frame Rate property of the decoder to get the MCPS \
-                        ... \n ! mfw_mpeg4decoder framerate=value ! .... \
-                        \n Note: value denotes the framerate to be set");
-				}
-				avg_dec_time =
-				    ((float) vpu_dec->decode_wait_time) /
-				    vpu_dec->decoded_frames;
+				    ((float) vpu_dec->chain_Time *
+				     PROCESSOR_CLOCK / (1000000 *
+							(vpu_dec->
+							 decoded_frames
+							 -
+							 vpu_dec->
+							 frames_dropped)))
+				    * vpu_dec->frame_rate;
 				g_print
-				    ("\nAverage decoding Wait time is        %fus",
-				     avg_dec_time);
-				avg_plugin_time =
-				    ((float) vpu_dec->chain_Time) /
-				    vpu_dec->decoded_frames;
+				    ("\nAverage plug-in MCPS is              %f",
+				     avg_mcps);
+			} else {
 				g_print
-				    ("\nAverage plugin time is               %fus\n",
-				     avg_plugin_time);
-
-				vpu_dec->decode_wait_time = 0;
-				vpu_dec->chain_Time = 0;
-				vpu_dec->decoded_frames = 0;
-				vpu_dec->avg_fps_decoding = 0.0;
-				vpu_dec->frames_dropped = 0;
+				    ("enable the Frame Rate property of the decoder to get the MCPS \
+                       ... \n ! mfw_mpeg4decoder framerate=value ! .... \
+                       \n Note: value denotes the framerate to be set");
 			}
+			avg_dec_time =
+			    ((float) vpu_dec->decode_wait_time) /
+			    vpu_dec->decoded_frames;
+			g_print
+			    ("\nAverage decoding Wait time is        %fus",
+			     avg_dec_time);
+			avg_plugin_time =
+			    ((float) vpu_dec->chain_Time) /
+			    vpu_dec->decoded_frames;
+			g_print
+			    ("\nAverage plugin time is               %fus\n",
+			     avg_plugin_time);
+			vpu_dec->decode_wait_time = 0;
+			vpu_dec->chain_Time = 0;
+			vpu_dec->decoded_frames = 0;
+			vpu_dec->avg_fps_decoding = 0.0;
+			vpu_dec->frames_dropped = 0;
+		}
 
-			mfw_gst_vpudec_FrameBufferClose(vpu_dec);
+		mfw_gst_vpudec_FrameBufferClose(vpu_dec);
 
-			{
-				/* release framebuffers hold by vpu */
-				gint cnt;
-				for (cnt = 0; cnt < vpu_dec->numframebufs;
-				     cnt++) {
-					if (vpu_dec->outbuffers[cnt])
-						gst_buffer_unref(vpu_dec->
-								 outbuffers
-								 [cnt]);
-				}
-			}
+		/* release framebuffers hold by vpu */
+		for (cnt = 0; cnt < vpu_dec->numframebufs;
+		     cnt++) {
+			if (vpu_dec->outbuffers[cnt])
+				gst_buffer_unref(vpu_dec->
+						 outbuffers
+						 [cnt]);
+		}
 
-			vpu_dec->first = FALSE;
-			vpu_dec->buffidx_in = 0;
-			vpu_dec->buffidx_out = 0;
-			memset(&vpu_dec->timestamp_buffer[0], 0,
-			       MAX_STREAM_BUF);
-			memset(&vpu_dec->frame_sizes_buffer[0], 0,
-			       MAX_STREAM_BUF);
-			vpu_dec->start_addr = NULL;
-			vpu_dec->end_addr = NULL;
-			vpu_dec->base_addr = NULL;
-			vpu_dec->outsize = 0;
-			vpu_dec->direct_render = FALSE;
-			vpu_dec->vpu_wait = FALSE;
-			vpu_dec->framebufinit_done = FALSE;
+		vpu_dec->first = FALSE;
+		vpu_dec->buffidx_in = 0;
+		vpu_dec->buffidx_out = 0;
+		memset(&vpu_dec->timestamp_buffer[0], 0,
+		       MAX_STREAM_BUF);
+		memset(&vpu_dec->frame_sizes_buffer[0], 0,
+		       MAX_STREAM_BUF);
+		vpu_dec->start_addr = NULL;
+		vpu_dec->end_addr = NULL;
+		vpu_dec->base_addr = NULL;
+		vpu_dec->outsize = 0;
+		vpu_dec->direct_render = FALSE;
+		vpu_dec->vpu_wait = FALSE;
+		vpu_dec->framebufinit_done = FALSE;
 
-			if (vpu_dec->is_startframe) {
+		if (vpu_dec->is_startframe) {
+			vpu_DecGetOutputInfo(*vpu_dec->handle,
+					     vpu_dec->outputInfo);
+			vpu_dec->is_startframe = FALSE;
+		}
+		if (vpu_dec->vpu_opened) {
+			vpu_ret = vpu_DecClose(*vpu_dec->handle);
+
+			if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
 				vpu_DecGetOutputInfo(*vpu_dec->handle,
-						     vpu_dec->outputInfo);
-				vpu_dec->is_startframe = FALSE;
-			}
-			if (vpu_dec->vpu_opened) {
-				vpu_ret = vpu_DecClose(*vpu_dec->handle);
-
-				if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-					vpu_DecGetOutputInfo(*vpu_dec->handle,
-							     vpu_dec->
-							     outputInfo);
-					vpu_ret =
-					    vpu_DecClose(*vpu_dec->handle);
-					if (vpu_ret < 0) {
-						GST_ERROR
-						    ("Error in closing the VPU decoder,error is %d\n",
-						     vpu_ret);
-						return GST_STATE_CHANGE_FAILURE;
-					}
+						     vpu_dec->
+						     outputInfo);
+				vpu_ret =
+				    vpu_DecClose(*vpu_dec->handle);
+				if (vpu_ret < 0) {
+					GST_ERROR
+					    ("Error in closing the VPU decoder,error is %d\n",
+					     vpu_ret);
+					return GST_STATE_CHANGE_FAILURE;
 				}
-				vpu_dec->vpu_opened = FALSE;
 			}
-			if (vpu_dec->bit_stream_buf.phy_addr) {
-				IOFreePhyMem(&(vpu_dec->bit_stream_buf));
-				IOFreeVirtMem(&(vpu_dec->bit_stream_buf));
-				vpu_dec->bit_stream_buf.phy_addr = 0;
-			}
-			if (vpu_dec->ps_mem_desc.phy_addr) {
-				IOFreePhyMem(&(vpu_dec->ps_mem_desc));
-				IOFreeVirtMem(&(vpu_dec->ps_mem_desc));
-				vpu_dec->ps_mem_desc.phy_addr = 0;
-			}
-			if (vpu_dec->slice_mem_desc.phy_addr) {
-				IOFreePhyMem(&(vpu_dec->slice_mem_desc));
-				IOFreeVirtMem(&(vpu_dec->slice_mem_desc));
-				vpu_dec->ps_mem_desc.phy_addr = 0;
-			}
-			if (vpu_dec->decOP != NULL) {
-				g_free(vpu_dec->decOP);
-				vpu_dec->decOP = NULL;
-			}
-			if (vpu_dec->initialInfo != NULL) {
-				g_free(vpu_dec->initialInfo);
-				vpu_dec->initialInfo = NULL;
-			}
-			if (vpu_dec->decParam != NULL) {
-				g_free(vpu_dec->decParam);
-				vpu_dec->decParam = NULL;
-			}
-			if (vpu_dec->outputInfo != NULL) {
-				g_free(vpu_dec->outputInfo);
-				vpu_dec->outputInfo = NULL;
-			}
-			if (vpu_dec->handle != NULL) {
-				g_free(vpu_dec->handle);
-				vpu_dec->handle = NULL;
-			}
-
-			/* Unlock the mutex to free the mutex
-			 * in case of date terminated.
-			 */
-			vpu_mutex_unlock(vpu_dec->vpu_mutex);
-			g_mutex_free(vpu_dec->vpu_mutex);
-			vpu_dec->vpu_mutex = NULL;
-			break;
+			vpu_dec->vpu_opened = FALSE;
 		}
+		if (vpu_dec->bit_stream_buf.phy_addr) {
+			IOFreePhyMem(&(vpu_dec->bit_stream_buf));
+			IOFreeVirtMem(&(vpu_dec->bit_stream_buf));
+			vpu_dec->bit_stream_buf.phy_addr = 0;
+		}
+		if (vpu_dec->ps_mem_desc.phy_addr) {
+			IOFreePhyMem(&(vpu_dec->ps_mem_desc));
+			IOFreeVirtMem(&(vpu_dec->ps_mem_desc));
+			vpu_dec->ps_mem_desc.phy_addr = 0;
+		}
+		if (vpu_dec->slice_mem_desc.phy_addr) {
+			IOFreePhyMem(&(vpu_dec->slice_mem_desc));
+			IOFreeVirtMem(&(vpu_dec->slice_mem_desc));
+			vpu_dec->ps_mem_desc.phy_addr = 0;
+		}
+		if (vpu_dec->decOP != NULL) {
+			g_free(vpu_dec->decOP);
+			vpu_dec->decOP = NULL;
+		}
+		if (vpu_dec->initialInfo != NULL) {
+			g_free(vpu_dec->initialInfo);
+			vpu_dec->initialInfo = NULL;
+		}
+		if (vpu_dec->decParam != NULL) {
+			g_free(vpu_dec->decParam);
+			vpu_dec->decParam = NULL;
+		}
+		if (vpu_dec->outputInfo != NULL) {
+			g_free(vpu_dec->outputInfo);
+			vpu_dec->outputInfo = NULL;
+		}
+		if (vpu_dec->handle != NULL) {
+			g_free(vpu_dec->handle);
+			vpu_dec->handle = NULL;
+		}
+
+		/* Unlock the mutex to free the mutex
+		 * in case of date terminated.
+		 */
+		vpu_mutex_unlock(vpu_dec->vpu_mutex);
+		g_mutex_free(vpu_dec->vpu_mutex);
+		vpu_dec->vpu_mutex = NULL;
+		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
-		{
-			GST_DEBUG("\nVPU State: Ready to Null\n");
+		GST_DEBUG("\nVPU State: Ready to Null\n");
 
-			if (vpu_dec->loopback == FALSE)
-				vpu_UnInit();
-			break;
-		}
+		if (vpu_dec->loopback == FALSE)
+			vpu_UnInit();
+		break;
 	default:
 		break;
 	}
