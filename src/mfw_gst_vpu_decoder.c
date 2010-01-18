@@ -1707,31 +1707,19 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		/* Padding the width and height to 16 */
 		orgPicW = vpu_dec->initialInfo->picWidth;
 		orgPicH = vpu_dec->initialInfo->picHeight;
-		vpu_dec->initialInfo->picWidth =
-		    (vpu_dec->initialInfo->picWidth + 15) / 16 * 16;
-		vpu_dec->initialInfo->picHeight =
-		    (vpu_dec->initialInfo->picHeight + 15) / 16 * 16;
-		if (vpu_dec->codec == STD_AVC
-		    && (vpu_dec->initialInfo->picCropRect.right > 0
-			&& vpu_dec->initialInfo->picCropRect.bottom >
-			0)) {
-			crop_top_len =
-			    vpu_dec->initialInfo->picCropRect.top;
-			crop_left_len =
-			    vpu_dec->initialInfo->picCropRect.left;
-			crop_right_len =
-			    vpu_dec->initialInfo->picWidth -
-			    vpu_dec->initialInfo->picCropRect.right;
-			crop_bottom_len =
-			    vpu_dec->initialInfo->picHeight -
-			    vpu_dec->initialInfo->picCropRect.bottom;
+		vpu_dec->initialInfo->picWidth = (vpu_dec->initialInfo->picWidth + 15) / 16 * 16;
+		vpu_dec->initialInfo->picHeight = (vpu_dec->initialInfo->picHeight + 15) / 16 * 16;
+		if (vpu_dec->codec == STD_AVC && (vpu_dec->initialInfo->picCropRect.right > 0
+				&& vpu_dec->initialInfo->picCropRect.bottom > 0)) {
+			crop_top_len = vpu_dec->initialInfo->picCropRect.top;
+			crop_left_len = vpu_dec->initialInfo->picCropRect.left;
+			crop_right_len = vpu_dec->initialInfo->picWidth - vpu_dec->initialInfo->picCropRect.right;
+			crop_bottom_len = vpu_dec->initialInfo->picHeight - vpu_dec->initialInfo->picCropRect.bottom;
 		} else {
 			crop_top_len = 0;
 			crop_left_len = 0;
-			crop_right_len =
-			    vpu_dec->initialInfo->picWidth - orgPicW;
-			crop_bottom_len =
-			    vpu_dec->initialInfo->picHeight - orgPicH;
+			crop_right_len = vpu_dec->initialInfo->picWidth - orgPicW;
+			crop_bottom_len = vpu_dec->initialInfo->picHeight - orgPicH;
 		}
 
 		/* set the capabilites on the source pad */
@@ -1747,8 +1735,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 				"num-buffers-required", G_TYPE_INT, needFrameBufCount,
 				NULL);
 		if (!(gst_pad_set_caps(vpu_dec->srcpad, caps))) {
-			GST_ERROR
-			    ("\nCould not set the caps for the VPU decoder's src pad\n");
+			GST_ERROR("Could not set the caps for the VPU decoder's src pad\n");
 		}
 		gst_caps_unref(caps);
 
