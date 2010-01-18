@@ -223,7 +223,7 @@ static gboolean mfw_gst_vpudec_setcaps(GstPad *, GstCaps *);
                                      LOCAL FUNCTIONS
 =======================================================================================*/
 
-/* helper function for float comaprision with 0.00001 precision */
+/* helper function for float comparison with 0.00001 precision */
 #define FLOAT_MATCH 1
 #define FLOAT_UNMATCH 0
 static inline guint
@@ -420,7 +420,7 @@ FUNCTION:           mfw_gst_VC1_Create_RCVheader
 
 DESCRIPTION:        This function is used to create the RCV header
                     for integration with the ASF demuxer using the width,height and the
-                    Header Extension data recived through caps negotiation.
+                    Header Extension data received through caps negotiation.
 
 ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
 
@@ -655,7 +655,7 @@ DESCRIPTION:        Open VPU
 
 ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
 
-RETURN VALUE:       GstFlowReturn - Success of Failure.
+RETURN VALUE:       GstFlowReturn - Success or Failure.
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
@@ -723,7 +723,7 @@ DESCRIPTION:        Update bitstream buffer in streaming mode which means we mig
 ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
                     buffer - pointer to the input buffer which has the video data.
 
-RETURN VALUE:       GstFlowReturn - Success of Failure.
+RETURN VALUE:       GstFlowReturn - Success or Failure.
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
@@ -831,7 +831,7 @@ DESCRIPTION:        Release buffers that are already displayed
 
 ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
 
-RETURN VALUE:       GstFlowReturn - Success of Failure.
+RETURN VALUE:       GstFlowReturn - Success or Failure.
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
@@ -914,7 +914,7 @@ DESCRIPTION:        Initialize VPU
 
 ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
 
-RETURN VALUE:       GstFlowReturn - Success of Failure.
+RETURN VALUE:       GstFlowReturn - Success or Failure.
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
@@ -1133,7 +1133,7 @@ DESCRIPTION:        The main processing function where the data comes in as buff
 ARGUMENTS PASSED:   pad - pointer to the sinkpad of this element
                     buffer - pointer to the input buffer which has the H.264 data.
 
-RETURN VALUE:       GstFlowReturn - Success of Failure.
+RETURN VALUE:       GstFlowReturn - Success or Failure.
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
@@ -1488,7 +1488,7 @@ DESCRIPTION:        The main processing function where the data comes in as buff
 ARGUMENTS PASSED:   pad - pointer to the sinkpad of this element
                     buffer - pointer to the input buffer which has the H.264 data.
 
-RETURN VALUE:       GstFlowReturn - Success of Failure.
+RETURN VALUE:       GstFlowReturn - Success or Failure.
 PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
