@@ -2321,7 +2321,7 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 	GstStructure *structure = gst_caps_get_structure(caps, 0);
 	vpu_dec = MFW_GST_VPU_DEC(gst_pad_get_parent(pad));
 	mime = gst_structure_get_name(structure);
-	GValue *codec_data = NULL;
+	GValue *codec_data;
 	guint8 *hdrextdata;
 	guint i = 0;
 	gint wmvversion;
@@ -2362,6 +2362,19 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 	GST_DEBUG("\nInput Width is %d\n", vpu_dec->picWidth);
 	gst_structure_get_int(structure, "height", &vpu_dec->picHeight);
 	GST_DEBUG("\nInput Height is %d\n", vpu_dec->picHeight);
+
+	codec_data = (GValue *) gst_structure_get_value(structure, "codec_data");
+	if (codec_data) {
+		vpu_dec->HdrExtData = gst_value_get_buffer(codec_data);
+		vpu_dec->HdrExtDataLen = GST_BUFFER_SIZE(vpu_dec->HdrExtData);
+		GST_DEBUG("Codec specific data length is %d\n", vpu_dec->HdrExtDataLen);
+		GST_DEBUG("Header Extension Data is \n");
+		hdrextdata = GST_BUFFER_DATA(vpu_dec->HdrExtData);
+		for (i = 0; i < vpu_dec->HdrExtDataLen; i++)
+			GST_DEBUG("%02x ", hdrextdata[i]);
+		GST_DEBUG("\n");
+	}
+
 	if (vpu_dec->codec == STD_VC1) {
 		gst_structure_get_int(structure, "wmvversion", &wmvversion);
 		if (wmvversion != 3) {
@@ -2372,22 +2385,7 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 			return FALSE;
 		}
 
-		codec_data =
-		    (GValue *) gst_structure_get_value(structure, "codec_data");
-
-		if (NULL != codec_data) {
-			vpu_dec->HdrExtData = gst_value_get_buffer(codec_data);
-			vpu_dec->HdrExtDataLen =
-			    GST_BUFFER_SIZE(vpu_dec->HdrExtData);
-			GST_DEBUG("\nCodec specific data length is %d\n",
-				  vpu_dec->HdrExtDataLen);
-			GST_DEBUG("Header Extension Data is \n");
-			hdrextdata = GST_BUFFER_DATA(vpu_dec->HdrExtData);
-			for (i = 0; i < vpu_dec->HdrExtDataLen; i++)
-				GST_DEBUG("0X%x", hdrextdata[i]);
-			GST_DEBUG("\n");
-
-		} else {
+		if (!codec_data) {
 			GST_ERROR
 			    ("No Header Extension Data found during Caps Negotiation \n");
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
