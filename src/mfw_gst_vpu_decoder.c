@@ -261,17 +261,17 @@ mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
 	switch (prop_id) {
 	case MFW_GST_VPU_PROF_ENABLE:
 		vpu_dec->profiling = g_value_get_boolean(value);
-		GST_DEBUG("profiling=%d\n", vpu_dec->profiling);
+		GST_DEBUG("profiling=%d", vpu_dec->profiling);
 		break;
 
 	case MFW_GST_VPU_CODEC_TYPE:
 		vpu_dec->codec = g_value_get_enum(value);
-		GST_DEBUG("codec=%d\n", vpu_dec->codec);
+		GST_DEBUG("codec=%d", vpu_dec->codec);
 		break;
 
 	case MFW_GST_VPU_LOOPBACK:
 		vpu_dec->loopback = g_value_get_boolean(value);
-		GST_DEBUG("loopback=%d\n", vpu_dec->loopback);
+		GST_DEBUG("loopback=%d", vpu_dec->loopback);
 		break;
 
 	case MFW_GST_VPU_DBK_ENABLE:
@@ -288,7 +288,7 @@ mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
 
 	case MFW_GST_VPU_MIRROR:
 		vpu_dec->mirror_dir = g_value_get_enum(value);
-		GST_DEBUG("mirror_direction=%d\n", vpu_dec->mirror_dir);
+		GST_DEBUG("mirror_direction=%d", vpu_dec->mirror_dir);
 		break;
 
 	case MFW_GST_VPU_ROTATION:
@@ -298,7 +298,7 @@ mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
 		case 90:
 		case 180:
 		case 270:
-			GST_DEBUG("rotation angle=%d\n",
+			GST_DEBUG("rotation angle=%d",
 				  vpu_dec->rotation_angle);
 			break;
 		default:
@@ -403,7 +403,7 @@ static void
 vpu_mutex_lock(GMutex * mutex)
 {
 	return;
-	GST_DEBUG("VPU mutex locked. +++\n");
+	GST_DEBUG("VPU mutex locked. +++");
 	g_mutex_lock(mutex);
 }
 
@@ -411,7 +411,7 @@ static void
 vpu_mutex_unlock(GMutex * mutex)
 {
 	return;
-	GST_DEBUG("VPU mutex unlocked. ---\n");
+	GST_DEBUG("VPU mutex unlocked. ---");
 	g_mutex_unlock(mutex);
 }
 
@@ -591,8 +591,7 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 							   &outbuffer);
 
 		if (retval != GST_FLOW_OK) {
-			GST_ERROR("Error in allocating the Framebuffer[%d],"
-				  " error is %d", i, retval);
+			GST_ERROR("Error in allocating the Framebuffer[%d], error is %d", i, retval);
 			return -1;
 		}
 
@@ -634,7 +633,7 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 					IOFreeVirtMem(&vpu_dec->frame_mem[i]);
 					IOFreePhyMem(&vpu_dec->frame_mem[i]);
 				}
-				GST_ERROR("No enough mem for framebuffer!\n");
+				GST_ERROR("No enough mem for framebuffer!");
 				return -1;
 			}
 			frameBuf[i].bufY = vpu_dec->frame_mem[i].phy_addr;
@@ -673,7 +672,7 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	guint8 *virt_bit_stream_buf = NULL;
 
-	GST_DEBUG("codec=%d\n", vpu_dec->codec);
+	GST_DEBUG("codec=%d", vpu_dec->codec);
 	vpu_dec->bit_stream_buf.size = BUFF_FILL_SIZE;
 	IOGetPhyMem(&vpu_dec->bit_stream_buf);
 	virt_bit_stream_buf = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
@@ -713,7 +712,7 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 	/* open a VPU's decoder instance */
 	vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
 	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_DecOpen failed. Error code is %d \n", vpu_ret);
+		GST_ERROR("vpu_DecOpen failed. Error code is %d", vpu_ret);
 		return GST_STATE_CHANGE_FAILURE;
 	}
 	vpu_dec->vpu_opened = TRUE;
@@ -747,9 +746,7 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 		vpu_dec->eos = TRUE;
 		vpu_ret = vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle), 0);
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_DecUpdateBitstreamBuffer failed. Error code is %d \n",
-			     vpu_ret);
+			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
 			return GST_FLOW_ERROR;
 		}
 	}
@@ -820,7 +817,7 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 
 		vpu_ret = vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle), GST_BUFFER_SIZE(buffer));
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d \n", vpu_ret);
+			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
 			return GST_FLOW_ERROR;
 		}
 
@@ -862,7 +859,7 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 						 indexFrameDisplay] =
 			    FB_STATE_ALLOCTED;
 			if (vpu_ret != RETCODE_SUCCESS) {
-				GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d \n", vpu_ret);
+				GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d", vpu_ret);
 				return GST_FLOW_ERROR;
 			}
 		}
@@ -884,9 +881,7 @@ mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 						//g_print (" clearing buffer %d \n", i);
 						vpu_ret = vpu_DecClrDispFlag(*vpu_dec->handle, i);
 						if (vpu_ret != RETCODE_SUCCESS) {
-							GST_ERROR
-							    ("vpu_DecClrDispFlag failed. Error code is %d \n",
-							     vpu_ret);
+							GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d", vpu_ret);
 							return GST_FLOW_ERROR;
 						}
 						numFreeBufs++;
@@ -955,12 +950,12 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
 		return GST_FLOW_OK;
 	}
 	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_DecGetInitialInfo failed. Error code is %d \n", vpu_ret);
+		GST_ERROR("vpu_DecGetInitialInfo failed. Error code is %d", vpu_ret);
 		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec, "VPU Decoder Initialisation failed ");
 		return GST_FLOW_ERROR;
 	}
-	GST_DEBUG("Dec: min buffer count= %d\n", vpu_dec->initialInfo->minFrameBufferCount);
-	GST_DEBUG("Dec InitialInfo =>\npicWidth: %u, picHeight: %u, frameRate: %u\n",
+	GST_DEBUG("Dec: min buffer count= %d", vpu_dec->initialInfo->minFrameBufferCount);
+	GST_DEBUG("Dec InitialInfo => picWidth: %u, picHeight: %u, frameRate: %u",
 			vpu_dec->initialInfo->picWidth,
 			vpu_dec->initialInfo->picHeight,
 			(unsigned int) vpu_dec->initialInfo->frameRateInfo);
@@ -1038,7 +1033,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
 			NULL);
 
 	if (!(gst_pad_set_caps(vpu_dec->srcpad, caps)))
-		GST_ERROR("Could not set the caps for the VPU decoder's src pad\n");
+		GST_ERROR("Could not set the caps for the VPU decoder's src pad");
 	gst_caps_unref(caps);
 
 	vpu_dec->outsize = (vpu_dec->initialInfo->picWidth * vpu_dec->initialInfo->picHeight * 3) / 2;
@@ -1046,7 +1041,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
 	/* Allocate the Frame buffers requested by the Decoder */
 	if (vpu_dec->framebufinit_done == FALSE) {
 		if ((mfw_gst_vpudec_FrameBufferInit(vpu_dec, vpu_dec->frameBuf, needFrameBufCount)) < 0) {
-			GST_ERROR("Mem system allocation failed!\n");
+			GST_ERROR("Mem system allocation failed!");
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 							    "Allocation of the Frame Buffers Failed");
 
@@ -1068,7 +1063,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
 			vpu_dec->initialInfo->minFrameBufferCount : vpu_dec->numframebufs,
 			vpu_dec->initialInfo->picWidth, &bufinfo);
 	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_DecRegisterFrameBuffer failed. Error code is %d \n", vpu_ret);
+		GST_ERROR("vpu_DecRegisterFrameBuffer failed. Error code is %d", vpu_ret);
 		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 						    "Registration of the Allocated Frame Buffers Failed ");
 		return GST_FLOW_ERROR;
@@ -1095,7 +1090,7 @@ GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
 		}
 		vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle), SET_ROTATOR_STRIDE, &rotStride);
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_Dec SET_ROTATOR_STRIDE failed. ret=%d \n", vpu_ret);
+			GST_ERROR("vpu_Dec SET_ROTATOR_STRIDE failed. ret=%d", vpu_ret);
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 							    "VPU SET_ROTATOR_STRIDE failed ");
 			return GST_FLOW_ERROR;
@@ -1169,9 +1164,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
 		retval = mfw_gst_vpudec_vpu_open(vpu_dec);
 		if (retval != GST_FLOW_OK) {
-			GST_ERROR
-			    ("mfw_gst_vpudec_stream_buff_read failed. Error code is %d \n",
-			     retval);
+			GST_ERROR("mfw_gst_vpudec_stream_buff_read failed. Error code is %d", retval);
 			goto done;
 		}
 	}
@@ -1180,9 +1173,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	// Write input bitstream to VPU - special for streaming mode
 	retval = mfw_gst_vpudec_stream_buff_read_init(vpu_dec, buffer);
 	if (retval != GST_FLOW_OK) {
-		GST_ERROR
-		    ("mfw_gst_vpudec_stream_buff_read_init failed. Error code is %d \n",
-		     retval);
+		GST_ERROR("mfw_gst_vpudec_stream_buff_read_init failed. Error code is %d", retval);
 		goto done;
 	}
 	if (vpu_dec->buf_empty) {
@@ -1197,8 +1188,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
 		retval = mfw_gst_vpudec_vpu_init(vpu_dec, 0);
 		if (retval != GST_FLOW_OK) {
-			GST_ERROR
-			    ("mfw_gst_vpudec_vpu_init failed initializing VPU\n");
+			GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
 			goto done;
 		}
 		// don't exit instead start the first decode
@@ -1253,7 +1243,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 									 (buffer));
 					if (vpu_ret != RETCODE_SUCCESS) {
 						GST_ERROR
-						    ("vpu_DecUpdateBitstreamBuffer failed. Error code is %d \n",
+						    ("vpu_DecUpdateBitstreamBuffer failed. Error code is %d",
 						     vpu_ret);
 						retval = GST_FLOW_ERROR;
 						goto done;
@@ -1298,9 +1288,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 
 			if (vpu_ret != RETCODE_SUCCESS) {
 				vpu_mutex_unlock(vpu_dec->vpu_mutex);
-				GST_ERROR
-				    ("vpu_DecStartOneFrame failed. Error code is %d \n",
-				     vpu_ret);
+				GST_ERROR("vpu_DecStartOneFrame failed. Error code is %d", vpu_ret);
 				retval = GST_FLOW_ERROR;
 				goto done;
 			}
@@ -1351,17 +1339,14 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 #endif
 		if ((vpu_dec->decParam->prescanEnable == 1)
 		    && (vpu_dec->outputInfo->prescanresult == 0)) {
-			GST_WARNING
-			    ("The prescan result is zero, all the output information have no meaning.\n");
+			GST_WARNING("The prescan result is zero, all the output information have no meaning.");
 			// Return for more data as this is incomplete - but do not process as an error
 			retval = GST_FLOW_OK;
 			goto done;
 		}
 
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_DecGetOutputInfo failed. Error code is %d \n",
-			     vpu_ret);
+			GST_ERROR("vpu_DecGetOutputInfo failed. Error code is %d", vpu_ret);
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -1389,7 +1374,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		    (vpu_dec->outputInfo->indexFrameDisplay == -3)
 		    || G_UNLIKELY(vpu_dec->outputInfo->
 				  indexFrameDisplay == -2)) {
-			GST_DEBUG("Decoded frame not to display!\n");
+			GST_DEBUG("Decoded frame not to display!");
 			continue;
 		}
 
@@ -1424,9 +1409,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 							      &vpu_dec->
 							      pushbuff);
 			if (retval != GST_FLOW_OK) {
-				GST_ERROR
-				    ("Error in allocating the Framebuffer[%d],"
-				     " error is %d",
+				GST_ERROR("Error in allocating the Framebuffer[%d], error is %d",
 				     vpu_dec->prv_use_idx, retval);
 				goto done;
 			}
@@ -1480,14 +1463,13 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		    FB_STATE_DISPLAY;
 
 		gst_buffer_ref(vpu_dec->pushbuff);
-		GST_DEBUG("frame decoded : %lld\n",
+		GST_DEBUG("frame decoded : %lld",
 			  vpu_dec->decoded_frames);
 		retval =
 		    gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
 		if (retval != GST_FLOW_OK) {
-			GST_ERROR
-			    ("Error in Pushing the Output onto the Source Pad,error is %d \n",
-			     retval);
+			GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d",
+				retval);
 			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
 						 indexFrameDisplay] =
 			    FB_STATE_ALLOCTED;
@@ -1564,7 +1546,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 
 	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
 		guint8 *virt_bit_stream_buf = NULL;
-		GST_DEBUG("codec=%d\n", vpu_dec->codec);
+		GST_DEBUG("codec=%d", vpu_dec->codec);
 		vpu_dec->file_play_mode = TRUE;
 		vpu_dec->bit_stream_buf.size = BUFF_FILL_SIZE;
 		IOGetPhyMem(&vpu_dec->bit_stream_buf);
@@ -1610,8 +1592,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		/* open a VPU's decoder instance */
 		vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecOpen failed. Error code is %d \n",
-				  vpu_ret);
+			GST_ERROR("vpu_DecOpen failed. Error code is %d", vpu_ret);
 			retval = GST_STATE_CHANGE_FAILURE;
 			goto done;
 		}
@@ -1655,14 +1636,13 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
 		vpu_ret = vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle), GST_BUFFER_SIZE(buffer));
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d \n", vpu_ret);
+			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
 		retval = mfw_gst_vpudec_vpu_init(vpu_dec, 1);
 		if (retval != GST_FLOW_OK) {
-			GST_ERROR
-			    ("mfw_gst_vpudec_vpu_init failed initializing VPU\n");
+			GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
 			goto done;
 		}
 	}
@@ -1681,7 +1661,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 					vpu_dec->fb_state_plugin[i] = FB_STATE_ALLOCTED;
 					vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle), i);
 					if (vpu_ret != RETCODE_SUCCESS) {
-						GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d \n", vpu_ret);
+						GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d", vpu_ret);
 						retval = GST_FLOW_ERROR;
 						goto done;
 					}
@@ -1704,9 +1684,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 			break;
 		}
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_DecStartOneFrame failed. Error code is %d \n",
-			     vpu_ret);
+			GST_ERROR("vpu_DecStartOneFrame failed. Error code is %d", vpu_ret);
 			retval = GST_FLOW_ERROR;
 			break;
 		}
@@ -1734,9 +1712,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		    vpu_DecGetOutputInfo(*(vpu_dec->handle),
 					 vpu_dec->outputInfo);
 		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_DecGetOutputInfo failed. Error code is %d \n",
-			     vpu_ret);
+			GST_ERROR("vpu_DecGetOutputInfo failed. Error code is %d", vpu_ret);
 			retval = GST_FLOW_ERROR;
 			break;
 		}
@@ -1761,7 +1737,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 				continue;
 			}
 #endif
-			GST_DEBUG("Decoded frame not to display!\n");
+			GST_DEBUG("Decoded frame not to display!");
 			vpu_dec->lastframedropped = TRUE;
 			retval = GST_FLOW_OK;
 			goto done;
@@ -1789,9 +1765,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 							      &vpu_dec->
 							      pushbuff);
 			if (retval != GST_FLOW_OK) {
-				GST_ERROR
-				    ("Error in allocating the Framebuffer[%d],"
-				     " error is %d", i, retval);
+				GST_ERROR("Error in allocating the Framebuffer[%d], error is %d", i, retval);
 				break;
 			}
 			memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
@@ -1807,13 +1781,12 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_dec->decoded_frames++;
 		vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
 					 indexFrameDisplay] = FB_STATE_DISPLAY;
-		GST_DEBUG("frame decoded : %lld\n", vpu_dec->decoded_frames);
+		GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
 
 		gst_buffer_ref(vpu_dec->pushbuff);
 		retval = gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
 		if (retval != GST_FLOW_OK) {
-			GST_ERROR
-			    ("Error in Pushing the Output on to the Source Pad,error is %d \n",
+			GST_ERROR("Error in Pushing the Output on to the Source Pad,error is %d",
 			     retval);
 		}
 #ifndef VPU_MX27
@@ -1872,20 +1845,17 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 	case GST_EVENT_NEWSEGMENT:
 		gst_event_parse_new_segment(event, NULL, &rate, &format,
 					    &start, &stop, &position);
-		GST_DEBUG(" receiving new seg \n");
-		GST_DEBUG(" start = %" GST_TIME_FORMAT,
-			  GST_TIME_ARGS(start));
-		GST_DEBUG(" stop = %" GST_TIME_FORMAT,
-			  GST_TIME_ARGS(stop));
-		GST_DEBUG(" position in mpeg4  =%" GST_TIME_FORMAT,
-			  GST_TIME_ARGS(position));
+		GST_DEBUG("receiving new seg start = %" GST_TIME_FORMAT
+			  " stop = %" GST_TIME_FORMAT
+			  " position in mpeg4  =%" GST_TIME_FORMAT,
+				GST_TIME_ARGS(start),
+				GST_TIME_ARGS(stop),
+				GST_TIME_ARGS(position));
 		vpu_dec->flush = FALSE;
 		if (GST_FORMAT_TIME == format) {
 			result = gst_pad_push_event(vpu_dec->srcpad, event);
 			if (TRUE != result) {
-				GST_ERROR
-				    ("\n Error in pushing the event,result	is %d\n",
-				     result);
+				GST_ERROR("Error in pushing the event, result is %d", result);
 			}
 		}
 		break;
@@ -1919,7 +1889,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 				}
 
 				if (RETCODE_SUCCESS != vpu_ret)
-					GST_ERROR("error in vpu_DecClose\n");
+					GST_ERROR("error in vpu_DecClose");
 
 				vpu_dec->init = FALSE;
 
@@ -1928,7 +1898,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 
 				vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
 				if (vpu_ret != RETCODE_SUCCESS)
-					GST_ERROR("vpu_DecOpen failed. Error code is %d \n", vpu_ret);
+					GST_ERROR("vpu_DecOpen failed. Error code is %d", vpu_ret);
 			} else {
 				vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
 				if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
@@ -1936,7 +1906,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 					vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
 				}
 				if (RETCODE_SUCCESS != vpu_ret)
-					GST_ERROR("error in flushing the bitstream buffer\n");
+					GST_ERROR("error in flushing the bitstream buffer");
 			}
 			vpu_dec->start_addr = vpu_dec->base_addr;
 		}
@@ -1953,7 +1923,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result) {
-			GST_ERROR("Error in pushing the event,result is %d\n", result);
+			GST_ERROR("Error in pushing the event,result is %d", result);
 			gst_event_unref(event);
 		}
 		break;
@@ -1963,7 +1933,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result)
-			GST_ERROR("Error in pushing the event,result is %d\n", result);
+			GST_ERROR("Error in pushing the event,result is %d", result);
 		break;
 	default:
 		result = gst_pad_event_default(pad, event);
@@ -2007,22 +1977,22 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 
-		GST_DEBUG("VPU State: Null to Ready\n");
+		GST_DEBUG("VPU State: Null to Ready");
 		vpu_ret = vpu_Init((PhysicalAddress) (NULL));
 		if (vpu_ret < 0) {
-			GST_DEBUG("Error in initializing the VPU, error is %d\n",vpu_ret);
+			GST_DEBUG("Error in initializing the VPU, error is %d",vpu_ret);
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
 		vpu_ret = vpu_GetVersionInfo(&ver);
 		if (vpu_ret) {
-			GST_DEBUG("Error in geting the VPU version, error is %d\n", vpu_ret);
+			GST_DEBUG("Error in geting the VPU version, error is %d", vpu_ret);
 			vpu_UnInit();
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
 		g_print(YELLOW_STR
-			("VPU Version: firmware %d.%d.%d; libvpu: %d.%d.%d \n",
+			("VPU Version: firmware %d.%d.%d; libvpu: %d.%d.%d",
 			 ver.fw_major, ver.fw_minor, ver.fw_release,
 			 ver.lib_major, ver.lib_minor,
 			 ver.lib_release));
@@ -2031,7 +2001,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);
 		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
-		GST_DEBUG("\nVPU State: Ready to Paused\n\n");
+		GST_DEBUG("VPU State: Ready to Paused");
 		vpu_dec->init = FALSE;
 		vpu_dec->vpu_opened = FALSE;
 		vpu_dec->start_addr = NULL;
@@ -2087,21 +2057,21 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		memset(vpu_dec->initialInfo, 0, sizeof (DecInitialInfo));
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-		GST_DEBUG("\nVPU State: Paused to Playing\n");
+		GST_DEBUG("VPU State: Paused to Playing");
 		break;
 	default:
 		break;
 	}
 
 	ret = vpu_dec->parent_class->change_state(element, transition);
-	GST_DEBUG("\n State Change for VPU returned %d", ret);
+	GST_DEBUG("State Change for VPU returned %d", ret);
 
 	switch (transition) {
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-		GST_DEBUG("\nVPU State: Playing to Paused\n");
+		GST_DEBUG("VPU State: Playing to Paused");
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
-		GST_DEBUG("\nVPU State: Paused to Ready\n");
+		GST_DEBUG("VPU State: Paused to Ready");
 		if (vpu_dec->profiling) {
 			g_print("PROFILE FIGURES OF VPU DECODER PLUGIN");
 			g_print("\nTotal decode wait time is            %fus", (gfloat) vpu_dec->decode_wait_time);
@@ -2165,7 +2135,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 				vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
 				vpu_ret = vpu_DecClose(*vpu_dec->handle);
 				if (vpu_ret < 0) {
-					GST_ERROR("Error in closing the VPU decoder,error is %d\n", vpu_ret);
+					GST_ERROR("Error in closing the VPU decoder,error is %d", vpu_ret);
 					return GST_STATE_CHANGE_FAILURE;
 				}
 			}
@@ -2215,7 +2185,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->vpu_mutex = NULL;
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
-		GST_DEBUG("\nVPU State: Ready to Null\n");
+		GST_DEBUG("VPU State: Ready to Null");
 
 		if (vpu_dec->loopback == FALSE)
 			vpu_UnInit();
@@ -2331,7 +2301,7 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 		vpu_dec->codec = STD_MJPG;
 #endif
 	else {
-		GST_ERROR(" Codec Standard not supporded \n");
+		GST_ERROR(" Codec Standard not supporded");
 		return FALSE;
 	}
 
@@ -2347,22 +2317,23 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 			((gfloat) vpu_dec->frame_rate_nu /
 			 vpu_dec->frame_rate_de);
 
-	GST_DEBUG(" Frame Rate = %f \n", vpu_dec->frame_rate);
 	gst_structure_get_int(structure, "width", &vpu_dec->picWidth);
-	GST_DEBUG("\nInput Width is %d\n", vpu_dec->picWidth);
 	gst_structure_get_int(structure, "height", &vpu_dec->picHeight);
-	GST_DEBUG("\nInput Height is %d\n", vpu_dec->picHeight);
+
+	GST_DEBUG("Frame Rate = %f, Input width = %d, Input height = %d",
+			vpu_dec->frame_rate,
+			vpu_dec->picWidth,
+			vpu_dec->picHeight);
 
 	codec_data = (GValue *) gst_structure_get_value(structure, "codec_data");
 	if (codec_data) {
 		vpu_dec->HdrExtData = gst_value_get_buffer(codec_data);
 		vpu_dec->HdrExtDataLen = GST_BUFFER_SIZE(vpu_dec->HdrExtData);
-		GST_DEBUG("Codec specific data length is %d\n", vpu_dec->HdrExtDataLen);
-		GST_DEBUG("Header Extension Data is \n");
+		GST_DEBUG("Codec specific data length is %d", vpu_dec->HdrExtDataLen);
+		GST_DEBUG("Header Extension Data is");
 		hdrextdata = GST_BUFFER_DATA(vpu_dec->HdrExtData);
 		for (i = 0; i < vpu_dec->HdrExtDataLen; i++)
 			GST_DEBUG("%02x ", hdrextdata[i]);
-		GST_DEBUG("\n");
 	}
 
 	if (vpu_dec->codec == STD_VC1) {
@@ -2376,8 +2347,7 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 		}
 
 		if (!codec_data) {
-			GST_ERROR
-			    ("No Header Extension Data found during Caps Negotiation \n");
+			GST_ERROR("No Header Extension Data found during Caps Negotiation");
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 							    "No Extension Header Data Recieved from the Demuxer");
 			gst_object_unref(vpu_dec);
