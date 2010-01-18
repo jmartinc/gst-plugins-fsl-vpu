@@ -654,12 +654,13 @@ IMPORTANT NOTES:    None
 =======================================================================================*/
 
 GstFlowReturn
-mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
+mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec, int filemode)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	guint8 *virt_bit_stream_buf = NULL;
-
 	GST_DEBUG("codec=%d", vpu_dec->codec);
+	if (filemode)
+		vpu_dec->file_play_mode = TRUE;
 	vpu_dec->bit_stream_buf.size = BUFF_FILL_SIZE;
 	IOGetPhyMem(&vpu_dec->bit_stream_buf);
 	virt_bit_stream_buf = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
@@ -678,58 +679,19 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 
 	vpu_dec->decOP->bitstreamBuffer = vpu_dec->bit_stream_buf.phy_addr;
 	vpu_dec->decOP->bitstreamBufferSize = BUFF_FILL_SIZE;
-
-	vpu_dec->decOP->reorderEnable = 0;
-
-	vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
-
-	vpu_dec->base_write = vpu_dec->bit_stream_buf.phy_addr;
-	vpu_dec->end_write = vpu_dec->bit_stream_buf.phy_addr + BUFF_FILL_SIZE;
-
-	/* open a VPU's decoder instance */
-	vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
-	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_DecOpen failed. Error code is %d", vpu_ret);
-		return GST_STATE_CHANGE_FAILURE;
-	}
-	vpu_dec->vpu_opened = TRUE;
-	return GST_FLOW_OK;
-}
-
-GstFlowReturn
-mfw_gst_vpudec_vpu_open_filemode(MfwGstVPU_Dec * vpu_dec)
-{
-	RetCode vpu_ret = RETCODE_SUCCESS;
-	guint8 *virt_bit_stream_buf = NULL;
-	GST_DEBUG("codec=%d", vpu_dec->codec);
-	vpu_dec->file_play_mode = TRUE;
-	vpu_dec->bit_stream_buf.size = BUFF_FILL_SIZE;
-	IOGetPhyMem(&vpu_dec->bit_stream_buf);
-	virt_bit_stream_buf = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
-	vpu_dec->start_addr = vpu_dec->base_addr = virt_bit_stream_buf;
-	vpu_dec->end_addr = virt_bit_stream_buf + BUFF_FILL_SIZE;
-
-	if (vpu_dec->codec == STD_AVC) {
-		vpu_dec->ps_mem_desc.size = PS_SAVE_SIZE;
-		IOGetPhyMem(&vpu_dec->ps_mem_desc);
-		vpu_dec->decOP->psSaveBuffer = vpu_dec->ps_mem_desc.phy_addr;
-		vpu_dec->decOP->psSaveBufferSize = PS_SAVE_SIZE;
-
-		vpu_dec->slice_mem_desc.size = SLICE_SAVE_SIZE;
-		IOGetPhyMem(&vpu_dec->slice_mem_desc);
-	}
-
-	vpu_dec->decOP->bitstreamBuffer = vpu_dec->bit_stream_buf.phy_addr;
-	vpu_dec->decOP->bitstreamBufferSize = BUFF_FILL_SIZE;
-	if (vpu_dec->codec == STD_AVC)
+	if (filemode && vpu_dec->codec == STD_AVC)
 		vpu_dec->decOP->reorderEnable = 1;
 
 	vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
+
+	if (filemode) {
 #if defined (VPU_MX37) || defined (VPU_MX51)
-	vpu_dec->decOP->filePlayEnable = 1;
+		vpu_dec->decOP->filePlayEnable = 1;
 #endif
-	vpu_dec->decOP->picWidth = vpu_dec->picWidth;
-	vpu_dec->decOP->picHeight = vpu_dec->picHeight;
+		vpu_dec->decOP->picWidth = vpu_dec->picWidth;
+		vpu_dec->decOP->picHeight = vpu_dec->picHeight;
+	}
+
 	vpu_dec->base_write = vpu_dec->bit_stream_buf.phy_addr;
 	vpu_dec->end_write = vpu_dec->bit_stream_buf.phy_addr + BUFF_FILL_SIZE;
 
@@ -1179,7 +1141,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	}
 	// Open VPU is not already opened
 	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
-		retval = mfw_gst_vpudec_vpu_open(vpu_dec);
+		retval = mfw_gst_vpudec_vpu_open(vpu_dec, 0);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR("mfw_gst_vpudec_stream_buff_read failed. Error code is %d", retval);
 			goto done;
@@ -1497,7 +1459,7 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 	}
 
 	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
-		retval = mfw_gst_vpudec_vpu_open_filemode(vpu_dec);
+		retval = mfw_gst_vpudec_vpu_open(vpu_dec, 1);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR("mfw_gst_vpudec_stream_buff_read failed. Error code is %d", retval);
 			goto done;
