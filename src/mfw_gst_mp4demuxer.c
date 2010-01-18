@@ -433,6 +433,12 @@ static gboolean mfw_gst_mp4demuxer_parse(MFW_GST_MP4DEMUX_INFO_T * demuxer)
         else
         {
             unsigned char *temp = GST_BUFFER_DATA(demuxer->video_object_buffer);
+	    printf("ficken: 0x%08x %d\n", *(unsigned int *)*(demuxer->parser_info.
+				                mp4_parser_object_type->
+				                decoderSpecificInfoH[track_count]),
+			    demuxer->parser_info.
+				                mp4_parser_object_type->media[track_count]->specificInfo_size
+			    );
             memcpy              (temp, *(demuxer->parser_info.
 				                mp4_parser_object_type->
 				                decoderSpecificInfoH[track_count]), demuxer->parser_info.
@@ -1363,6 +1369,7 @@ static gboolean mp4_write_audio_data(MFW_GST_MP4DEMUX_INFO_T *mp4_demuxer,
 
     /* pushes buffer to the peer element */
     result = gst_pad_push(src_pad, src_data_buf);
+    printf("push 1: 0x%08x\n", *(unsigned int *)src_data_buf->data);
     if (result != GST_FLOW_OK) {
 	GST_ERROR("\n Cannot Push Data onto next element");
 	return FALSE;
@@ -1429,7 +1436,7 @@ static gboolean mp4_write_video_data(MFW_GST_MP4DEMUX_INFO_T *mp4_demuxer,
 {
     GstClockTime stream_time;
     GstPad *src_pad;
-	
+printf("->-> 0x%08x\n", *(unsigned int *)source_buffer);
     GstCaps *src_caps = NULL;
     GstBuffer *src_data_buf = NULL;
     unsigned char *tmp_buf = NULL;
@@ -1493,6 +1500,7 @@ static gboolean mp4_write_video_data(MFW_GST_MP4DEMUX_INFO_T *mp4_demuxer,
 	
     if(mp4_demuxer->video_object_buffer != NULL)
     {
+	    printf("video data: 0x%08x\n", *(unsigned int *)mp4_demuxer->video_object_buffer->data);
         unsigned char *video_data = GST_BUFFER_DATA(mp4_demuxer->video_object_buffer);
         unsigned int video_data_size = GST_BUFFER_SIZE(mp4_demuxer->video_object_buffer);
         memcpy  (tmp_buf, video_data, video_data_size); 
@@ -1500,8 +1508,10 @@ static gboolean mp4_write_video_data(MFW_GST_MP4DEMUX_INFO_T *mp4_demuxer,
         gst_buffer_unref(mp4_demuxer->video_object_buffer);
         mp4_demuxer->video_object_buffer = NULL;
     }
-    else
+    else {
+	    printf("else\n");
 		memcpy(tmp_buf, source_buffer, total_size);
+    }
 	
     
 	
@@ -1515,6 +1525,7 @@ static gboolean mp4_write_video_data(MFW_GST_MP4DEMUX_INFO_T *mp4_demuxer,
     GST_DEBUG("pushing video data on to src pad \n ");
 	
     /* pushes buffer to the peer element */
+    printf("push 2: 0x%08x ofs: %lld\n", *(unsigned int *)(src_data_buf->data + src_data_buf->offset), src_data_buf->offset);
     result = gst_pad_push(src_pad, src_data_buf);
     if (result != GST_FLOW_OK) {
 		GST_ERROR("\n Cannot Push Data onto next element, reason is %d", result);
@@ -1775,7 +1786,7 @@ u32 app_MP4LocalReadFile(void *SourceBuffer,guint32 TotalSize,
 
 		/* pulls block of data */
 		new_buf = MP4PullData(mp4_demuxer);
-
+printf("-------------> 0x%08x\n", *(unsigned int *)new_buf->data);
 		if (new_buf == NULL) {
 		    GST_ERROR("not able to pull the data\n");
 		    return 0;
