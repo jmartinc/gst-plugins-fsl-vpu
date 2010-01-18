@@ -186,6 +186,7 @@ typedef struct _MfwGstVPU_Dec {
 	gint dbk_offset_a;
 	gint dbk_offset_b;
 
+	int once;
 } MfwGstVPU_Dec;
 
 typedef struct _MfwGstVPU_DecClass {
