@@ -1554,6 +1554,9 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 	long time_before = 0, time_after = 0;
 	GstBuffer *SrcFrameSize = NULL;
 	DecBufInfo bufinfo;
+	gint crop_top_len, crop_left_len;
+	gint crop_right_len, crop_bottom_len;
+	gint orgPicW, orgPicH;
 
 	if (G_UNLIKELY(vpu_dec->profiling)) {
 		gettimeofday(&tv_prof2, 0);
@@ -1702,57 +1705,52 @@ mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
 		needFrameBufCount = vpu_dec->initialInfo->minFrameBufferCount + 2;
 
 		/* Padding the width and height to 16 */
-		{
-			gint crop_top_len, crop_left_len;
-			gint crop_right_len, crop_bottom_len;
-			gint orgPicW = vpu_dec->initialInfo->picWidth;
-			gint orgPicH = vpu_dec->initialInfo->picHeight;
-			vpu_dec->initialInfo->picWidth =
-			    (vpu_dec->initialInfo->picWidth + 15) / 16 * 16;
-			vpu_dec->initialInfo->picHeight =
-			    (vpu_dec->initialInfo->picHeight + 15) / 16 * 16;
-			if (vpu_dec->codec == STD_AVC
-			    && (vpu_dec->initialInfo->picCropRect.right > 0
-				&& vpu_dec->initialInfo->picCropRect.bottom >
-				0)) {
-				crop_top_len =
-				    vpu_dec->initialInfo->picCropRect.top;
-				crop_left_len =
-				    vpu_dec->initialInfo->picCropRect.left;
-				crop_right_len =
-				    vpu_dec->initialInfo->picWidth -
-				    vpu_dec->initialInfo->picCropRect.right;
-				crop_bottom_len =
-				    vpu_dec->initialInfo->picHeight -
-				    vpu_dec->initialInfo->picCropRect.bottom;
-			} else {
-				crop_top_len = 0;
-				crop_left_len = 0;
-				crop_right_len =
-				    vpu_dec->initialInfo->picWidth - orgPicW;
-				crop_bottom_len =
-				    vpu_dec->initialInfo->picHeight - orgPicH;
-			}
-
-			/* set the capabilites on the source pad */
-			caps = gst_caps_new_simple("video/x-raw-yuv",
-					"format", GST_TYPE_FOURCC, fourcc,
-					"width", G_TYPE_INT, vpu_dec->initialInfo->picWidth,
-					"height", G_TYPE_INT, vpu_dec->initialInfo->picHeight,
-					"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
-					"crop-top-by-pixel", G_TYPE_INT, crop_top_len,
-					"crop-left-by-pixel", G_TYPE_INT, (crop_left_len + 7) / 8 * 8,
-					"crop-right-by-pixel", G_TYPE_INT, (crop_right_len + 7) / 8 * 8,
-					"crop-bottom-by-pixel", G_TYPE_INT, crop_bottom_len,
-					"num-buffers-required", G_TYPE_INT, needFrameBufCount,
-					NULL);
-			if (!(gst_pad_set_caps(vpu_dec->srcpad, caps))) {
-				GST_ERROR
-				    ("\nCould not set the caps for the VPU decoder's src pad\n");
-			}
-			gst_caps_unref(caps);
-			caps = NULL;
+		orgPicW = vpu_dec->initialInfo->picWidth;
+		orgPicH = vpu_dec->initialInfo->picHeight;
+		vpu_dec->initialInfo->picWidth =
+		    (vpu_dec->initialInfo->picWidth + 15) / 16 * 16;
+		vpu_dec->initialInfo->picHeight =
+		    (vpu_dec->initialInfo->picHeight + 15) / 16 * 16;
+		if (vpu_dec->codec == STD_AVC
+		    && (vpu_dec->initialInfo->picCropRect.right > 0
+			&& vpu_dec->initialInfo->picCropRect.bottom >
+			0)) {
+			crop_top_len =
+			    vpu_dec->initialInfo->picCropRect.top;
+			crop_left_len =
+			    vpu_dec->initialInfo->picCropRect.left;
+			crop_right_len =
+			    vpu_dec->initialInfo->picWidth -
+			    vpu_dec->initialInfo->picCropRect.right;
+			crop_bottom_len =
+			    vpu_dec->initialInfo->picHeight -
+			    vpu_dec->initialInfo->picCropRect.bottom;
+		} else {
+			crop_top_len = 0;
+			crop_left_len = 0;
+			crop_right_len =
+			    vpu_dec->initialInfo->picWidth - orgPicW;
+			crop_bottom_len =
+			    vpu_dec->initialInfo->picHeight - orgPicH;
 		}
+
+		/* set the capabilites on the source pad */
+		caps = gst_caps_new_simple("video/x-raw-yuv",
+				"format", GST_TYPE_FOURCC, fourcc,
+				"width", G_TYPE_INT, vpu_dec->initialInfo->picWidth,
+				"height", G_TYPE_INT, vpu_dec->initialInfo->picHeight,
+				"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
+				"crop-top-by-pixel", G_TYPE_INT, crop_top_len,
+				"crop-left-by-pixel", G_TYPE_INT, (crop_left_len + 7) / 8 * 8,
+				"crop-right-by-pixel", G_TYPE_INT, (crop_right_len + 7) / 8 * 8,
+				"crop-bottom-by-pixel", G_TYPE_INT, crop_bottom_len,
+				"num-buffers-required", G_TYPE_INT, needFrameBufCount,
+				NULL);
+		if (!(gst_pad_set_caps(vpu_dec->srcpad, caps))) {
+			GST_ERROR
+			    ("\nCould not set the caps for the VPU decoder's src pad\n");
+		}
+		gst_caps_unref(caps);
 
 		vpu_DecSetEscSeqInit(*(vpu_dec->handle), 0);
 		vpu_dec->outsize = (vpu_dec->initialInfo->picWidth *
