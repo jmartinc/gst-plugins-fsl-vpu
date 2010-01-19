@@ -62,58 +62,6 @@
 
 #define PROCESSOR_CLOCK    333
 
-#ifdef VPU_MX51
-#define MFW_GST_VPUDEC_VIDEO_CAPS \
-    "video/mpeg, " \
-    "width = (int) [16, 1280], " \
-    "height = (int) [16, 720], " \
-    "mpegversion = (int) 4; " \
-    \
-    "video/x-h263, " \
-    "width = (int) [16, 1280], " \
-    "height = (int)[16, 720]; " \
-    \
-    "video/x-h264, " \
-    "width = (int) [16, 1280], " \
-    "height = (int)[16, 720]; " \
-     \
-    "video/x-wmv, " \
-    "wmvversion = (int) 3, " \
-    "width = (int) [16, 1280], " \
-    "height = (int)[16, 720]; " \
-    \
-    "video/mp2v, "  \
-    "mpegversion = (int) [1,2] , "  \
-    "systemstream = (boolean) false;"\
-    \
-    "image/jpeg, "  \
-    "width = (int) [16, 1280], " \
-    "height = (int)[16, 720]"
-#elif defined(VPU_MX37)
-#define MFW_GST_VPUDEC_VIDEO_CAPS \
-    "video/mpeg, " \
-    "width = (int) [16, 1280], " \
-    "height = (int) [16, 720], " \
-    "mpegversion = (int) 4; " \
-    \
-    "video/x-h263, " \
-    "width = (int) [16, 1280], " \
-    "height = (int)[16, 720]; " \
-    \
-    "video/x-h264, " \
-    "width = (int) [16, 1280], " \
-    "height = (int)[16, 720]; " \
-     \
-    "video/x-wmv, " \
-    "wmvversion = (int) 3, " \
-    "width = (int) [16, 1280], " \
-    "height = (int)[16, 720]; " \
-    \
-    "video/mp2v, "  \
-    "mpegversion = (int) [1,2] , "  \
-    "systemstream = (boolean) false"
-#else
-
 #define MFW_GST_VPUDEC_VIDEO_CAPS \
     "video/mpeg, " \
     "width = (int) [16, 576], " \
@@ -130,8 +78,6 @@
 
 #define STD_MPEG2 -1
 #define STD_VC1   -1
-
-#endif
 
 #define DEFAULT_DBK_OFFSET_VALUE    5
 
@@ -152,21 +98,12 @@ enum {
 };
 
 /* get the element details */
-#ifdef VPU_MX27
 static GstElementDetails mfw_gst_vpudec_details =
 GST_ELEMENT_DETAILS("Freescale: Hardware (VPU) Decoder",
 		    "Codec/Decoder/Video",
 		    "Decodes H.264, MPEG4, H263 "
 		    "Elementary data into YUV 4:2:0 data",
 		    "i.MX series");
-#else
-static GstElementDetails mfw_gst_vpudec_details =
-GST_ELEMENT_DETAILS("Freescale: Hardware (VPU) Decoder",
-		    "Codec/Decoder/Video",
-		    "Decodes H.264, MPEG4, H263, and VC-1 "
-		    "Elementary data into YUV 4:2:0 data",
-		    "i.MX series");
-#endif
 
 /* defines sink pad  properties of the VPU Decoder element */
 static GstStaticPadTemplate mfw_gst_vpudec_sink_factory =
@@ -203,9 +140,6 @@ static void mfw_gst_vpudec_class_init(MfwGstVPU_DecClass *);
 static void mfw_gst_vpudec_base_init(MfwGstVPU_DecClass *);
 static void mfw_gst_vpudec_init(MfwGstVPU_Dec *, MfwGstVPU_DecClass *);
 static GstFlowReturn mfw_gst_vpudec_chain_stream_mode(GstPad *, GstBuffer *);
-#ifndef VPU_MX27
-static GstFlowReturn mfw_gst_vpudec_chain_file_mode(GstPad *, GstBuffer *);
-#endif
 static GstStateChangeReturn mfw_gst_vpudec_change_state(GstElement *,
 							GstStateChange);
 static void mfw_gst_vpudec_set_property(GObject *, guint, const GValue *,
@@ -566,14 +500,8 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 	GstFlowReturn retval = GST_FLOW_OK;
 	GstBuffer *outbuffer = NULL;
 	guint strideY = 0, height = 0;
-#if defined (VPU_MX37) || defined (VPU_MX51)
-	gint mvsize;
-#endif
 	strideY = vpu_dec->initialInfo->picWidth;
 	height = vpu_dec->initialInfo->picHeight;
-#if defined (VPU_MX37) || defined (VPU_MX51)
-	mvsize = strideY * height / 4;
-#endif
 
 	for (i = 0; i < num_buffers; i++) {
 		retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
@@ -589,11 +517,6 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 
 		/* if the buffer allocated is the Hardware Buffer use it as it is */
 		if (GST_BUFFER_FLAG_IS_SET(outbuffer, GST_BUFFER_FLAG_LAST) == TRUE) {
-#if defined (VPU_MX37) || defined (VPU_MX51)
-			vpu_dec->frame_mem[i].size = mvsize;
-			IOGetPhyMem(&vpu_dec->frame_mem[i]);
-			frameBuf[i].bufMvCol = vpu_dec->frame_mem[i].phy_addr;
-#endif
 			vpu_dec->outbuffers[i] = outbuffer;
 			GST_BUFFER_SIZE(vpu_dec->outbuffers[i]) = vpu_dec->outsize;
 			GST_BUFFER_OFFSET_END(vpu_dec->outbuffers[i]) = i;
@@ -612,11 +535,7 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 				gst_buffer_unref(outbuffer);
 				outbuffer = NULL;
 			}
-#if defined (VPU_MX37) || defined (VPU_MX51)
-			vpu_dec->frame_mem[i].size = vpu_dec->outsize + mvsize;
-#else
 			vpu_dec->frame_mem[i].size = vpu_dec->outsize;
-#endif
 			IOGetPhyMem(&vpu_dec->frame_mem[i]);
 			if (vpu_dec->frame_mem[i].phy_addr == 0) {
 				gint j;
@@ -630,9 +549,6 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 			frameBuf[i].bufY = vpu_dec->frame_mem[i].phy_addr;
 			frameBuf[i].bufCb = frameBuf[i].bufY + (strideY * height);
 			frameBuf[i].bufCr = frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
-#if defined (VPU_MX37) || defined (VPU_MX51)
-			frameBuf[i].bufMvCol = frameBuf[i].bufCr + ((strideY / 2) * (height / 2));
-#endif
 			vpu_dec->frame_virt[i] = (guint8 *) IOGetVirtMem(&vpu_dec->frame_mem[i]);
 			vpu_dec->direct_render = FALSE;
 		}
@@ -654,13 +570,11 @@ IMPORTANT NOTES:    None
 =======================================================================================*/
 
 static GstFlowReturn
-mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec, int filemode)
+mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	guint8 *virt_bit_stream_buf = NULL;
 	GST_DEBUG("codec=%d", vpu_dec->codec);
-	if (filemode)
-		vpu_dec->file_play_mode = TRUE;
 	vpu_dec->bit_stream_buf.size = BUFF_FILL_SIZE;
 	IOGetPhyMem(&vpu_dec->bit_stream_buf);
 	virt_bit_stream_buf = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
@@ -679,18 +593,8 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec, int filemode)
 
 	vpu_dec->decOP->bitstreamBuffer = vpu_dec->bit_stream_buf.phy_addr;
 	vpu_dec->decOP->bitstreamBufferSize = BUFF_FILL_SIZE;
-	if (filemode && vpu_dec->codec == STD_AVC)
-		vpu_dec->decOP->reorderEnable = 1;
 
 	vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
-
-	if (filemode) {
-#if defined (VPU_MX37) || defined (VPU_MX51)
-		vpu_dec->decOP->filePlayEnable = 1;
-#endif
-		vpu_dec->decOP->picWidth = vpu_dec->picWidth;
-		vpu_dec->decOP->picHeight = vpu_dec->picHeight;
-	}
 
 	vpu_dec->base_write = vpu_dec->bit_stream_buf.phy_addr;
 	vpu_dec->end_write = vpu_dec->bit_stream_buf.phy_addr + BUFF_FILL_SIZE;
@@ -906,7 +810,7 @@ PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
-static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
+static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstCaps *caps;
@@ -978,23 +882,16 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemo
 		crop_bottom_len = vpu_dec->initialInfo->picHeight - orgPicH;
 	}
 
-	if (filemode) {
+	if (vpu_dec->rotation_angle == 90 || vpu_dec->rotation_angle == 270) {
+		width = vpu_dec->initialInfo->picHeight;
+		height = vpu_dec->initialInfo->picWidth;
+		crop_right_by_pixel = (crop_right_len + 7) / 8 * 8;
+		crop_bottom_by_pixel = crop_right_len;
+	} else {
 		width = vpu_dec->initialInfo->picWidth;
 		height = vpu_dec->initialInfo->picHeight;
-		crop_right_by_pixel = (crop_right_len + 7) / 8 * 8;
+		crop_right_by_pixel = (crop_bottom_len + 7) / 8 * 8;
 		crop_bottom_by_pixel = crop_bottom_len;
-	} else {
-		if (vpu_dec->rotation_angle == 90 || vpu_dec->rotation_angle == 270) {
-			width = vpu_dec->initialInfo->picHeight;
-			height = vpu_dec->initialInfo->picWidth;
-			crop_right_by_pixel = (crop_right_len + 7) / 8 * 8;
-			crop_bottom_by_pixel = crop_right_len;
-		} else {
-			width = vpu_dec->initialInfo->picWidth;
-			height = vpu_dec->initialInfo->picHeight;
-			crop_right_by_pixel = (crop_bottom_len + 7) / 8 * 8;
-			crop_bottom_by_pixel = crop_bottom_len;
-		}
 	}
 
 	/* set the capabilites on the source pad */
@@ -1048,11 +945,6 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemo
 		return GST_FLOW_ERROR;
 	}
 
-	if (filemode) {
-		vpu_dec->init = TRUE;
-		return GST_FLOW_OK;
-	}
-
 	// Setup rotation or mirroring which will be output to separate buffers for display
 	if (vpu_dec->rotation_angle || vpu_dec->mirror_dir) {
 		int rotStride = width;
@@ -1084,25 +976,6 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemo
 	}
 
 	vpu_dec->decParam->prescanEnable = 1;
-#ifndef VPU_MX27
-	if (vpu_dec->dbk_enabled) {
-		DbkOffset dbkoffset;
-		dbkoffset.DbkOffsetEnable = 1;
-		dbkoffset.DbkOffsetA = vpu_dec->dbk_offset_a;
-		dbkoffset.DbkOffsetB = vpu_dec->dbk_offset_b;
-
-		vpu_DecGiveCommand(*(vpu_dec->handle), SET_DBK_OFFSET,
-				   &dbkoffset);
-	} else {
-		DbkOffset dbkoffset;
-		dbkoffset.DbkOffsetEnable = 0;
-		dbkoffset.DbkOffsetA = 0;
-		dbkoffset.DbkOffsetB = 0;
-
-		vpu_DecGiveCommand(*(vpu_dec->handle), SET_DBK_OFFSET,
-				   &dbkoffset);
-	}
-#endif
 	vpu_dec->init = TRUE;
 	return GST_FLOW_OK;
 }
@@ -1141,7 +1014,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	}
 	// Open VPU is not already opened
 	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
-		retval = mfw_gst_vpudec_vpu_open(vpu_dec, 0);
+		retval = mfw_gst_vpudec_vpu_open(vpu_dec);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR("mfw_gst_vpudec_stream_buff_read failed. Error code is %d", retval);
 			goto done;
@@ -1165,7 +1038,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	}
 	// Initialize VPU
 	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
-		retval = mfw_gst_vpudec_vpu_init(vpu_dec, 0);
+		retval = mfw_gst_vpudec_vpu_init(vpu_dec);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
 			goto done;
@@ -1417,258 +1290,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	}
 	return retval;
 }
-
-#ifndef VPU_MX27
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_chain_file_mode
-
-DESCRIPTION:        The main processing function where the data comes in as buffer. This
-                    data is decoded, and then pushed onto the next element for further
-                    processing.
-
-ARGUMENTS PASSED:   pad - pointer to the sinkpad of this element
-                    buffer - pointer to the input buffer which has the H.264 data.
-
-RETURN VALUE:       GstFlowReturn - Success or Failure.
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
-static GstFlowReturn
-mfw_gst_vpudec_chain_file_mode(GstPad * pad, GstBuffer * buffer)
-{
-	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
-	RetCode vpu_ret = RETCODE_SUCCESS;
-	GstFlowReturn retval = GST_FLOW_OK;
-	gint i = 0;
-	guint needFrameBufCount = 0;
-	gint fourcc = GST_STR_FOURCC("I420");
-
-	GstCaps *caps = NULL;
-	struct timeval tv_prof, tv_prof1;
-	struct timeval tv_prof2, tv_prof3;
-	long time_before = 0, time_after = 0;
-	GstBuffer *SrcFrameSize = NULL;
-	DecBufInfo bufinfo;
-	gint crop_top_len, crop_left_len;
-	gint crop_right_len, crop_bottom_len;
-	gint orgPicW, orgPicH;
-
-	if (G_UNLIKELY(vpu_dec->profiling)) {
-		gettimeofday(&tv_prof2, 0);
-	}
-
-	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
-		retval = mfw_gst_vpudec_vpu_open(vpu_dec, 1);
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("mfw_gst_vpudec_stream_buff_read failed. Error code is %d", retval);
-			goto done;
-		}
-	}
-
-	/*Time stamp Buffer is a circular buffer to store the timestamps which are later
-	   used while pushing the decoded frame onto the Sink element */
-	vpu_dec->timestamp_buffer[vpu_dec->ts_rx] = GST_BUFFER_TIMESTAMP(buffer);
-	vpu_dec->ts_rx = (vpu_dec->ts_rx + 1) % MAX_STREAM_BUF;
-	/******************************************************************************/
-	/********           Fill and update bitstreambuf           ********************/
-	/******************************************************************************/
-	if ((vpu_dec->codec == STD_VC1) && (vpu_dec->picWidth != 0)) {
-		/* Creation of RCV Header is done in case of ASF Playback pf VC-1 streams
-		   from the parameters like width height and Header Extension Data */
-		if (vpu_dec->first == FALSE) {
-			GstBuffer *tempBuf;
-			tempBuf = mfw_gst_VC1_Create_RCVheader(vpu_dec, buffer);
-			buffer = gst_buffer_join(tempBuf, buffer);
-			vpu_dec->first = TRUE;
-		}
-
-		/* The Size of the input stream is appended with the input stream
-		   for integration with ASF */
-		else {
-			SrcFrameSize = gst_buffer_new_and_alloc(4);
-			GST_BUFFER_DATA(SrcFrameSize)[0] = (unsigned char) GST_BUFFER_SIZE(buffer);
-			GST_BUFFER_DATA(SrcFrameSize)[1] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 8);
-			GST_BUFFER_DATA(SrcFrameSize)[2] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 16);
-			GST_BUFFER_DATA(SrcFrameSize)[3] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 24);
-			buffer = gst_buffer_join(SrcFrameSize, buffer);
-		}
-	}
-
-	memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-	vpu_dec->decParam->chunkSize = GST_BUFFER_SIZE(buffer);
-
-	/* Initializion of the VPU decoder and the output buffers for the VPU
-	   is done here */
-	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
-		vpu_ret = vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle), GST_BUFFER_SIZE(buffer));
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
-			retval = GST_FLOW_ERROR;
-			goto done;
-		}
-		retval = mfw_gst_vpudec_vpu_init(vpu_dec, 1);
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
-			goto done;
-		}
-	}
-
-	while (1) {
-		gboolean updated = FALSE;
-
-		/* check which buffer has been displayed, then clr it for vpu */
-		i = vpu_dec->prv_use_idx;
-		while (!updated) {
-			GstBuffer *pBuffer = vpu_dec->outbuffers[i];
-			if (gst_buffer_is_metadata_writable(pBuffer) &&
-			    vpu_dec->fb_state_plugin[i] == FB_STATE_DISPLAY) {
-				if (!(vpu_dec->codec == STD_VC1 && i == vpu_dec->outputInfo->indexFrameDisplay)) {
-					/* don't clear the frame buffer when it just displayed for vc1 clips */
-					vpu_dec->fb_state_plugin[i] = FB_STATE_ALLOCTED;
-					vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle), i);
-					if (vpu_ret != RETCODE_SUCCESS) {
-						GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d", vpu_ret);
-						retval = GST_FLOW_ERROR;
-						goto done;
-					}
-					updated = TRUE;
-				}
-			}
-			i++;
-			if ((guint) i == vpu_dec->numframebufs)
-				i = 0;
-			if (i == vpu_dec->prv_use_idx)
-				break;
-		}
-		vpu_dec->prv_use_idx = i;
-
-		/* Decoder API to decode one Frame at a time */
-		vpu_ret = vpu_DecStartOneFrame(*(vpu_dec->handle), vpu_dec->decParam);
-		if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-			retval = GST_FLOW_OK;
-			break;
-		}
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecStartOneFrame failed. Error code is %d", vpu_ret);
-			retval = GST_FLOW_ERROR;
-			break;
-		}
-
-		if (G_UNLIKELY(vpu_dec->profiling)) {
-			gettimeofday(&tv_prof, 0);
-		}
-
-		while (vpu_IsBusy()) {
-			vpu_WaitForInt(500);
-		};
-
-		if (G_UNLIKELY(vpu_dec->profiling)) {
-			gettimeofday(&tv_prof1, 0);
-			time_before = (tv_prof.tv_sec * 1000000) + tv_prof.tv_usec;
-			time_after = (tv_prof1.tv_sec * 1000000) + tv_prof1.tv_usec;
-			vpu_dec->decode_wait_time += time_after - time_before;
-		}
-
-		/* get the output information as to which index of the Framebuffers the
-		   output is written onto */
-		vpu_ret = vpu_DecGetOutputInfo(*(vpu_dec->handle), vpu_dec->outputInfo);
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecGetOutputInfo failed. Error code is %d", vpu_ret);
-			retval = GST_FLOW_ERROR;
-			break;
-		}
-
-		if (vpu_dec->outputInfo->indexFrameDecoded >= 0) {
-			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDecoded] = FB_STATE_DECODED;
-		}
-#ifndef VPU_MX27
-		if ((vpu_dec->outputInfo->interlacedFrame)
-		    && (vpu_dec->lastframedropped)) {
-			vpu_dec->ts_tx = (vpu_dec->ts_tx + 1) % MAX_STREAM_BUF;
-		}
-#endif
-
-		/* BIT don't have picture to be displayed */
-		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -3) ||
-		    G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -2)) {
-#ifndef VPU_MX27
-			if (vpu_dec->outputInfo->mp4PackedPBframe == 1) {
-				continue;
-			}
-#endif
-			GST_DEBUG("Decoded frame not to display!");
-			vpu_dec->lastframedropped = TRUE;
-			retval = GST_FLOW_OK;
-			goto done;
-		} else {
-			vpu_dec->lastframedropped = FALSE;
-		}
-		// don't try to display any buffers if not valid display index
-		if (vpu_dec->outputInfo->indexFrameDisplay <= 0) {
-			retval = GST_FLOW_OK;
-			goto done;
-		}
-
-		if (G_LIKELY(vpu_dec->direct_render == TRUE))
-			vpu_dec->pushbuff = vpu_dec->outbuffers[vpu_dec->outputInfo->indexFrameDisplay];
-
-		/* Incase of the Filesink the output in the hardware buffer is copied onto the
-		   buffer allocated by filesink */
-		else {
-			retval =
-			    gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
-							      vpu_dec->outsize,
-							      GST_PAD_CAPS(vpu_dec->srcpad),
-							      &vpu_dec->pushbuff);
-			if (retval != GST_FLOW_OK) {
-				GST_ERROR("Error in allocating the Framebuffer[%d] 3, error is %d", i, retval);
-				break;
-			}
-			memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
-			       vpu_dec->frame_virt[vpu_dec->outputInfo->
-						   indexFrameDisplay],
-			       vpu_dec->outsize);
-		}
-		/* update the time stamp base on the frame-rate */
-		GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
-		GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) =
-		    vpu_dec->timestamp_buffer[vpu_dec->ts_tx];
-		vpu_dec->ts_tx = (vpu_dec->ts_tx + 1) % MAX_STREAM_BUF;
-		vpu_dec->decoded_frames++;
-		vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
-					 indexFrameDisplay] = FB_STATE_DISPLAY;
-		GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
-
-		gst_buffer_ref(vpu_dec->pushbuff);
-		retval = gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("Error in Pushing the Output on to the Source Pad,error is %d",
-			     retval);
-		}
-#ifndef VPU_MX27
-		if (vpu_dec->outputInfo->mp4PackedPBframe == 1) {
-			//g_print("mp4PackedPBframe is 1\n");
-			continue;
-		}
-#endif
-		break;
-	}
-      done:
-	if (G_UNLIKELY(vpu_dec->profiling)) {
-		gettimeofday(&tv_prof3, 0);
-		time_before = (tv_prof2.tv_sec * 1000000) + tv_prof2.tv_usec;
-		time_after = (tv_prof3.tv_sec * 1000000) + tv_prof3.tv_usec;
-		vpu_dec->chain_Time += time_after - time_before;
-	}
-	if (buffer != NULL) {
-		gst_buffer_unref(buffer);
-		buffer = NULL;
-	}
-	return retval;
-}
-
-#endif				/* ifndef VPU_MX27 */
 
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_sink_event
@@ -2145,10 +1766,6 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 		vpu_dec->codec = STD_VC1;
 	else if (strcmp(mime, "video/mp2v") == 0)
 		vpu_dec->codec = STD_MPEG2;
-#if defined (VPU_MX51)
-	else if (strcmp(mime, "image/jpeg") == 0)
-		vpu_dec->codec = STD_MJPG;
-#endif
 	else {
 		GST_ERROR(" Codec Standard not supporded");
 		return FALSE;
@@ -2256,31 +1873,13 @@ GType
 mfw_gst_vpudec_codec_get_type(void)
 {
 	static GType vpudec_codec_type = 0;
-#if defined (VPU_MX51)
-	static GEnumValue vpudec_codecs[] = {
-		{STD_MPEG4, STR(STD_MPEG4), "std_mpeg4"},
-		{STD_H263, STR(STD_H263), "std_h263"},
-		{STD_AVC, STR(STD_AVC), "std_avc"},
-		{STD_VC1, STR(STD_VC1), "std_vc1"},
-		{STD_MJPG, STR(STD_MJPG), "std_mjpg"},
-		{0, NULL, NULL},
-	};
-#elif defined (VPU_MX37)
-	static GEnumValue vpudec_codecs[] = {
-		{STD_MPEG4, STR(STD_MPEG4), "std_mpeg4"},
-		{STD_H263, STR(STD_H263), "std_h263"},
-		{STD_AVC, STR(STD_AVC), "std_avc"},
-		{STD_VC1, STR(STD_VC1), "std_vc1"},
-		{0, NULL, NULL},
-	};
-#else
+
 	static GEnumValue vpudec_codecs[] = {
 		{STD_MPEG4, STR(STD_MPEG4), "std_mpeg4"},
 		{STD_H263, STR(STD_H263), "std_h263"},
 		{STD_AVC, STR(STD_AVC), "std_avc"},
 		{0, NULL, NULL},
 	};
-#endif
 	if (!vpudec_codec_type) {
 		vpudec_codec_type =
 		    g_enum_register_static("MfwGstVpuDecCodecs", vpudec_codecs);
@@ -2436,13 +2035,8 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 	gst_element_add_pad(GST_ELEMENT(vpu_dec), vpu_dec->srcpad);
 	vpu_dec->parent_class = g_type_class_peek_parent(gclass);
 
-#ifdef VPU_MX27
 	gst_pad_set_chain_function(vpu_dec->sinkpad,
 				   mfw_gst_vpudec_chain_stream_mode);
-#else
-	gst_pad_set_chain_function(vpu_dec->sinkpad,
-				   mfw_gst_vpudec_chain_file_mode);
-#endif
 
 	gst_pad_set_setcaps_function(vpu_dec->sinkpad, mfw_gst_vpudec_setcaps);
 	gst_pad_set_event_function(vpu_dec->sinkpad,
