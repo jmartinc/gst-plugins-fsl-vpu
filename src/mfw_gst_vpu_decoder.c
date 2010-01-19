@@ -592,7 +592,8 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 
 	if (vpu_dec->codec == STD_MPEG4) {
 		if (!vpu_dec->once) {
-			buffer = gst_buffer_join(vpu_dec->HdrExtData, buffer);
+			if (vpu_dec->HdrExtData)
+				buffer = gst_buffer_join(vpu_dec->HdrExtData, buffer);
 			vpu_dec->once = 1;
 		}
 	}
