@@ -76,8 +76,6 @@
     "width = (int) [16, 576], " \
     "height = (int)[16, 720]"
 
-#define STD_MPEG2 -1
-
 #define DEFAULT_DBK_OFFSET_VALUE    5
 
 /*======================================================================================
@@ -375,39 +373,6 @@ mfw_gst_vpudec_FrameBufferClose(MfwGstVPU_Dec * vpu_dec)
 	}
 }
 
-static gboolean
-mfw_gst_get_timestamp(MfwGstVPU_Dec * vpu_dec, GstClockTime * ptimestamp)
-{
-	gboolean found = FALSE;
-	guint i = vpu_dec->ts_tx;
-	guint index = 0;
-	GstClockTime timestamp = 0;
-	while (i != vpu_dec->ts_rx) {
-		if (found) {
-			if (vpu_dec->timestamp_buffer[i] < timestamp) {
-				timestamp = vpu_dec->timestamp_buffer[i];
-				index = i;
-			}
-		} else {
-			timestamp = vpu_dec->timestamp_buffer[i];
-			index = i;
-			found = TRUE;
-		}
-		i = ((i + 1) % MAX_STREAM_BUF);
-	}
-	if (found) {
-		if (index != vpu_dec->ts_tx) {
-			vpu_dec->timestamp_buffer[index] =
-			    vpu_dec->timestamp_buffer[vpu_dec->ts_tx];
-		}
-		vpu_dec->ts_tx = (vpu_dec->ts_tx + 1) % MAX_STREAM_BUF;
-		*ptimestamp = timestamp;
-		return TRUE;
-	} else {
-		return FALSE;
-	}
-}
-
 /*=============================================================================
 FUNCTION:           mfw_gst_vpudec_FrameBufferInit
 
@@ -584,11 +549,8 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 	if (G_UNLIKELY(vpu_dec->eos == TRUE))
 		return GST_FLOW_OK;
 
-	if (vpu_dec->codec != STD_MPEG2 || GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(buffer))) {
-		/* for mpeg2, we only store valid timestamp */
-		vpu_dec->timestamp_buffer[vpu_dec->ts_rx] = GST_BUFFER_TIMESTAMP((buffer));
-		vpu_dec->ts_rx = (vpu_dec->ts_rx + 1) % MAX_STREAM_BUF;
-	}
+	vpu_dec->timestamp_buffer[vpu_dec->ts_rx] = GST_BUFFER_TIMESTAMP((buffer));
+	vpu_dec->ts_rx = (vpu_dec->ts_rx + 1) % MAX_STREAM_BUF;
 
 	if (vpu_dec->codec == STD_MPEG4) {
 		if (!vpu_dec->once) {
@@ -915,7 +877,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFlowReturn retval = GST_FLOW_OK;
 
-	gfloat time_val = 0;
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
 	long time_before = 0, time_after = 0;
@@ -1134,31 +1095,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 
 		// Update the time stamp base on the frame-rate
 		GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
-		if (vpu_dec->codec == STD_MPEG2) {
-			GstClockTime ts;
-			if (!(mfw_gst_get_timestamp(vpu_dec, &ts))) {
-				/* no timestamp found */
-				vpu_dec->no_ts_frames++;
-				if (g_compare_float(vpu_dec->frame_rate, 0) != FLOAT_MATCH) {
-					/* calculating timestamp for decoded data */
-					time_val = ((gfloat) vpu_dec->no_ts_frames / vpu_dec->frame_rate);
-					ts = vpu_dec->base_ts + time_val * 1000 * 1000 * 1000;
-				} else {
-					/* calculating timestamp for decoded data at 25.0 fps */
-					time_val = ((gfloat) vpu_dec->no_ts_frames / 25.0);
-					ts = vpu_dec->base_ts + time_val * 1000 * 1000 * 1000;
-				}
-			} else {
-				vpu_dec->base_ts = ts;
-				vpu_dec->no_ts_frames = 0;
-			}
-				GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) = ts;
-		} else {
-			GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) =
-			    vpu_dec->timestamp_buffer[vpu_dec->ts_tx];
-			vpu_dec->ts_tx =
-			    (vpu_dec->ts_tx + 1) % MAX_STREAM_BUF;
-		}
+		GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) = vpu_dec->timestamp_buffer[vpu_dec->ts_tx];
+		vpu_dec->ts_tx = (vpu_dec->ts_tx + 1) % MAX_STREAM_BUF;
 
 		vpu_dec->decoded_frames++;
 		vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_DISPLAY;
@@ -1289,7 +1227,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		}
 
 		/* clear all the framebuffer which not in display state */
-		if (vpu_dec->codec == STD_MPEG2 || vpu_dec->codec == STD_MPEG4) {
+		if (vpu_dec->codec == STD_MPEG4) {
 			for (idx = 0; idx < vpu_dec->numframebufs; idx++) {
 				if (vpu_dec->fb_state_plugin[idx] != FB_STATE_DISPLAY) {
 					vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle), idx);
@@ -1660,16 +1598,10 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 		vpu_dec->codec = STD_MPEG4;
 	else if (strcmp(mime, "video/x-h263") == 0)
 		vpu_dec->codec = STD_H263;
-	else if (strcmp(mime, "video/mp2v") == 0)
-		vpu_dec->codec = STD_MPEG2;
 	else {
 		GST_ERROR(" Codec Standard not supporded");
 		return FALSE;
 	}
-
-	if (vpu_dec->codec == STD_MPEG2)
-		gst_pad_set_chain_function(vpu_dec->sinkpad,
-					   mfw_gst_vpudec_chain_stream_mode);
 
 	gst_structure_get_fraction(structure, "framerate",
 			&vpu_dec->frame_rate_nu, &vpu_dec->frame_rate_de);
