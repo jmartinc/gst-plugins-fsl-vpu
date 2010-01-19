@@ -1172,18 +1172,11 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		}
 
 		if (vpu_dec->outputInfo->indexFrameDecoded >= 0) {
-			if (vpu_dec->
-			    fb_state_plugin[vpu_dec->outputInfo->
-					    indexFrameDecoded] ==
-			    FB_STATE_DISPLAY) {
+			if (vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDecoded] == FB_STATE_DISPLAY) {
 				//g_print ("***** Decoded returned was in display mode \n");
-				vpu_DecClrDispFlag(*(vpu_dec->handle),
-						   vpu_dec->outputInfo->
-						   indexFrameDecoded);
+				vpu_DecClrDispFlag(*(vpu_dec->handle), vpu_dec->outputInfo->indexFrameDecoded);
 			}
-			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->
-						 indexFrameDecoded] =
-			    FB_STATE_DECODED;
+			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDecoded] = FB_STATE_DECODED;
 		}
 		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -1))
 			break;	/* decoding done */
@@ -1202,13 +1195,10 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 				// switch output buffer for every other frame so we don't overwrite display data in v4lsink
 				// this way VPU can still decode while v4l sink is displaying
 				vpu_dec->rot_buff_idx =
-					(vpu_dec->rot_buff_idx == vpu_dec->initialInfo-> minFrameBufferCount) ?
+					(vpu_dec->rot_buff_idx == vpu_dec->initialInfo->minFrameBufferCount) ?
 					vpu_dec->initialInfo->minFrameBufferCount + 1 :
 					vpu_dec->initialInfo->minFrameBufferCount;
-				vpu_DecGiveCommand(*(vpu_dec->handle),
-					SET_ROTATOR_OUTPUT,
-					&vpu_dec->
-					frameBuf[vpu_dec->rot_buff_idx]);
+				vpu_DecGiveCommand(*vpu_dec->handle, SET_ROTATOR_OUTPUT, &vpu_dec->frameBuf[vpu_dec->rot_buff_idx]);
 			} else {
 				vpu_dec->pushbuff = vpu_dec->outbuffers[vpu_dec->outputInfo->indexFrameDisplay];
 			}
