@@ -470,13 +470,12 @@ static GstFlowReturn
 mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
-	guint8 *virt_bit_stream_buf = NULL;
 	GST_DEBUG("codec=%d", vpu_dec->codec);
 	vpu_dec->bit_stream_buf.size = BUFF_FILL_SIZE;
 	IOGetPhyMem(&vpu_dec->bit_stream_buf);
-	virt_bit_stream_buf = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
-	vpu_dec->start_addr = vpu_dec->base_addr = virt_bit_stream_buf;
-	vpu_dec->end_addr = virt_bit_stream_buf + BUFF_FILL_SIZE;
+	vpu_dec->base_addr = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
+	vpu_dec->start_addr = vpu_dec->base_addr;
+	vpu_dec->end_addr = vpu_dec->start_addr + BUFF_FILL_SIZE;
 
 	if (vpu_dec->codec == STD_AVC) {
 		vpu_dec->ps_mem_desc.size = PS_SAVE_SIZE;
