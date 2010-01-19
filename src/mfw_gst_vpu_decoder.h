@@ -131,10 +131,6 @@ typedef struct _MfwGstVPU_Dec {
 	FB_STATE fb_state_plugin[NUM_FRAME_BUF];
 	CodStd codec;		/* codec standard to be selected */
 	gboolean vpu_wait;	/* Flag for the VPU wait call */
-	PhysicalAddress base_write;	/* Base address (Physical)
-					   of the input ring buffer */
-	PhysicalAddress end_write;	/* End address (Physical)
-					   of the input ring buffer */
 	gint picWidth;		/* Width of the Image obtained through
 				   Caps Neogtiation */
 	gint picHeight;		/* Height of the Image obtained through

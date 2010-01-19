@@ -492,9 +492,6 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 
 	vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
 
-	vpu_dec->base_write = vpu_dec->bit_stream_buf.phy_addr;
-	vpu_dec->end_write = vpu_dec->bit_stream_buf.phy_addr + BUFF_FILL_SIZE;
-
 	/* open a VPU's decoder instance */
 	vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
 	if (vpu_ret != RETCODE_SUCCESS) {
