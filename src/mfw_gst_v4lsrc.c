@@ -50,7 +50,7 @@
 #include <string.h>
 #include "gst-plugins-fsl_config.h"
 #include "mfw_gst_v4lsrc.h"
-#ifdef _MX27
+#ifdef VPU_MX27
 #include "mxcfb.h"
 #else
 #include "linux/mxcfb.h"

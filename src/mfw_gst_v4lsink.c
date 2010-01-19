@@ -50,7 +50,7 @@
 #include "mfw_gst_v4lsink.h"
 #include "gst-plugins-fsl_config.h"
 
-#if defined(ENABLE_TVOUT) && defined (_MX27)
+#if defined(ENABLE_TVOUT) && defined (VPU_MX27)
 /*For TV-Out & change para on-the-fly*/
 #include <errno.h>
 #include <sys/time.h>
@@ -113,7 +113,7 @@ enum {
 #define BUFFER_RESERVED_NUM         0   /* 0 addtional buffer need reserved for v4l queue in vpu based decoder */
 #define MAX_V4L_ALLOW_SIZE_IN_MB    15  /* 15MB limitation */
 #else
-#if defined(_MX27)
+#if defined(VPU_MX27)
 #define MIN_BUFFER_NUM              2   /* minimal 2, 5 is default for compability of non-updated codec like wmv */
 #define MAX_BUFFER_NUM              10  /* this number is related to driver */
 #else
@@ -388,7 +388,7 @@ handle_error:
 
 #endif
 
-#if defined(ENABLE_TVOUT) && defined (_MX27)
+#if defined(ENABLE_TVOUT) && defined (VPU_MX27)
 void tv_out_open(MFW_GST_V4LSINK_INFO_T * v4l_sink_info)
 {
 
@@ -650,7 +650,7 @@ static void mfw_gst_v4lsink_close(MFW_GST_V4LSINK_INFO_T * v4l_sink_info)
                             g_slist_remove(v4l_sink_info->reservedhwbuffer_list, v4lsink_buffer);
                     }
                     v4lsink_buffer->bufstate = BUF_STATE_FREE;
-                    gst_buffer_unref(v4lsink_buffer);
+                    gst_buffer_unref(&v4lsink_buffer->buffer);
                 } else {
                     v4lsink_buffer->bufstate = BUF_STATE_FREE;
                 }
@@ -699,7 +699,7 @@ static void mfw_gst_v4lsink_close(MFW_GST_V4LSINK_INFO_T * v4l_sink_info)
     }
 #endif
     
-#if defined (_MX27)
+#if defined (VPU_MX27)
     {
         tv_out_close(v4l_sink_info);
     }
@@ -748,7 +748,7 @@ MFWGstV4LSinkBuffer *mfw_gst_v4lsink_new_swbuffer(MFW_GST_V4LSINK_INFO_T * v4l_s
     
     if (pdata==NULL){
         GST_ERROR("Can not allocate data buffer for swbuffer!\n");
-        gst_buffer_unref(v4lsink_buffer);
+        gst_buffer_unref(&v4lsink_buffer->buffer);
         return NULL;
     }
     
@@ -1155,7 +1155,7 @@ gboolean mfw_gst_v4lsink_output_init(MFW_GST_V4LSINK_INFO_T *v4l_sink_info,
     }
 #endif
     
-#if  defined(_MX27)
+#if  defined(VPU_MX27)
     if (TRUE == v4l_sink_info->tv_out)
                 tv_out_open(v4l_sink_info);
     else
@@ -1326,7 +1326,7 @@ mfw_gst_v4lsink_buffer_alloc(GstBaseSink * bsink, guint64 offset,
         gst_structure_get_fourcc(s, "format",
 			     &v4l_sink_info->fourcc);
 
-#ifndef _MX27
+#ifndef VPU_MX27
         if (v4l_sink_info->fourcc==GST_STR_FOURCC("NV12")){
             g_print("set to nv12 mode\n");
             v4l_sink_info->outformat = V4L2_PIX_FMT_NV12;
@@ -1373,7 +1373,7 @@ mfw_gst_v4lsink_buffer_alloc(GstBaseSink * bsink, guint64 offset,
             v4l_sink_info->buffers_required = max_frames;
         }
  
-#ifndef _MX27
+#ifndef VPU_MX27
         if ((v4l_sink_info->cr_left_bypixel == 0) &&
             (v4l_sink_info->crop_left != 0)) 
 #endif
@@ -1835,7 +1835,7 @@ static GstFlowReturn mfw_gst_v4lsink_show_frame(GstBaseSink * basesink,
                         GST_WARNING("stream off, buffer %p state changed from SHOWING\n", v4lsinkbuffer);
                         v4lsinkbuffer->bufstate = BUF_STATE_SHOWED;
                         g_mutex_unlock(mfw_gst_v4lsink->pool_lock);
-                        gst_buffer_unref(v4lsinkbuffer);
+                        gst_buffer_unref(&v4lsinkbuffer->buffer);
                         g_mutex_lock(mfw_gst_v4lsink->pool_lock);
                         mfw_gst_v4lsink->v4lqueued --;
                     }
