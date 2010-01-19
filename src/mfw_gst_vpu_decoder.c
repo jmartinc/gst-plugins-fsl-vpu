@@ -143,8 +143,7 @@ static void mfw_gst_vpudec_set_property(GObject *, guint, const GValue *,
 					GParamSpec *);
 static void mfw_gst_vpudec_get_property(GObject *, guint, GValue *,
 					GParamSpec *);
-static gint mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec *, FrameBuffer *,
-					   gint);
+static gint mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec *);
 static gboolean mfw_gst_vpudec_sink_event(GstPad *, GstEvent *);
 static gboolean mfw_gst_vpudec_setcaps(GstPad *, GstCaps *);
 /*======================================================================================
@@ -391,10 +390,9 @@ IMPORTANT NOTES:    None
 =============================================================================*/
 
 static gint
-mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
-			       FrameBuffer * frameBuf, gint num_buffers)
+mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec)
 {
-
+	FrameBuffer *framebuf = vpu_dec->frameBuf;
 	gint i = 0;
 	GstFlowReturn retval = GST_FLOW_OK;
 	GstBuffer *outbuffer = NULL;
@@ -402,7 +400,7 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec,
 	strideY = vpu_dec->initialInfo->picWidth;
 	height = vpu_dec->initialInfo->picHeight;
 
-	for (i = 0; i < num_buffers; i++) {
+	for (i = 0; i < vpu_dec->numframebufs; i++) {
 		retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
 							   vpu_dec->outsize,
 							   GST_PAD_CAPS
@@ -790,7 +788,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	vpu_dec->numframebufs = needFrameBufCount;
 	/* Allocate the Frame buffers requested by the Decoder */
 	if (vpu_dec->framebufinit_done == FALSE) {
-		if ((mfw_gst_vpudec_FrameBufferInit(vpu_dec, vpu_dec->frameBuf, needFrameBufCount)) < 0) {
+		if ((mfw_gst_vpudec_FrameBufferInit(vpu_dec)) < 0) {
 			GST_ERROR("Mem system allocation failed!");
 			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
 							    "Allocation of the Frame Buffers Failed");
