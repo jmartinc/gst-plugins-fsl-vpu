@@ -77,7 +77,6 @@
     "height = (int)[16, 720]"
 
 #define STD_MPEG2 -1
-#define STD_VC1   -1
 
 #define DEFAULT_DBK_OFFSET_VALUE    5
 
@@ -349,71 +348,6 @@ vpu_mutex_unlock(GMutex * mutex)
 }
 
 /*=============================================================================
-FUNCTION:           mfw_gst_VC1_Create_RCVheader
-
-DESCRIPTION:        This function is used to create the RCV header
-                    for integration with the ASF demuxer using the width,height and the
-                    Header Extension data received through caps negotiation.
-
-ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-
-RETURN VALUE:       GstBuffer
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=============================================================================*/
-
-static GstBuffer *
-mfw_gst_VC1_Create_RCVheader(MfwGstVPU_Dec * vpu_dec, GstBuffer * inbuffer)
-{
-	GstBuffer *RCVHeader = NULL;
-	unsigned char *RCVHeaderData = NULL;
-	unsigned int value = 0;
-	int i = 0;
-
-#define RCV_HEADER_LEN  24
-	RCVHeader = gst_buffer_new_and_alloc(RCV_HEADER_LEN);
-	RCVHeaderData = GST_BUFFER_DATA(RCVHeader);
-
-	//Number of Frames, Header Extension Bit, Codec Version
-	value = NUM_FRAMES | SET_HDR_EXT | CODEC_VERSION;
-	RCVHeaderData[i++] = (unsigned char) value;
-	RCVHeaderData[i++] = (unsigned char) (value >> 8);
-	RCVHeaderData[i++] = (unsigned char) (value >> 16);
-	RCVHeaderData[i++] = (unsigned char) (value >> 24);
-	//Header Extension Size
-	//ASF Parser gives 5 bytes whereas the VPU expects only 4 bytes, so limiting it
-	if (vpu_dec->HdrExtDataLen > 4)
-		vpu_dec->HdrExtDataLen = 4;
-	RCVHeaderData[i++] = (unsigned char) vpu_dec->HdrExtDataLen;
-	RCVHeaderData[i++] = (unsigned char) (vpu_dec->HdrExtDataLen >> 8);
-	RCVHeaderData[i++] = (unsigned char) (vpu_dec->HdrExtDataLen >> 16);
-	RCVHeaderData[i++] = (unsigned char) (vpu_dec->HdrExtDataLen >> 24);
-
-	//Header Extension bytes obtained during negotiation
-	memcpy(RCVHeaderData + i, GST_BUFFER_DATA(vpu_dec->HdrExtData)
-	       , vpu_dec->HdrExtDataLen);
-	i += vpu_dec->HdrExtDataLen;
-	//Height
-	RCVHeaderData[i++] = (unsigned char) vpu_dec->picHeight;
-	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picHeight >> 8) & 0xff));
-	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picHeight >> 16) & 0xff));
-	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picHeight >> 24) & 0xff));
-	//Width
-	RCVHeaderData[i++] = (unsigned char) vpu_dec->picWidth;
-	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picWidth >> 8) & 0xff));
-	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picWidth >> 16) & 0xff));
-	RCVHeaderData[i++] = (unsigned char) (((vpu_dec->picWidth >> 24) & 0xff));
-	//Frame Size
-	RCVHeaderData[i++] = (unsigned char) GST_BUFFER_SIZE(inbuffer);
-	RCVHeaderData[i++] = (unsigned char) (GST_BUFFER_SIZE(inbuffer) >> 8);
-	RCVHeaderData[i++] = (unsigned char) (GST_BUFFER_SIZE(inbuffer) >> 16);
-	RCVHeaderData[i++] = (unsigned char) ((GST_BUFFER_SIZE(inbuffer) >> 24) | 0x80);
-
-	return RCVHeader;
-}
-
-/*=============================================================================
 FUNCTION:           mfw_gst_vpudec_FrameBufferClose
 
 DESCRIPTION:        This function frees the allocated frame buffers
@@ -654,29 +588,6 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 		/* for mpeg2, we only store valid timestamp */
 		vpu_dec->timestamp_buffer[vpu_dec->ts_rx] = GST_BUFFER_TIMESTAMP((buffer));
 		vpu_dec->ts_rx = (vpu_dec->ts_rx + 1) % MAX_STREAM_BUF;
-	}
-
-	if ((vpu_dec->codec == STD_VC1) && (vpu_dec->picWidth != 0)) {
-		/* Creation of RCV Header is done in case of ASF Playback pf VC-1 streams
-		   from the parameters like width height and Header Extension Data */
-		if (vpu_dec->first == FALSE) {
-			GstBuffer *tempBuf;
-			tempBuf = mfw_gst_VC1_Create_RCVheader(vpu_dec, buffer);
-			buffer = gst_buffer_join(tempBuf, buffer);
-			vpu_dec->first = TRUE;
-		} else {
-			/* The Size of the input stream is appended with the input stream
-			   for integration with ASF */
-
-			GstBuffer *SrcFrameSize = NULL;
-
-			SrcFrameSize = gst_buffer_new_and_alloc(4);
-			GST_BUFFER_DATA(SrcFrameSize)[0] = (unsigned char) GST_BUFFER_SIZE(buffer);
-			GST_BUFFER_DATA(SrcFrameSize)[1] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 8);
-			GST_BUFFER_DATA(SrcFrameSize)[2] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 16);
-			GST_BUFFER_DATA(SrcFrameSize)[3] = (unsigned char) (GST_BUFFER_SIZE(buffer) >> 24);
-			buffer = gst_buffer_join(SrcFrameSize, buffer);
-		}
 	}
 
 	if (vpu_dec->codec == STD_MPEG4) {
@@ -1349,7 +1260,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 
 		if (vpu_dec->file_play_mode == FALSE) {
 			/* The below block of code is used to Flush the buffered input stream data */
-			if (vpu_dec->codec == STD_VC1 || vpu_dec->codec == STD_AVC) {
+			if (vpu_dec->codec == STD_AVC) {
 				vpu_ret = vpu_DecClose(*vpu_dec->handle);
 				if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
 					vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
@@ -1360,9 +1271,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 					GST_ERROR("error in vpu_DecClose");
 
 				vpu_dec->init = FALSE;
-
-				if (vpu_dec->codec == STD_VC1)
-					vpu_dec->first = FALSE;
 
 				vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
 				if (vpu_ret != RETCODE_SUCCESS)
@@ -1744,7 +1652,6 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 	GValue *codec_data;
 	guint8 *hdrextdata;
 	guint i = 0;
-	gint wmvversion;
 
 	if (strcmp(mime, "video/x-h264") == 0)
 		vpu_dec->codec = STD_AVC;
@@ -1752,8 +1659,6 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 		vpu_dec->codec = STD_MPEG4;
 	else if (strcmp(mime, "video/x-h263") == 0)
 		vpu_dec->codec = STD_H263;
-	else if (strcmp(mime, "video/x-wmv") == 0)
-		vpu_dec->codec = STD_VC1;
 	else if (strcmp(mime, "video/mp2v") == 0)
 		vpu_dec->codec = STD_MPEG2;
 	else {
@@ -1792,24 +1697,6 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 			GST_DEBUG("%02x ", hdrextdata[i]);
 	}
 
-	if (vpu_dec->codec == STD_VC1) {
-		gst_structure_get_int(structure, "wmvversion", &wmvversion);
-		if (wmvversion != 3) {
-			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
-							    "WMV Version error:This is a VC1 decoder supports "
-							    "only WMV 9 Simple and Main Profile decode (WMV3)");
-			gst_object_unref(vpu_dec);
-			return FALSE;
-		}
-
-		if (!codec_data) {
-			GST_ERROR("No Header Extension Data found during Caps Negotiation");
-			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
-							    "No Extension Header Data Recieved from the Demuxer");
-			gst_object_unref(vpu_dec);
-			return FALSE;
-		}
-	}
 	gst_object_unref(vpu_dec);
 	return gst_pad_set_caps(pad, caps);
 }
