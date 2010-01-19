@@ -653,7 +653,7 @@ POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
 
-GstFlowReturn
+static GstFlowReturn
 mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec, int filemode)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
@@ -719,7 +719,7 @@ PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
-GstFlowReturn
+static GstFlowReturn
 mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 				     GstBuffer * buffer)
 {
@@ -827,7 +827,7 @@ PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
-GstFlowReturn
+static GstFlowReturn
 mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
@@ -906,7 +906,7 @@ PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
-GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
+static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec, int filemode)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstCaps *caps;
