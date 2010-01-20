@@ -89,7 +89,6 @@ enum {
 	MFW_GST_VPU_DBK_ENABLE,
 	MFW_GST_VPU_DBK_OFFSETA,
 	MFW_GST_VPU_DBK_OFFSETB,
-	MFW_GST_VPU_LOOPBACK,
 	MFW_GST_VPU_ROTATION,
 	MFW_GST_VPU_MIRROR,
 };
@@ -199,11 +198,6 @@ mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
 		GST_DEBUG("codec=%d", vpu_dec->codec);
 		break;
 
-	case MFW_GST_VPU_LOOPBACK:
-		vpu_dec->loopback = g_value_get_boolean(value);
-		GST_DEBUG("loopback=%d", vpu_dec->loopback);
-		break;
-
 	case MFW_GST_VPU_DBK_ENABLE:
 		vpu_dec->dbk_enabled = g_value_get_boolean(value);
 		break;
@@ -273,9 +267,6 @@ mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 		break;
 	case MFW_GST_VPU_CODEC_TYPE:
 		g_value_set_enum(value, vpu_dec->codec);
-		break;
-	case MFW_GST_VPU_LOOPBACK:
-		g_value_set_boolean(value, vpu_dec->loopback);
 		break;
 	case MFW_GST_VPU_DBK_ENABLE:
 		g_value_set_boolean(value, vpu_dec->dbk_enabled);
@@ -967,15 +958,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			}
 
 			vpu_dec->is_startframe = TRUE;
-
-			// Start parallelization if not in loopback mode and not doing rotation
-			// in those cases we must complete frame after starting decode
-			if ((vpu_dec->loopback == FALSE)
-			    && (vpu_dec->rotation_angle == 0)
-			    && (vpu_dec->mirror_dir == MIRDIR_NONE)) {
-				retval = GST_FLOW_OK;
-				goto done;
-			}
 		}
 		// Wait for output from decode
 		if (G_UNLIKELY(vpu_dec->profiling)) {
@@ -1457,9 +1439,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
 		GST_DEBUG("VPU State: Ready to Null");
-
-		if (vpu_dec->loopback == FALSE)
-			vpu_UnInit();
 		break;
 	default:
 		break;
@@ -1732,14 +1711,6 @@ mfw_gst_vpudec_class_init(MfwGstVPU_DecClass * klass)
 							  STD_AVC,
 							  G_PARAM_READWRITE));
 
-	g_object_class_install_property(gobject_class, MFW_GST_VPU_LOOPBACK,
-					g_param_spec_boolean("loopback",
-							     "LoopBack",
-							     "enables the decoder plug-in to operate"
-							     "in loopback mode with encoder ",
-							     FALSE,
-							     G_PARAM_READWRITE));
-
 	g_object_class_install_property(gobject_class, MFW_GST_VPU_ROTATION,
 					g_param_spec_uint("rotation",
 							  "Rotation",
@@ -1818,7 +1789,6 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 	vpu_dec->rotation_angle = 0;
 	vpu_dec->mirror_dir = MIRDIR_NONE;
 	vpu_dec->codec = STD_AVC;
-	vpu_dec->loopback = FALSE;
 
 	vpu_dec->vpu_mutex = g_mutex_new();
 	vpu_dec->lastframedropped = FALSE;

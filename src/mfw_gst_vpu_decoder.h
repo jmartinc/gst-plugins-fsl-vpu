@@ -165,8 +165,6 @@ typedef struct _MfwGstVPU_Dec {
 	/* enable direct rendering in case of V4L */
 	gboolean first;		/* Flag for inserting the RCV Header
 				   fot the first time */
-	gboolean loopback;	/* Flag to turn of parallelism in case of
-				   loop back */
 	gboolean framebufinit_done;
 	/* Flag to initialise the Frame buffers */
 	gint prv_use_idx;
