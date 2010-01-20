@@ -387,18 +387,6 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec)
 			return -1;
 		}
 
-		/* if the buffer allocated is the Hardware Buffer use it as it is */
-		if (GST_BUFFER_FLAG_IS_SET(outbuffer, GST_BUFFER_FLAG_LAST) == TRUE) {
-			vpu_dec->outbuffers[i] = outbuffer;
-			GST_BUFFER_SIZE(vpu_dec->outbuffers[i]) = vpu_dec->outsize;
-			GST_BUFFER_OFFSET_END(vpu_dec->outbuffers[i]) = i;
-			vpu_dec->fb_state_plugin[i] = FB_STATE_ALLOCTED;
-
-			frameBuf[i].bufY = GST_BUFFER_OFFSET(outbuffer);
-			frameBuf[i].bufCb = frameBuf[i].bufY + (strideY * height);
-			frameBuf[i].bufCr = frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
-			vpu_dec->direct_render = TRUE;
-		}
 		/* else allocate The Hardware buffer through IOGetPhyMem
 		   Note this to support writing the output to a file in case of
 		   File Sink */
@@ -422,7 +410,6 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec)
 			frameBuf[i].bufCb = frameBuf[i].bufY + (strideY * height);
 			frameBuf[i].bufCr = frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
 			vpu_dec->frame_virt[i] = (guint8 *) IOGetVirtMem(&vpu_dec->frame_mem[i]);
-			vpu_dec->direct_render = FALSE;
 		}
 	}
 	return 0;
@@ -885,35 +872,19 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			continue;
 		}
 
-		if (G_LIKELY(vpu_dec->direct_render == TRUE)) {
-			if (vpu_dec->rotation_angle
-			    || vpu_dec->mirror_dir) {
-				vpu_dec->pushbuff = vpu_dec->outbuffers[vpu_dec->rot_buff_idx];
-				// switch output buffer for every other frame so we don't overwrite display data in v4lsink
-				// this way VPU can still decode while v4l sink is displaying
-				vpu_dec->rot_buff_idx =
-					(vpu_dec->rot_buff_idx == vpu_dec->initialInfo->minFrameBufferCount) ?
-					vpu_dec->initialInfo->minFrameBufferCount + 1 :
-					vpu_dec->initialInfo->minFrameBufferCount;
-				vpu_DecGiveCommand(*vpu_dec->handle, SET_ROTATOR_OUTPUT, &vpu_dec->frameBuf[vpu_dec->rot_buff_idx]);
-			} else {
-				vpu_dec->pushbuff = vpu_dec->outbuffers[vpu_dec->outputInfo->indexFrameDisplay];
-			}
-		} else {
-			// Incase of the Filesink the output in the hardware buffer is copied onto the
-			//  buffer allocated by filesink
-			retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
-							      vpu_dec->outsize,
-							      GST_PAD_CAPS(vpu_dec->srcpad),
-							      &vpu_dec->pushbuff);
-			if (retval != GST_FLOW_OK) {
-				GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
-				     0, retval);
-				goto done;
-			}
-			memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
-					vpu_dec->frame_virt[vpu_dec->outputInfo->indexFrameDisplay], vpu_dec->outsize);
+		// Incase of the Filesink the output in the hardware buffer is copied onto the
+		//  buffer allocated by filesink
+		retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
+						      vpu_dec->outsize,
+						      GST_PAD_CAPS(vpu_dec->srcpad),
+						      &vpu_dec->pushbuff);
+		if (retval != GST_FLOW_OK) {
+			GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
+			     0, retval);
+			goto done;
 		}
+		memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
+				vpu_dec->frame_virt[vpu_dec->outputInfo->indexFrameDisplay], vpu_dec->outsize);
 
 		// Update the time stamp base on the frame-rate
 		GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
@@ -1123,7 +1094,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->decoded_frames = 0;
 		vpu_dec->avg_fps_decoding = 0.0;
 		vpu_dec->frames_dropped = 0;
-		vpu_dec->direct_render = FALSE;
 		vpu_dec->vpu_wait = FALSE;
 		vpu_dec->first = FALSE;
 		vpu_dec->framebufinit_done = FALSE;
@@ -1209,7 +1179,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->end_addr = NULL;
 		vpu_dec->base_addr = NULL;
 		vpu_dec->outsize = 0;
-		vpu_dec->direct_render = FALSE;
 		vpu_dec->vpu_wait = FALSE;
 		vpu_dec->framebufinit_done = FALSE;
 

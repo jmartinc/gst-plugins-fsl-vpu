@@ -148,7 +148,6 @@ typedef struct _MfwGstVPU_Dec {
 	guint64 frames_dropped;	/* number of frames dropped due to error */
 	gfloat avg_fps_decoding;
 	/* average fps of decoding  */
-	gboolean direct_render;
 	/* enable direct rendering in case of V4L */
 	gboolean first;		/* Flag for inserting the RCV Header
 				   fot the first time */
