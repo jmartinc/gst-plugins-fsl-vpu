@@ -935,30 +935,27 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 					break;
 			}
 		}
-		// Start Decoding One frame in VPU if not already started
-		if (vpu_dec->is_startframe == FALSE) {
-			// Release buffers back to VPU before starting next decode
-			retval = mfw_gst_vpudec_release_buff(vpu_dec);
-			if (retval != GST_FLOW_OK) {
-				// Error in clearing VPU buffers
-				goto done;
-			}
 
-			vpu_ret = vpu_DecStartOneFrame(*vpu_dec->handle, vpu_dec->decParam);
-
-			if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-				retval = GST_FLOW_OK;
-				goto done;
-			}
-
-			if (vpu_ret != RETCODE_SUCCESS) {
-				GST_ERROR("vpu_DecStartOneFrame failed. Error code is %d", vpu_ret);
-				retval = GST_FLOW_ERROR;
-				goto done;
-			}
-
-			vpu_dec->is_startframe = TRUE;
+		// Release buffers back to VPU before starting next decode
+		retval = mfw_gst_vpudec_release_buff(vpu_dec);
+		if (retval != GST_FLOW_OK) {
+			// Error in clearing VPU buffers
+			goto done;
 		}
+
+		vpu_ret = vpu_DecStartOneFrame(*vpu_dec->handle, vpu_dec->decParam);
+
+		if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
+			retval = GST_FLOW_OK;
+			goto done;
+		}
+
+		if (vpu_ret != RETCODE_SUCCESS) {
+			GST_ERROR("vpu_DecStartOneFrame failed. Error code is %d", vpu_ret);
+			retval = GST_FLOW_ERROR;
+			goto done;
+		}
+
 		// Wait for output from decode
 		if (G_UNLIKELY(vpu_dec->profiling)) {
 			gettimeofday(&tv_prof, 0);
@@ -974,8 +971,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		}
 		// Get the VPU output from decoding
 		vpu_ret = vpu_DecGetOutputInfo(*(vpu_dec->handle), vpu_dec->outputInfo);
-
-		vpu_dec->is_startframe = FALSE;
 
 		if ((vpu_dec->decParam->prescanEnable == 1)
 		    && (vpu_dec->outputInfo->prescanresult == 0)) {
@@ -1136,11 +1131,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		vpu_dec->flush = TRUE;
 		vpu_dec->no_ts_frames = 0;
 		vpu_dec->base_ts = 0;
-
-		if (vpu_dec->is_startframe) {
-			vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
-			vpu_dec->is_startframe = FALSE;
-		}
 
 		if (vpu_dec->file_play_mode == FALSE) {
 			/* The below block of code is used to Flush the buffered input stream data */
@@ -1378,10 +1368,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->vpu_wait = FALSE;
 		vpu_dec->framebufinit_done = FALSE;
 
-		if (vpu_dec->is_startframe) {
-			vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
-			vpu_dec->is_startframe = FALSE;
-		}
 		if (vpu_dec->vpu_opened) {
 			vpu_ret = vpu_DecClose(*vpu_dec->handle);
 
@@ -1792,8 +1778,6 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 
 	vpu_dec->vpu_mutex = g_mutex_new();
 	vpu_dec->lastframedropped = FALSE;
-
-	vpu_dec->is_startframe = FALSE;
 
 	vpu_dec->dbk_enabled = FALSE;
 	vpu_dec->dbk_offset_a = vpu_dec->dbk_offset_b = DEFAULT_DBK_OFFSET_VALUE;

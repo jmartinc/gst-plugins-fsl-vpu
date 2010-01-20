@@ -168,7 +168,6 @@ typedef struct _MfwGstVPU_Dec {
 	gboolean framebufinit_done;
 	/* Flag to initialise the Frame buffers */
 	gint prv_use_idx;
-	gboolean is_startframe;
 
 	GMutex *vpu_mutex;
 	gboolean lastframedropped;
