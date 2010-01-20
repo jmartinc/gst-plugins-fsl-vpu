@@ -102,16 +102,6 @@ typedef struct _MfwGstVPU_Dec {
 	GstBuffer *outbuffers[NUM_FRAME_BUF];
 	/*output buffers allocated */
 	GstBuffer *pushbuff;	/* out put buffer to be pushed */
-	GstClockTime timestamp_buffer[MAX_STREAM_BUF];
-	guint ts_rx;
-	guint ts_tx;		/* members to handle timestamp */
-
-	guint buffered_size;
-	guint frame_sizes_buffer[MAX_STREAM_BUF];
-	guint buffidx_in;
-	guint buffidx_out;	/* members to handle input
-				   buffer management */
-	gboolean buf_empty;
 
 	/* VPU specific Members */
 	DecHandle *handle;

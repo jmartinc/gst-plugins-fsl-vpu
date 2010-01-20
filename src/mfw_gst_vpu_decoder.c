@@ -478,70 +478,6 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 }
 
 /*======================================================================================
-FUNCTION:           mfw_gst_vpudec_stream_file_read
-
-DESCRIPTION:        Update bitstream buffer in streaming mode which means we might not
-                    be getting a full frame from upstream as we are in file play mode
-
-ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-                    buffer - pointer to the input buffer which has the video data.
-
-RETURN VALUE:       GstFlowReturn - Success or Failure.
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
-static GstFlowReturn
-mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
-				     GstBuffer * buffer)
-{
-	RetCode vpu_ret = RETCODE_SUCCESS;
-
-	if (G_UNLIKELY(buffer == NULL)) {
-		/* now end of stream */
-		vpu_dec->eos = TRUE;
-		vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, NULL, 0);
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
-			return GST_FLOW_ERROR;
-		}
-	}
-
-	/******************************************************************************/
-	/********           Fill and update bitstreambuf           ********************/
-	/******************************************************************************/
-
-	/*Time stamp Buffer is a circular buffer to store the timestamps which are later
-	   used while pushing the decoded frame onto the Sink element */
-	if (G_UNLIKELY(vpu_dec->eos == TRUE))
-		return GST_FLOW_OK;
-
-	vpu_dec->timestamp_buffer[vpu_dec->ts_rx] = GST_BUFFER_TIMESTAMP((buffer));
-	vpu_dec->ts_rx = (vpu_dec->ts_rx + 1) % MAX_STREAM_BUF;
-
-	if (vpu_dec->codec == STD_MPEG4) {
-		if (!vpu_dec->once) {
-			if (vpu_dec->HdrExtData)
-				buffer = gst_buffer_join(vpu_dec->HdrExtData, buffer);
-			vpu_dec->once = 1;
-		}
-	}
-
-	vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_in] = GST_BUFFER_SIZE(buffer);
-	vpu_dec->buffidx_in = (vpu_dec->buffidx_in + 1) % MAX_STREAM_BUF;
-
-	vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-	if (vpu_ret != RETCODE_SUCCESS) {
-		return GST_FLOW_OK;
-	}
-	vpu_dec->buffered_size += GST_BUFFER_SIZE(buffer);
-	gst_buffer_unref(buffer);
-	vpu_dec->buf_empty = TRUE;
-
-	return GST_FLOW_OK;
-}
-
-/*======================================================================================
 FUNCTION:           mfw_gst_vpudec_release_buff
 
 DESCRIPTION:        Release buffers that are already displayed
@@ -841,51 +777,46 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			goto done;
 		}
 	}
-	vpu_dec->buf_empty = FALSE;
 
-	// Write input bitstream to VPU - special for streaming mode
-	retval = mfw_gst_vpudec_stream_buff_read_init(vpu_dec, buffer);
-	if (retval != GST_FLOW_OK) {
-		GST_ERROR("mfw_gst_vpudec_stream_buff_read_init failed. Error code is %d", retval);
-		goto done;
-	}
-	if (vpu_dec->buf_empty) {
-		buffer = NULL;
-		if ((vpu_dec->buffered_size <
-		     (vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_out] + 1024))
-		    || (vpu_dec->buffered_size < 1024)) {
-			return GST_FLOW_OK;
+	if (G_UNLIKELY(buffer == NULL)) {
+		/* now end of stream */
+		vpu_dec->eos = TRUE;
+		vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, NULL, 0);
+		if (vpu_ret != RETCODE_SUCCESS) {
+			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
+			return GST_FLOW_ERROR;
 		}
 	}
-	// Initialize VPU
-	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
-		retval = mfw_gst_vpudec_vpu_init(vpu_dec);
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
-			goto done;
+
+	if (G_UNLIKELY(vpu_dec->eos == TRUE))
+		return GST_FLOW_OK;
+
+	if (vpu_dec->codec == STD_MPEG4) {
+		if (!vpu_dec->once) {
+			if (vpu_dec->HdrExtData)
+				buffer = gst_buffer_join(vpu_dec->HdrExtData, buffer);
+			vpu_dec->once = 1;
 		}
-		// don't exit instead start the first decode
-		//return GST_FLOW_OK;
 	}
-	// Keep looping while there is enough in bitstream to decode
+
+	vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+	if (vpu_ret != RETCODE_SUCCESS) {
+		printf("SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSHOULD not be here\n");
+	}
+
 	while (1) {
-		if (vpu_dec->flush == TRUE)
-			break;
+		printf("ENter while\n");
 
-		// read any left over in buffer
-		if (G_LIKELY(vpu_dec->eos != TRUE)) {
-			if (buffer != NULL) {
-				vpu_dec->buffered_size += GST_BUFFER_SIZE(buffer);
-				vpu_DecBufferPush(*vpu_dec->handle, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-				gst_buffer_unref(buffer);
-				buffer = NULL;
-			} else {
-				if (vpu_dec->buffered_size < vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_out] + 1024)
-					break;
-				if (vpu_dec->buffered_size < 2048)
-					break;
+		if (G_UNLIKELY(vpu_dec->init == FALSE)) {
+			retval = mfw_gst_vpudec_vpu_init(vpu_dec);
+			if (retval != GST_FLOW_OK) {
+				GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
+				goto done;
 			}
 		}
+
+		if (vpu_dec->flush == TRUE)
+			break;
 
 		// Release buffers back to VPU before starting next decode
 		retval = mfw_gst_vpudec_release_buff(vpu_dec);
@@ -897,6 +828,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_ret = vpu_DecStartOneFrame(*vpu_dec->handle, vpu_dec->decParam);
 
 		if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
+			printf("frame not complete\n");
 			retval = GST_FLOW_OK;
 			goto done;
 		}
@@ -925,8 +857,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 
 		if ((vpu_dec->decParam->prescanEnable == 1)
 		    && (vpu_dec->outputInfo->prescanresult == 0)) {
-			GST_WARNING("The prescan result is zero, all the output information have no meaning.");
-			// Return for more data as this is incomplete - but do not process as an error
+			/* No complete frame in bitstream. Bail out. */
 			retval = GST_FLOW_OK;
 			goto done;
 		}
@@ -975,7 +906,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 							      vpu_dec->outsize,
 							      GST_PAD_CAPS(vpu_dec->srcpad),
 							      &vpu_dec->pushbuff);
-			printf("alloc\n");
 			if (retval != GST_FLOW_OK) {
 				GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
 				     0, retval);
@@ -987,13 +917,12 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 
 		// Update the time stamp base on the frame-rate
 		GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
-		GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) = vpu_dec->timestamp_buffer[vpu_dec->ts_tx];
-		vpu_dec->ts_tx = (vpu_dec->ts_tx + 1) % MAX_STREAM_BUF;
+		GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) = GST_BUFFER_TIMESTAMP(buffer);
+		GST_BUFFER_DURATION(vpu_dec->pushbuff) = GST_BUFFER_DURATION(buffer);
 
 		vpu_dec->decoded_frames++;
 		vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_DISPLAY;
 
-		gst_buffer_ref(vpu_dec->pushbuff);
 		GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
 		retval = gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
 		if (retval != GST_FLOW_OK) {
@@ -1001,11 +930,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_ALLOCTED;
 			// Make sure we clear and release the buffer since it can't be displayed
 			vpu_DecClrDispFlag(*vpu_dec->handle, vpu_dec->outputInfo->indexFrameDisplay);
-		}
-		/* get output */
-		if (vpu_dec->buffered_size > 0) {
-			vpu_dec->buffered_size = vpu_dec->buffered_size - vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_out];
-			vpu_dec->buffidx_out = (vpu_dec->buffidx_out + 1) % MAX_STREAM_BUF;
 		}
 		retval = GST_FLOW_OK;
 	}
@@ -1016,10 +940,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		time_after = (tv_prof3.tv_sec * 1000000) + tv_prof3.tv_usec;
 		vpu_dec->chain_Time += time_after - time_before;
 	}
-	if (buffer != NULL) {
-		gst_buffer_unref(buffer);
-		buffer = NULL;
-	}
+	gst_buffer_unref(buffer);
 	return retval;
 }
 
@@ -1070,13 +991,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		}
 		break;
 	case GST_EVENT_FLUSH_STOP:
-		vpu_dec->buffidx_in = 0;
-		vpu_dec->buffidx_out = 0;
-		vpu_dec->buffered_size = 0;
-		memset(&vpu_dec->frame_sizes_buffer[0], 0, MAX_STREAM_BUF);
-		memset(&vpu_dec->timestamp_buffer[0], 0, MAX_STREAM_BUF);
-		vpu_dec->ts_rx = 0;
-		vpu_dec->ts_tx = 0;
 		vpu_dec->vpu_wait = FALSE;
 		vpu_dec->eos = FALSE;
 		vpu_dec->flush = TRUE;
@@ -1211,12 +1125,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->frames_dropped = 0;
 		vpu_dec->direct_render = FALSE;
 		vpu_dec->vpu_wait = FALSE;
-		vpu_dec->buffered_size = 0;
 		vpu_dec->first = FALSE;
-		vpu_dec->buffidx_in = 0;
-		vpu_dec->buffidx_out = 0;
-		vpu_dec->ts_rx = 0;
-		vpu_dec->ts_tx = 0;
 		vpu_dec->framebufinit_done = FALSE;
 		vpu_dec->eos = FALSE;
 
@@ -1224,8 +1133,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 			vpu_dec->outbuffers[cnt] = NULL;
 
 		memset(&vpu_dec->bit_stream_buf, 0, sizeof (vpu_mem_desc));
-		memset(&vpu_dec->frame_sizes_buffer[0], 0, MAX_STREAM_BUF * sizeof (guint));
-		memset(&vpu_dec->timestamp_buffer[0], 0, MAX_STREAM_BUF * sizeof (GstClockTime));
 		memset(&vpu_dec->frameBuf[0], 0, NUM_FRAME_BUF * sizeof (FrameBuffer));
 		memset(&vpu_dec->frame_mem[0], 0, NUM_FRAME_BUF * sizeof (vpu_mem_desc));
 		/* Handle the decoder Initialization over here. */
@@ -1298,10 +1205,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		}
 
 		vpu_dec->first = FALSE;
-		vpu_dec->buffidx_in = 0;
-		vpu_dec->buffidx_out = 0;
-		memset(&vpu_dec->timestamp_buffer[0], 0, MAX_STREAM_BUF);
-		memset(&vpu_dec->frame_sizes_buffer[0], 0, MAX_STREAM_BUF);
 		vpu_dec->start_addr = NULL;
 		vpu_dec->end_addr = NULL;
 		vpu_dec->base_addr = NULL;
