@@ -928,14 +928,9 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 							  &p1, &p2, &space);
 
 				if (space >= GST_BUFFER_SIZE(buffer)) {
-					if ((vpu_dec->start_addr +
-					     GST_BUFFER_SIZE(buffer)) <=
-					    vpu_dec->end_addr) {
-						memcpy(vpu_dec->start_addr,
-						       GST_BUFFER_DATA(buffer),
-						       GST_BUFFER_SIZE(buffer));
-						vpu_dec->start_addr +=
-						    GST_BUFFER_SIZE(buffer);
+					if ((vpu_dec->start_addr + GST_BUFFER_SIZE(buffer)) <= vpu_dec->end_addr) {
+						memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+						vpu_dec->start_addr += GST_BUFFER_SIZE(buffer);
 					} else {
 						guint residue = vpu_dec->end_addr - vpu_dec->start_addr;
 						memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), residue);
@@ -1076,15 +1071,14 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 							      vpu_dec->outsize,
 							      GST_PAD_CAPS(vpu_dec->srcpad),
 							      &vpu_dec->pushbuff);
+			printf("alloc\n");
 			if (retval != GST_FLOW_OK) {
 				GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
 				     vpu_dec->prv_use_idx, retval);
 				goto done;
 			}
 			memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
-			       vpu_dec->frame_virt[vpu_dec->outputInfo->
-						   indexFrameDisplay],
-			       vpu_dec->outsize);
+					vpu_dec->frame_virt[vpu_dec->outputInfo->indexFrameDisplay], vpu_dec->outsize);
 		}
 
 		// Update the time stamp base on the frame-rate
