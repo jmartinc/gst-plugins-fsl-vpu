@@ -392,7 +392,7 @@ IMPORTANT NOTES:    None
 static gint
 mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec)
 {
-	FrameBuffer *framebuf = vpu_dec->frameBuf;
+	FrameBuffer *frameBuf = vpu_dec->frameBuf;
 	gint i = 0;
 	GstFlowReturn retval = GST_FLOW_OK;
 	GstBuffer *outbuffer = NULL;
