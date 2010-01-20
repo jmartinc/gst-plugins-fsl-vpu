@@ -1083,34 +1083,32 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		vpu_dec->no_ts_frames = 0;
 		vpu_dec->base_ts = 0;
 
-		if (vpu_dec->file_play_mode == FALSE) {
-			/* The below block of code is used to Flush the buffered input stream data */
-			if (vpu_dec->codec == STD_AVC) {
+		/* The below block of code is used to Flush the buffered input stream data */
+		if (vpu_dec->codec == STD_AVC) {
+			vpu_ret = vpu_DecClose(*vpu_dec->handle);
+			if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
+				vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
 				vpu_ret = vpu_DecClose(*vpu_dec->handle);
-				if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-					vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
-					vpu_ret = vpu_DecClose(*vpu_dec->handle);
-				}
-
-				if (RETCODE_SUCCESS != vpu_ret)
-					GST_ERROR("error in vpu_DecClose");
-
-				vpu_dec->init = FALSE;
-
-				vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
-				if (vpu_ret != RETCODE_SUCCESS)
-					GST_ERROR("vpu_DecOpen failed. Error code is %d", vpu_ret);
-			} else {
-				vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
-				if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-					vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
-					vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
-				}
-				if (RETCODE_SUCCESS != vpu_ret)
-					GST_ERROR("error in flushing the bitstream buffer");
 			}
-			vpu_dec->start_addr = vpu_dec->base_addr;
+
+			if (RETCODE_SUCCESS != vpu_ret)
+				GST_ERROR("error in vpu_DecClose");
+
+			vpu_dec->init = FALSE;
+
+			vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
+			if (vpu_ret != RETCODE_SUCCESS)
+				GST_ERROR("vpu_DecOpen failed. Error code is %d", vpu_ret);
+		} else {
+			vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
+			if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
+				vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
+				vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
+			}
+			if (RETCODE_SUCCESS != vpu_ret)
+				GST_ERROR("error in flushing the bitstream buffer");
 		}
+		vpu_dec->start_addr = vpu_dec->base_addr;
 
 		/* clear all the framebuffer which not in display state */
 		if (vpu_dec->codec == STD_MPEG4) {
@@ -1129,8 +1127,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		}
 		break;
 	case GST_EVENT_EOS:
-		if (vpu_dec->file_play_mode == FALSE)
-			mfw_gst_vpudec_chain_stream_mode(vpu_dec->sinkpad, NULL);
+		mfw_gst_vpudec_chain_stream_mode(vpu_dec->sinkpad, NULL);
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result)
@@ -1223,7 +1220,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->ts_rx = 0;
 		vpu_dec->ts_tx = 0;
 		vpu_dec->framebufinit_done = FALSE;
-		vpu_dec->file_play_mode = FALSE;
 		vpu_dec->eos = FALSE;
 		vpu_dec->no_ts_frames = 0;
 		vpu_dec->base_ts = 0;

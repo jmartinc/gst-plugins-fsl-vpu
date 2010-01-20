@@ -142,7 +142,6 @@ typedef struct _MfwGstVPU_Dec {
 	/* Structure for Frame buffer parameters
 	   if not used with V4LSink */
 	gint numframebufs;	/* Number of Frame buffers */
-	gboolean file_play_mode;	/* Flag for file play mode */
 	gboolean eos;		/* Flag for end of stream */
 	vpu_mem_desc ps_mem_desc;	/* ps save buffer */
 	vpu_mem_desc slice_mem_desc;	/* slice save buffer */
