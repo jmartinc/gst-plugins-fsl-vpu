@@ -148,8 +148,6 @@ typedef struct _MfwGstVPU_Dec {
 
 	/* Misc members */
 	guint64 decoded_frames;	/*number of the decoded frames */
-	guint64 no_ts_frames;	/*number of no timestamp frames, for mpeg2 */
-	GstClockTime base_ts;	/*the latest valid timestamp */
 	gfloat frame_rate;	/* Frame rate of display */
 	gint32 frame_rate_de;
 	gint32 frame_rate_nu;
@@ -165,8 +163,6 @@ typedef struct _MfwGstVPU_Dec {
 	gboolean first;		/* Flag for inserting the RCV Header
 				   fot the first time */
 	gboolean framebufinit_done;
-	/* Flag to initialise the Frame buffers */
-	gint prv_use_idx;
 
 	GMutex *vpu_mutex;
 	gboolean lastframedropped;

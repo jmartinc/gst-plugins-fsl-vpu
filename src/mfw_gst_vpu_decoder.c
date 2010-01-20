@@ -978,7 +978,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			printf("alloc\n");
 			if (retval != GST_FLOW_OK) {
 				GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
-				     vpu_dec->prv_use_idx, retval);
+				     0, retval);
 				goto done;
 			}
 			memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
@@ -1080,8 +1080,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		vpu_dec->vpu_wait = FALSE;
 		vpu_dec->eos = FALSE;
 		vpu_dec->flush = TRUE;
-		vpu_dec->no_ts_frames = 0;
-		vpu_dec->base_ts = 0;
 
 		/* The below block of code is used to Flush the buffered input stream data */
 		if (vpu_dec->codec == STD_AVC) {
@@ -1221,9 +1219,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->ts_tx = 0;
 		vpu_dec->framebufinit_done = FALSE;
 		vpu_dec->eos = FALSE;
-		vpu_dec->no_ts_frames = 0;
-		vpu_dec->base_ts = 0;
-		vpu_dec->prv_use_idx = 0;
 
 		for (cnt = 0; cnt < NUM_FRAME_BUF; cnt++)
 			vpu_dec->outbuffers[cnt] = NULL;
