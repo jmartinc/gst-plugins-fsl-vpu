@@ -908,12 +908,12 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		}
 
 		// Wait for output from decode
-		if (G_UNLIKELY(vpu_dec->profiling)) {
+		if (G_UNLIKELY(vpu_dec->profiling))
 			gettimeofday(&tv_prof, 0);
-		}
-		while (vpu_IsBusy()) {
+
+		while (vpu_IsBusy())
 			vpu_WaitForInt(1000);
-		};
+
 		if (G_UNLIKELY(vpu_dec->profiling)) {
 			gettimeofday(&tv_prof1, 0);
 			time_before = (tv_prof.tv_sec * 1000000) + tv_prof.tv_usec;
