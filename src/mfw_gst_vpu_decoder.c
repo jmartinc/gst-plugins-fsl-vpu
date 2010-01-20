@@ -962,7 +962,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		}
 		break;
 	case GST_EVENT_FLUSH_STOP:
-		vpu_dec->vpu_wait = FALSE;
 		vpu_dec->eos = FALSE;
 		vpu_dec->flush = TRUE;
 
@@ -1094,7 +1093,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->decoded_frames = 0;
 		vpu_dec->avg_fps_decoding = 0.0;
 		vpu_dec->frames_dropped = 0;
-		vpu_dec->vpu_wait = FALSE;
 		vpu_dec->first = FALSE;
 		vpu_dec->framebufinit_done = FALSE;
 		vpu_dec->eos = FALSE;
@@ -1179,7 +1177,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->end_addr = NULL;
 		vpu_dec->base_addr = NULL;
 		vpu_dec->outsize = 0;
-		vpu_dec->vpu_wait = FALSE;
 		vpu_dec->framebufinit_done = FALSE;
 
 		if (vpu_dec->vpu_opened) {
