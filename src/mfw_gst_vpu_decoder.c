@@ -464,7 +464,7 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 
 	vpu_dec->decOP->bitstreamBuffer = vpu_dec->bit_stream_buf.phy_addr;
 	vpu_dec->decOP->bitstreamBufferSize = BUFF_FILL_SIZE;
-
+	vpu_dec->decOP->bitstreamBufferVirt = vpu_dec->base_addr;
 	vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
 
 	/* open a VPU's decoder instance */
@@ -496,13 +496,11 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 				     GstBuffer * buffer)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
-	PhysicalAddress p1, p2;
-	Uint32 space;
 
 	if (G_UNLIKELY(buffer == NULL)) {
 		/* now end of stream */
 		vpu_dec->eos = TRUE;
-		vpu_ret = vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle), 0);
+		vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, NULL, 0);
 		if (vpu_ret != RETCODE_SUCCESS) {
 			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
 			return GST_FLOW_ERROR;
@@ -532,32 +530,13 @@ mfw_gst_vpudec_stream_buff_read_init(MfwGstVPU_Dec * vpu_dec,
 	vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_in] = GST_BUFFER_SIZE(buffer);
 	vpu_dec->buffidx_in = (vpu_dec->buffidx_in + 1) % MAX_STREAM_BUF;
 
-	vpu_DecGetBitstreamBuffer(*(vpu_dec->handle), &p1, &p2, &space);
-
-	/* Check if there is enough space for input buffer */
-	if (space >= GST_BUFFER_SIZE(buffer)) {
-		/* The buffer read by the VPU follows a circular buffer approach
-		   this block of code handles that */
-		if ((vpu_dec->start_addr + GST_BUFFER_SIZE(buffer)) <= vpu_dec->end_addr) {
-			memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-			vpu_dec->start_addr += GST_BUFFER_SIZE(buffer);
-		} else {
-			guint residue = vpu_dec->end_addr - vpu_dec->start_addr;
-			memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), residue);
-			memcpy(vpu_dec->base_addr, GST_BUFFER_DATA(buffer) + residue, GST_BUFFER_SIZE(buffer) - residue);
-			vpu_dec->start_addr = vpu_dec->base_addr + GST_BUFFER_SIZE(buffer) - residue;
-		}
-
-		vpu_ret = vpu_DecUpdateBitstreamBuffer(*(vpu_dec->handle), GST_BUFFER_SIZE(buffer));
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
-			return GST_FLOW_ERROR;
-		}
-
-		vpu_dec->buffered_size += GST_BUFFER_SIZE(buffer);
-		gst_buffer_unref(buffer);
-		vpu_dec->buf_empty = TRUE;
+	vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+	if (vpu_ret != RETCODE_SUCCESS) {
+		return GST_FLOW_OK;
 	}
+	vpu_dec->buffered_size += GST_BUFFER_SIZE(buffer);
+	gst_buffer_unref(buffer);
+	vpu_dec->buf_empty = TRUE;
 
 	return GST_FLOW_OK;
 }
@@ -896,38 +875,10 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		// read any left over in buffer
 		if (G_LIKELY(vpu_dec->eos != TRUE)) {
 			if (buffer != NULL) {
-				PhysicalAddress p1, p2;
-				Uint32 space;
-
-				vpu_DecGetBitstreamBuffer(*(vpu_dec->handle),
-							  &p1, &p2, &space);
-
-				if (space >= GST_BUFFER_SIZE(buffer)) {
-					if ((vpu_dec->start_addr + GST_BUFFER_SIZE(buffer)) <= vpu_dec->end_addr) {
-						memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-						vpu_dec->start_addr += GST_BUFFER_SIZE(buffer);
-					} else {
-						guint residue = vpu_dec->end_addr - vpu_dec->start_addr;
-						memcpy(vpu_dec->start_addr, GST_BUFFER_DATA(buffer), residue);
-						memcpy(vpu_dec->base_addr,
-								GST_BUFFER_DATA(buffer) + residue,
-								GST_BUFFER_SIZE(buffer) - residue);
-						vpu_dec->start_addr = vpu_dec->base_addr + GST_BUFFER_SIZE(buffer) -
-								residue;
-					}
-
-					vpu_ret = vpu_DecUpdateBitstreamBuffer(*vpu_dec->handle, GST_BUFFER_SIZE(buffer));
-					if (vpu_ret != RETCODE_SUCCESS) {
-						GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d",
-							vpu_ret);
-						retval = GST_FLOW_ERROR;
-						goto done;
-					}
-
-					vpu_dec->buffered_size += GST_BUFFER_SIZE(buffer);
-					gst_buffer_unref(buffer);
-					buffer = NULL;
-				}
+				vpu_dec->buffered_size += GST_BUFFER_SIZE(buffer);
+				vpu_DecBufferPush(*vpu_dec->handle, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+				gst_buffer_unref(buffer);
+				buffer = NULL;
 			} else {
 				if (vpu_dec->buffered_size < vpu_dec->frame_sizes_buffer[vpu_dec->buffidx_out] + 1024)
 					break;
