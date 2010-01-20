@@ -369,48 +369,26 @@ mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec)
 {
 	FrameBuffer *frameBuf = vpu_dec->frameBuf;
 	gint i = 0;
-	GstFlowReturn retval = GST_FLOW_OK;
-	GstBuffer *outbuffer = NULL;
 	guint strideY = 0, height = 0;
 	strideY = vpu_dec->initialInfo->picWidth;
 	height = vpu_dec->initialInfo->picHeight;
 
 	for (i = 0; i < vpu_dec->numframebufs; i++) {
-		retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
-							   vpu_dec->outsize,
-							   GST_PAD_CAPS
-							   (vpu_dec->srcpad),
-							   &outbuffer);
-
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("Error in allocating the Framebuffer[%d] 1, error is %d", i, retval);
+		vpu_dec->frame_mem[i].size = vpu_dec->outsize;
+		IOGetPhyMem(&vpu_dec->frame_mem[i]);
+		if (vpu_dec->frame_mem[i].phy_addr == 0) {
+			gint j;
+			for (j = 0; j < i; j++) {
+				IOFreeVirtMem(&vpu_dec->frame_mem[i]);
+				IOFreePhyMem(&vpu_dec->frame_mem[i]);
+			}
+			GST_ERROR("No enough mem for framebuffer!");
 			return -1;
 		}
-
-		/* else allocate The Hardware buffer through IOGetPhyMem
-		   Note this to support writing the output to a file in case of
-		   File Sink */
-		else {
-			if (outbuffer != NULL) {
-				gst_buffer_unref(outbuffer);
-				outbuffer = NULL;
-			}
-			vpu_dec->frame_mem[i].size = vpu_dec->outsize;
-			IOGetPhyMem(&vpu_dec->frame_mem[i]);
-			if (vpu_dec->frame_mem[i].phy_addr == 0) {
-				gint j;
-				for (j = 0; j < i; j++) {
-					IOFreeVirtMem(&vpu_dec->frame_mem[i]);
-					IOFreePhyMem(&vpu_dec->frame_mem[i]);
-				}
-				GST_ERROR("No enough mem for framebuffer!");
-				return -1;
-			}
-			frameBuf[i].bufY = vpu_dec->frame_mem[i].phy_addr;
-			frameBuf[i].bufCb = frameBuf[i].bufY + (strideY * height);
-			frameBuf[i].bufCr = frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
-			vpu_dec->frame_virt[i] = (guint8 *) IOGetVirtMem(&vpu_dec->frame_mem[i]);
-		}
+		frameBuf[i].bufY = vpu_dec->frame_mem[i].phy_addr;
+		frameBuf[i].bufCb = frameBuf[i].bufY + (strideY * height);
+		frameBuf[i].bufCr = frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
+		vpu_dec->frame_virt[i] = (guint8 *) IOGetVirtMem(&vpu_dec->frame_mem[i]);
 	}
 	return 0;
 }
