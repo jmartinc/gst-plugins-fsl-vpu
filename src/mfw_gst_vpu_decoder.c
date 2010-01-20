@@ -328,22 +328,6 @@ mfw_gst_vpudec_post_fatal_error_msg(MfwGstVPU_Dec * vpu_dec, gchar * error_msg)
 	g_error_free(error);
 }
 
-static void
-vpu_mutex_lock(GMutex * mutex)
-{
-	return;
-	GST_DEBUG("VPU mutex locked. +++");
-	g_mutex_lock(mutex);
-}
-
-static void
-vpu_mutex_unlock(GMutex * mutex)
-{
-	return;
-	GST_DEBUG("VPU mutex unlocked. ---");
-	g_mutex_unlock(mutex);
-}
-
 /*=============================================================================
 FUNCTION:           mfw_gst_vpudec_FrameBufferClose
 
@@ -969,33 +953,27 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 				goto done;
 			}
 
-			vpu_mutex_lock(vpu_dec->vpu_mutex);
-
 			vpu_ret =
 			    vpu_DecStartOneFrame(*(vpu_dec->handle),
 						 vpu_dec->decParam);
 			if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-				vpu_mutex_unlock(vpu_dec->vpu_mutex);
 				retval = GST_FLOW_OK;
 				goto done;
 			}
 
 			if (vpu_ret != RETCODE_SUCCESS) {
-				vpu_mutex_unlock(vpu_dec->vpu_mutex);
 				GST_ERROR("vpu_DecStartOneFrame failed. Error code is %d", vpu_ret);
 				retval = GST_FLOW_ERROR;
 				goto done;
 			}
 
 			vpu_dec->is_startframe = TRUE;
-			vpu_mutex_unlock(vpu_dec->vpu_mutex);
 
 			// Start parallelization if not in loopback mode and not doing rotation
 			// in those cases we must complete frame after starting decode
 			if ((vpu_dec->loopback == FALSE)
 			    && (vpu_dec->rotation_angle == 0)
 			    && (vpu_dec->mirror_dir == MIRDIR_NONE)) {
-				vpu_mutex_lock(vpu_dec->vpu_mutex);
 				retval = GST_FLOW_OK;
 				goto done;
 			}
@@ -1017,7 +995,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_ret = vpu_DecGetOutputInfo(*(vpu_dec->handle), vpu_dec->outputInfo);
 
 		vpu_dec->is_startframe = FALSE;
-		vpu_mutex_unlock(vpu_dec->vpu_mutex);
 
 		if ((vpu_dec->decParam->prescanEnable == 1)
 		    && (vpu_dec->outputInfo->prescanresult == 0)) {
@@ -1182,7 +1159,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		if (vpu_dec->is_startframe) {
 			vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
 			vpu_dec->is_startframe = FALSE;
-			vpu_mutex_unlock(vpu_dec->vpu_mutex);
 		}
 
 		if (vpu_dec->file_play_mode == FALSE) {
@@ -1477,7 +1453,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		/* Unlock the mutex to free the mutex
 		 * in case of date terminated.
 		 */
-		vpu_mutex_unlock(vpu_dec->vpu_mutex);
 		g_mutex_free(vpu_dec->vpu_mutex);
 		vpu_dec->vpu_mutex = NULL;
 		break;
@@ -1849,9 +1824,7 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 	vpu_dec->vpu_mutex = g_mutex_new();
 	vpu_dec->lastframedropped = FALSE;
 
-	vpu_mutex_lock(vpu_dec->vpu_mutex);
 	vpu_dec->is_startframe = FALSE;
-	vpu_mutex_unlock(vpu_dec->vpu_mutex);
 
 	vpu_dec->dbk_enabled = FALSE;
 	vpu_dec->dbk_offset_a = vpu_dec->dbk_offset_b = DEFAULT_DBK_OFFSET_VALUE;
