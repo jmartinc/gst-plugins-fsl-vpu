@@ -953,9 +953,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 				goto done;
 			}
 
-			vpu_ret =
-			    vpu_DecStartOneFrame(*(vpu_dec->handle),
-						 vpu_dec->decParam);
+			vpu_ret = vpu_DecStartOneFrame(*vpu_dec->handle, vpu_dec->decParam);
+
 			if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
 				retval = GST_FLOW_OK;
 				goto done;
