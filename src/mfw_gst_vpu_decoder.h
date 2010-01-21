@@ -82,14 +82,6 @@ G_BEGIN_DECLS
 /*=============================================================================
                                  STRUCTURES AND OTHER TYPEDEFS
 =============================================================================*/
-typedef enum {
-	FB_STATE_ILLEGAL,
-	FB_STATE_ALLOCTED,	/* buffer is in allocated */
-	FB_STATE_DISPLAY,	/* buffer is in display */
-	FB_STATE_DECODED,	/* buffer is in decoded */
-	FB_STATE_FREE,		/* buffer need free */
-} FB_STATE;
-
 typedef struct _MfwGstVPU_Dec {
 	/* Plug-in specific members */
 	GstElement element;	/* instance of base class */
@@ -117,8 +109,6 @@ typedef struct _MfwGstVPU_Dec {
 	FrameBuffer frameBuf[NUM_FRAME_BUF];
 	/* Hardware output buffer structure */
 	guint8 *frame_virt[NUM_FRAME_BUF];
-	/* Hardware output buffer virtual adresses */
-	FB_STATE fb_state_plugin[NUM_FRAME_BUF];
 	CodStd codec;		/* codec standard to be selected */
 	gint picWidth;		/* Width of the Image obtained through
 				   Caps Neogtiation */

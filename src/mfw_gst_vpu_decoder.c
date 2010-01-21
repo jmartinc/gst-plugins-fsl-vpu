@@ -748,13 +748,9 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			goto done;
 		}
 
-		if (vpu_dec->outputInfo->indexFrameDecoded >= 0) {
-			if (vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDecoded] == FB_STATE_DISPLAY) {
-				//g_print ("***** Decoded returned was in display mode \n");
-				vpu_DecClrDispFlag(*(vpu_dec->handle), vpu_dec->outputInfo->indexFrameDecoded);
-			}
-			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDecoded] = FB_STATE_DECODED;
-		}
+		if (vpu_dec->outputInfo->indexFrameDecoded >= 0)
+			vpu_DecClrDispFlag(*(vpu_dec->handle), vpu_dec->outputInfo->indexFrameDecoded);
+
 		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -1))
 			break;	/* decoding done */
 
@@ -791,13 +787,11 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		GST_BUFFER_DURATION(vpu_dec->pushbuff) = GST_BUFFER_DURATION(buffer);
 
 		vpu_dec->decoded_frames++;
-		vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_DISPLAY;
 
 		GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
 		retval = gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d", retval);
-			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_ALLOCTED;
 			// Make sure we clear and release the buffer since it can't be displayed
 			vpu_DecClrDispFlag(*vpu_dec->handle, vpu_dec->outputInfo->indexFrameDisplay);
 		}
@@ -893,12 +887,8 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 
 		/* clear all the framebuffer which not in display state */
 		if (vpu_dec->codec == STD_MPEG4) {
-			for (idx = 0; idx < vpu_dec->numframebufs; idx++) {
-				if (vpu_dec->fb_state_plugin[idx] != FB_STATE_DISPLAY) {
-					vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle), idx);
-					vpu_dec->fb_state_plugin[idx] = FB_STATE_ALLOCTED;
-				}
-			}
+			for (idx = 0; idx < vpu_dec->numframebufs; idx++)
+				vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle), idx);
 		}
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
