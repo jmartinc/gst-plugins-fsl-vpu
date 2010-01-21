@@ -443,85 +443,6 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 }
 
 /*======================================================================================
-FUNCTION:           mfw_gst_vpudec_release_buff
-
-DESCRIPTION:        Release buffers that are already displayed
-
-ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-
-RETURN VALUE:       GstFlowReturn - Success or Failure.
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
-static GstFlowReturn
-mfw_gst_vpudec_release_buff(MfwGstVPU_Dec * vpu_dec)
-{
-	RetCode vpu_ret = RETCODE_SUCCESS;
-
-	/* check which buffer has been displayed, then clr it for vpu */
-	if (vpu_dec->rotation_angle || vpu_dec->mirror_dir) {
-		// In rotation case we only output the rotation buffer so clear it now
-		// and below we have to wait for it it be displayed as we do not have a pipeline
-		if (vpu_dec->outputInfo->indexFrameDisplay >= 0) {
-			vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle),
-					       vpu_dec->outputInfo->indexFrameDisplay);
-			vpu_dec->fb_state_plugin[vpu_dec->outputInfo->indexFrameDisplay] = FB_STATE_ALLOCTED;
-			if (vpu_ret != RETCODE_SUCCESS) {
-				GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d", vpu_ret);
-				return GST_FLOW_ERROR;
-			}
-		}
-	} else {
-		gint i = 0;
-		gint loop_cnt = 5;
-		while (loop_cnt) {
-			int numFreeBufs = 0;
-			int numBusyBufs = 0;
-			for (i = 0; i < vpu_dec->numframebufs; i++) {
-				GstBuffer *pBuffer = vpu_dec->outbuffers[i];
-				if (pBuffer && gst_buffer_is_writable(pBuffer)) {
-					if (vpu_dec->fb_state_plugin[i] == FB_STATE_ALLOCTED)
-						numFreeBufs++;
-					else if (vpu_dec->fb_state_plugin[i] ==
-						 FB_STATE_DISPLAY) {
-						vpu_dec->fb_state_plugin[i] =
-						    FB_STATE_ALLOCTED;
-						//g_print (" clearing buffer %d \n", i);
-						vpu_ret = vpu_DecClrDispFlag(*vpu_dec->handle, i);
-						if (vpu_ret != RETCODE_SUCCESS) {
-							GST_ERROR("vpu_DecClrDispFlag failed. Error code is %d", vpu_ret);
-							return GST_FLOW_ERROR;
-						}
-						numFreeBufs++;
-					} else if (vpu_dec->
-						   fb_state_plugin[i] ==
-						   FB_STATE_DECODED)
-						numBusyBufs++;
-				} else {
-					numBusyBufs++;
-				}
-			}
-			// MPEG4 will not be using reference frames like H.264
-			if (vpu_dec->codec == STD_MPEG4)
-				break;
-
-			//H.264 will have to wait if all the buffers are busy with decode or display
-			if (numFreeBufs < 1) {
-				// wait for the buffers to be free
-				//g_print (" sleeping because - %d buffers are free %d are busy\n", numFreeBufs, numBusyBufs);
-				usleep(30);
-				loop_cnt--;
-			} else {
-				//g_print (" *** DEC can decode now - %d buffers are free %d are busy\n", numFreeBufs, numBusyBufs);
-				break;	// exit loop - it is safe to start decoding
-			}
-		}
-	}
-	return GST_FLOW_OK;
-}
-
-/*======================================================================================
 FUNCTION:           mfw_gst_vpudec_vpu_init
 
 DESCRIPTION:        Initialize VPU
@@ -782,13 +703,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 
 		if (vpu_dec->flush == TRUE)
 			break;
-
-		// Release buffers back to VPU before starting next decode
-		retval = mfw_gst_vpudec_release_buff(vpu_dec);
-		if (retval != GST_FLOW_OK) {
-			// Error in clearing VPU buffers
-			goto done;
-		}
 
 		vpu_ret = vpu_DecStartOneFrame(*vpu_dec->handle, vpu_dec->decParam);
 
