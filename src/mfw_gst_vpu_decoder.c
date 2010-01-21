@@ -579,7 +579,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	vpu_ret = vpu_DecRegisterFrameBuffer(*(vpu_dec->handle),
 					     vpu_dec->frameBuf,
-					     (vpu_dec->rotation_angle || vpu_dec-> mirror_dir) ?
+					     (vpu_dec->rotation_angle || vpu_dec->mirror_dir) ?
 			vpu_dec->initialInfo->minFrameBufferCount : vpu_dec->numframebufs,
 			vpu_dec->initialInfo->picWidth, &bufinfo);
 	if (vpu_ret != RETCODE_SUCCESS) {
@@ -646,6 +646,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFlowReturn retval = GST_FLOW_OK;
+	int i;
 
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
@@ -775,8 +776,14 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			     0, retval);
 			goto done;
 		}
+
+		if (vpu_dec->rotation_angle || vpu_dec->mirror_dir)
+			i = vpu_dec->rot_buff_idx;
+		else
+			i = vpu_dec->outputInfo->indexFrameDisplay;
+
 		memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
-				vpu_dec->frame_virt[vpu_dec->outputInfo->indexFrameDisplay], vpu_dec->outsize);
+				vpu_dec->frame_virt[i], vpu_dec->outsize);
 
 		// Update the time stamp base on the frame-rate
 		GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
