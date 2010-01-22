@@ -64,22 +64,22 @@
 
 #define MFW_GST_VPUDEC_VIDEO_CAPS \
     "video/mpeg, " \
-    "width = (int) [16, 576], " \
-    "height = (int) [16, 720], " \
+    "width = (int) [16, 720], " \
+    "height = (int) [16, 576], " \
     "mpegversion = (int) 4; " \
     \
     "video/x-divx, " \
-    "width = (int) [16, 576], " \
-    "height = (int) [16, 720], " \
+    "width = (int) [16, 720], " \
+    "height = (int) [16, 576], " \
     "divxversion = (int) [4, 5]; " \
     \
     "video/x-h263, " \
-    "width = (int) [16, 576], " \
-    "height = (int)[16, 720]; " \
+    "width = (int) [16, 720], " \
+    "height = (int)[16, 576]; " \
     \
     "video/x-h264, " \
-    "width = (int) [16, 576], " \
-    "height = (int)[16, 720]"
+    "width = (int) [16, 720], " \
+    "height = (int)[16, 576]"
 
 #define DEFAULT_DBK_OFFSET_VALUE    5
 
