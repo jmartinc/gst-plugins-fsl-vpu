@@ -68,6 +68,11 @@
     "height = (int) [16, 720], " \
     "mpegversion = (int) 4; " \
     \
+    "video/x-divx, " \
+    "width = (int) [16, 576], " \
+    "height = (int) [16, 720], " \
+    "divxversion = (int) [4, 5]; " \
+    \
     "video/x-h263, " \
     "width = (int) [16, 576], " \
     "height = (int)[16, 720]; " \
@@ -1222,6 +1227,8 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 	if (strcmp(mime, "video/x-h264") == 0)
 		vpu_dec->codec = STD_AVC;
 	else if (strcmp(mime, "video/mpeg") == 0)
+		vpu_dec->codec = STD_MPEG4;
+	else if (strcmp(mime, "video/x-divx") == 0)
 		vpu_dec->codec = STD_MPEG4;
 	else if (strcmp(mime, "video/x-h263") == 0)
 		vpu_dec->codec = STD_H263;
