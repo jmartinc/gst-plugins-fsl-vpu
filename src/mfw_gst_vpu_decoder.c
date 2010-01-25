@@ -474,9 +474,9 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	DecBufInfo bufinfo;
 	guint needFrameBufCount = 0;
 
-	vpu_DecSetEscSeqInit(*(vpu_dec->handle), 1);
-	vpu_ret = vpu_DecGetInitialInfo(*(vpu_dec->handle), vpu_dec->initialInfo);
-	vpu_DecSetEscSeqInit(*(vpu_dec->handle), 0);
+	vpu_DecSetEscSeqInit(*vpu_dec->handle, 1);
+	vpu_ret = vpu_DecGetInitialInfo(*vpu_dec->handle, vpu_dec->initialInfo);
+	vpu_DecSetEscSeqInit(*vpu_dec->handle, 0);
 
 	if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
 		return GST_FLOW_OK;
@@ -656,6 +656,14 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
 	long time_before = 0, time_after = 0;
+//	unsigned char *_buf = GST_BUFFER_DATA(buffer);
+//printf("got %d bytes of input data\n", GST_BUFFER_SIZE(buffer));
+//printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", _buf[0], _buf[1], _buf[2], _buf[3], _buf[4], _buf[5], _buf[6], _buf[7]); 
+//printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", _buf[8], _buf[9], _buf[10], _buf[11], _buf[12], _buf[13], _buf[14], _buf[15]); 
+//if (_buf[4] == 9) {
+//	printf("skip\n");
+//	goto done;
+//}
 
 	// Update Profiling timestamps
 	if (G_UNLIKELY(vpu_dec->profiling)) {
@@ -692,12 +700,11 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	}
 
 	vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-	if (vpu_ret != RETCODE_SUCCESS) {
-		printf("SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSHOULD not be here\n");
-	}
+	if (vpu_ret != RETCODE_SUCCESS)
+		return GST_FLOW_ERROR;
 
 	while (1) {
-		printf("ENter while\n");
+//		printf("ENter while\n");
 
 		if (G_UNLIKELY(vpu_dec->init == FALSE)) {
 			retval = mfw_gst_vpudec_vpu_init(vpu_dec);
@@ -752,22 +759,23 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
-
+//printf("FFFFICKEN: %d %d\n", vpu_dec->outputInfo->indexFrameDecoded, vpu_dec->outputInfo->indexFrameDisplay);
 		if (vpu_dec->outputInfo->indexFrameDecoded >= 0)
 			vpu_DecClrDispFlag(*(vpu_dec->handle), vpu_dec->outputInfo->indexFrameDecoded);
+			
 
-		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -1))
+		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -1)) {
+			printf("break\n");
 			break;	/* decoding done */
+		}
 
 		// BIT don't have picture to be displayed
 		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -3)
 		    || G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -2)) {
 			GST_DEBUG("Decoded frame not to display!");
-			continue;
+			break;
 		}
 
-		// Incase of the Filesink the output in the hardware buffer is copied onto the
-		//  buffer allocated by filesink
 		retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
 						      vpu_dec->outsize,
 						      GST_PAD_CAPS(vpu_dec->srcpad),
@@ -785,6 +793,9 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 
 		memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
 				vpu_dec->frame_virt[i], vpu_dec->outsize);
+
+		for(i = 0; i < vpu_dec->numframebufs; i++)
+			vpu_DecClrDispFlag(*(vpu_dec->handle), i);
 
 		// Update the time stamp base on the frame-rate
 		GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
@@ -891,10 +902,10 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		vpu_dec->start_addr = vpu_dec->base_addr;
 
 		/* clear all the framebuffer which not in display state */
-		if (vpu_dec->codec == STD_MPEG4) {
+//		if (vpu_dec->codec == STD_MPEG4) {
 			for (idx = 0; idx < vpu_dec->numframebufs; idx++)
 				vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle), idx);
-		}
+//		}
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result) {
