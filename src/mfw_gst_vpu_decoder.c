@@ -477,6 +477,29 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	return GST_FLOW_OK;
 }
 
+/*
+ * Check whether a buffer is suitable for direct DMA.
+ * In this plugin we are serving a DMA engine from userspace. What
+ * we basically want is to fill the buffers which the v4l2sink gave
+ * us without copying the buffer. If GST_BUFFER_OFFSET() is in physical
+ * SDRAM space we assume it is safe for direct render.
+ *
+ * For this to work the gstreamer v4l2sink has to be patches as the
+ * buffer offset is normally set to zero.
+ *
+ * This function also reveals the security issues with this approach:
+ * As we do DMA from userspace we can access and corrupt the whole
+ * physical memory with this plugin. Bang! Move this into the kernel.
+ *
+ */
+static int buf_valid_for_render(GstBuffer *buffer)
+{
+	if (GST_BUFFER_OFFSET(buffer) > 0xa0000000 &&
+			GST_BUFFER_OFFSET(buffer) < 0xc0000000)
+		return 1;
+	return 0;
+}
+
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_chain_stream_mode
 
@@ -570,8 +593,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			goto done;
 		}
 
-		if (vpu_dec->framebuf.phy_addr == 0 && (GST_BUFFER_OFFSET(pushbuff) < 0xa0000000 ||
-				GST_BUFFER_OFFSET(pushbuff) >= 0xc0000000)) {
+		if (vpu_dec->framebuf.phy_addr == 0 && !buf_valid_for_render(pushbuff)) {
 			printf("ALLOC FRAMEBUF\n");
 			vpu_dec->framebuf.size = vpu_dec->outsize;
 			IOGetPhyMem(&vpu_dec->framebuf);
@@ -590,11 +612,11 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		}
 
 		frame.stride = strideY;
-		if (GST_BUFFER_OFFSET(pushbuff) < 0xa0000000 ||
-				GST_BUFFER_OFFSET(pushbuff) >= 0xc0000000)
-			frame.bufY = vpu_dec->framebuf.phy_addr;
-		else
+		if (buf_valid_for_render(pushbuff))
 			frame.bufY = GST_BUFFER_OFFSET(pushbuff);
+		else
+			frame.bufY = vpu_dec->framebuf.phy_addr;
+
 		frame.bufCb = frame.bufY + (strideY * height);
 		frame.bufCr = frame.bufCb + ((strideY / 2) * (height / 2));
 
@@ -636,10 +658,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 
 //printf("GST_BUFFER_OFFSET: 0x%08x\n", (unsigned int)GST_BUFFER_OFFSET(vpu_dec->pushbuff));
 
-		if (GST_BUFFER_OFFSET(pushbuff) < 0xa0000000 ||
-				GST_BUFFER_OFFSET(pushbuff) >= 0xc0000000) {
+		if (!buf_valid_for_render(pushbuff))
 			memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->framebuf_virt, vpu_dec->outsize);
-		}
 
 		// Update the time stamp base on the frame-rate
 		GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
