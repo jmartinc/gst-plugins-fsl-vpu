@@ -386,9 +386,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	gint fourcc = GST_STR_FOURCC("I420");
 
-	vpu_DecSetEscSeqInit(*vpu_dec->handle, 1);
 	vpu_ret = vpu_DecGetInitialInfo(*vpu_dec->handle, vpu_dec->initialInfo);
-	vpu_DecSetEscSeqInit(*vpu_dec->handle, 0);
 
 	if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
 		return GST_FLOW_OK;
@@ -590,7 +588,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			strideY = vpu_dec->initialInfo->picWidth;
 			height = vpu_dec->initialInfo->picHeight;
 		}
-printf("strideY %d height %d\n", strideY, height);
+
 		frame.stride = strideY;
 		if (GST_BUFFER_OFFSET(pushbuff) < 0xa0000000 ||
 				GST_BUFFER_OFFSET(pushbuff) >= 0xc0000000)
