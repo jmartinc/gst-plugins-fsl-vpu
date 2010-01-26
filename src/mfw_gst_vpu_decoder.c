@@ -828,19 +828,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
-		vpu_ret = vpu_GetVersionInfo(&ver);
-		if (vpu_ret) {
-			GST_DEBUG("Error in geting the VPU version, error is %d", vpu_ret);
-			vpu_UnInit();
-			return GST_STATE_CHANGE_FAILURE;
-		}
-
-		g_print(YELLOW_STR
-			("VPU Version: firmware %d.%d.%d; libvpu: %d.%d.%d",
-			 ver.fw_major, ver.fw_minor, ver.fw_release,
-			 ver.lib_major, ver.lib_minor,
-			 ver.lib_release));
-
 #define MFW_GST_VPU_DECODER_PLUGIN VERSION
 		PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);
 		break;
