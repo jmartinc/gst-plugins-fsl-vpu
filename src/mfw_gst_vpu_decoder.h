@@ -102,10 +102,6 @@ typedef struct _MfwGstVPU_Dec {
 	DecOutputInfo *outputInfo;
 	DecParam *decParam;	/* Data Structures associated with
 				   VPU API */
-	vpu_mem_desc bit_stream_buf;	/* Structure for Bitstream buffer parameters */
-	guint8 *start_addr;	/* start addres of the Hardware input buffer */
-	guint8 *end_addr;	/* end addres of the Hardware input buffer */
-	guint8 *base_addr;	/* base addres of the Hardware input buffer */
 	CodStd codec;		/* codec standard to be selected */
 	gint picWidth;		/* Width of the Image obtained through
 				   Caps Neogtiation */

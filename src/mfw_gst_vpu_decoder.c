@@ -341,15 +341,7 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 {
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GST_DEBUG("codec=%d", vpu_dec->codec);
-	vpu_dec->bit_stream_buf.size = BUFF_FILL_SIZE;
-	IOGetPhyMem(&vpu_dec->bit_stream_buf);
-	vpu_dec->base_addr = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
-	vpu_dec->start_addr = vpu_dec->base_addr;
-	vpu_dec->end_addr = vpu_dec->start_addr + BUFF_FILL_SIZE;
 
-	vpu_dec->decOP->bitstreamBuffer = vpu_dec->bit_stream_buf.phy_addr;
-	vpu_dec->decOP->bitstreamBufferSize = BUFF_FILL_SIZE;
-	vpu_dec->decOP->bitstreamBufferVirt = vpu_dec->base_addr;
 	vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
 
 	/* open a VPU's decoder instance */
@@ -383,6 +375,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	gint orgPicW, orgPicH;
 	gint width, height;
 	gint crop_right_by_pixel, crop_bottom_by_pixel;
+	int rotmir;
 
 	gint fourcc = GST_STR_FOURCC("I420");
 
@@ -470,7 +463,37 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	vpu_dec->outsize = (vpu_dec->initialInfo->picWidth * vpu_dec->initialInfo->picHeight * 3) / 2;
 
-	vpu_set_mirror_rotation(*vpu_dec->handle, vpu_dec->mirror_dir, vpu_dec->rotation_angle);
+	switch (vpu_dec->mirror_dir) {
+	case MIRDIR_NONE:
+		rotmir = MIRROR_NONE;
+		break;
+	case MIRDIR_HOR:
+		rotmir = MIRROR_HOR;
+		break;
+	case MIRDIR_VER:
+		rotmir = MIRROR_VER;
+		break;
+	case MIRDIR_HOR_VER:
+		rotmir = MIRROR_HOR_VER;
+		break;
+	}
+
+	switch (vpu_dec->rotation_angle) {
+	case 0:
+		rotmir |= ROTATE_0;
+		break;
+	case 90:
+		rotmir |= ROTATE_90;
+		break;
+	case 180:
+		rotmir |= ROTATE_180;
+		break;
+	case 270:
+		rotmir |= ROTATE_270;
+		break;
+	}
+
+	ioctl(vpu_fd, VPU_IOC_ROTATE_MIRROR, rotmir);
 
 	vpu_dec->decParam->prescanEnable = 1;
 	vpu_dec->init = TRUE;
@@ -526,6 +549,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	int height;
 	FrameBuffer frame;
 	GstBuffer *pushbuff;
+	int ret;
 
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
@@ -547,8 +571,8 @@ printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
 	if (G_UNLIKELY(buffer == NULL)) {
 		/* now end of stream */
 		vpu_dec->eos = TRUE;
-		vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, NULL, 0);
-		if (vpu_ret != RETCODE_SUCCESS) {
+		ret = write(vpu_fd, NULL, 0);
+		if (ret) {
 			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
 			return GST_FLOW_ERROR;
 		}
@@ -565,9 +589,11 @@ printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
 		}
 //	}
 
-	vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-	if (vpu_ret != RETCODE_SUCCESS)
+	ret = write(vpu_fd, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+	if (ret == -1)
 		return GST_FLOW_ERROR;
+	if (ret < (int)GST_BUFFER_SIZE(buffer))
+		GST_ERROR("Not enough space in FIFO. Currently not handled\n");
 
 	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
 		retval = mfw_gst_vpudec_vpu_init(vpu_dec);
@@ -766,7 +792,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 			if (RETCODE_SUCCESS != vpu_ret)
 				GST_ERROR("error in flushing the bitstream buffer");
 		}
-		vpu_dec->start_addr = vpu_dec->base_addr;
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result) {
@@ -815,7 +840,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(element);
 	gint vpu_ret = RETCODE_SUCCESS;
-	vpu_versioninfo ver;
 	gfloat avg_mcps = 0, avg_plugin_time = 0, avg_dec_time = 0;
 
 	switch (transition) {
@@ -835,9 +859,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		GST_DEBUG("VPU State: Ready to Paused");
 		vpu_dec->init = FALSE;
 		vpu_dec->vpu_opened = FALSE;
-		vpu_dec->start_addr = NULL;
-		vpu_dec->end_addr = NULL;
-		vpu_dec->base_addr = NULL;
 		vpu_dec->outsize = 0;
 		vpu_dec->decode_wait_time = 0;
 		vpu_dec->chain_Time = 0;
@@ -847,7 +868,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->first = FALSE;
 		vpu_dec->eos = FALSE;
 
-		memset(&vpu_dec->bit_stream_buf, 0, sizeof (vpu_mem_desc));
 		/* Handle the decoder Initialization over here. */
 		vpu_dec->decOP = g_malloc(sizeof (DecOpenParam));
 		vpu_dec->initialInfo = g_malloc(sizeof (DecInitialInfo));
@@ -908,9 +928,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		}
 
 		vpu_dec->first = FALSE;
-		vpu_dec->start_addr = NULL;
-		vpu_dec->end_addr = NULL;
-		vpu_dec->base_addr = NULL;
 		vpu_dec->outsize = 0;
 
 		if (vpu_dec->vpu_opened) {
@@ -925,11 +942,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 				}
 			}
 			vpu_dec->vpu_opened = FALSE;
-		}
-		if (vpu_dec->bit_stream_buf.phy_addr) {
-			IOFreePhyMem(&(vpu_dec->bit_stream_buf));
-			IOFreeVirtMem(&(vpu_dec->bit_stream_buf));
-			vpu_dec->bit_stream_buf.phy_addr = 0;
 		}
 		if (vpu_dec->decOP != NULL) {
 			g_free(vpu_dec->decOP);
