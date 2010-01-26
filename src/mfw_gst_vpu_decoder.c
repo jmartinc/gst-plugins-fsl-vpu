@@ -656,19 +656,11 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
 	long time_before = 0, time_after = 0;
-//	unsigned char *_buf = GST_BUFFER_DATA(buffer);
-//printf("got %d bytes of input data\n", GST_BUFFER_SIZE(buffer));
-//printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", _buf[0], _buf[1], _buf[2], _buf[3], _buf[4], _buf[5], _buf[6], _buf[7]); 
-//printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", _buf[8], _buf[9], _buf[10], _buf[11], _buf[12], _buf[13], _buf[14], _buf[15]); 
-//if (_buf[4] == 9) {
-//	printf("skip\n");
-//	goto done;
-//}
 
 	// Update Profiling timestamps
-	if (G_UNLIKELY(vpu_dec->profiling)) {
+	if (G_UNLIKELY(vpu_dec->profiling))
 		gettimeofday(&tv_prof2, 0);
-	}
+
 	// Open VPU is not already opened
 	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
 		retval = mfw_gst_vpudec_vpu_open(vpu_dec);
@@ -750,6 +742,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		if ((vpu_dec->decParam->prescanEnable == 1)
 		    && (vpu_dec->outputInfo->prescanresult == 0)) {
 			/* No complete frame in bitstream. Bail out. */
+			GST_DEBUG("no complete");
 			retval = GST_FLOW_OK;
 			goto done;
 		}
@@ -763,9 +756,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		if (vpu_dec->outputInfo->indexFrameDecoded >= 0)
 			vpu_DecClrDispFlag(*(vpu_dec->handle), vpu_dec->outputInfo->indexFrameDecoded);
 			
-
 		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -1)) {
-			printf("break\n");
+			GST_DEBUG("decode done");
 			break;	/* decoding done */
 		}
 
