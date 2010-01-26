@@ -569,17 +569,15 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	if (vpu_ret != RETCODE_SUCCESS)
 		return GST_FLOW_ERROR;
 
-	while (1) {
-//		printf("ENter while\n");
-
-		if (G_UNLIKELY(vpu_dec->init == FALSE)) {
-			retval = mfw_gst_vpudec_vpu_init(vpu_dec);
-			if (retval != GST_FLOW_OK) {
-				GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
-				goto done;
-			}
+	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
+		retval = mfw_gst_vpudec_vpu_init(vpu_dec);
+		if (retval != GST_FLOW_OK) {
+			GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
+			goto done;
 		}
+	}
 
+	while (1) {
 		if (vpu_dec->flush == TRUE)
 			break;
 
