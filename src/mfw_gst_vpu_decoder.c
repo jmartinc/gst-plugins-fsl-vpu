@@ -147,7 +147,6 @@ static void mfw_gst_vpudec_set_property(GObject *, guint, const GValue *,
 					GParamSpec *);
 static void mfw_gst_vpudec_get_property(GObject *, guint, GValue *,
 					GParamSpec *);
-static gint mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec *);
 static gboolean mfw_gst_vpudec_sink_event(GstPad *, GstEvent *);
 static gboolean mfw_gst_vpudec_setcaps(GstPad *, GstCaps *);
 /*======================================================================================
@@ -324,80 +323,6 @@ mfw_gst_vpudec_post_fatal_error_msg(MfwGstVPU_Dec * vpu_dec, gchar * error_msg)
 	g_error_free(error);
 }
 
-/*=============================================================================
-FUNCTION:           mfw_gst_vpudec_FrameBufferClose
-
-DESCRIPTION:        This function frees the allocated frame buffers
-
-ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-
-RETURN VALUE:       None
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=============================================================================*/
-
-static void
-mfw_gst_vpudec_FrameBufferClose(MfwGstVPU_Dec * vpu_dec)
-{
-	gint i;
-
-	for (i = 0; i < vpu_dec->numframebufs; i++) {
-		if (vpu_dec->frame_mem[i].phy_addr != 0) {
-			IOFreePhyMem(&vpu_dec->frame_mem[i]);
-			IOFreeVirtMem(&vpu_dec->frame_mem[i]);
-			vpu_dec->frame_mem[i].phy_addr = 0;
-			vpu_dec->frame_virt[i] = NULL;
-		}
-	}
-}
-
-/*=============================================================================
-FUNCTION:           mfw_gst_vpudec_FrameBufferInit
-
-DESCRIPTION:        This function allocates the outbut buffer for the decoder
-
-ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-                    frameBuf - VPU's Output Frame Buffer to be
-                                   allocated.
-
-                    num_buffers number of frame buffers to be allocated
-
-RETURN VALUE:       0 (SUCCESS)/ -1 (FAILURE)
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=============================================================================*/
-
-static gint
-mfw_gst_vpudec_FrameBufferInit(MfwGstVPU_Dec * vpu_dec)
-{
-	FrameBuffer *frameBuf = vpu_dec->frameBuf;
-	gint i = 0;
-	guint strideY = 0, height = 0;
-	strideY = vpu_dec->initialInfo->picWidth;
-	height = vpu_dec->initialInfo->picHeight;
-
-	for (i = 0; i < vpu_dec->numframebufs; i++) {
-		vpu_dec->frame_mem[i].size = vpu_dec->outsize;
-		IOGetPhyMem(&vpu_dec->frame_mem[i]);
-		if (vpu_dec->frame_mem[i].phy_addr == 0) {
-			gint j;
-			for (j = 0; j < i; j++) {
-				IOFreeVirtMem(&vpu_dec->frame_mem[i]);
-				IOFreePhyMem(&vpu_dec->frame_mem[i]);
-			}
-			GST_ERROR("No enough mem for framebuffer!");
-			return -1;
-		}
-		frameBuf[i].bufY = vpu_dec->frame_mem[i].phy_addr;
-		frameBuf[i].bufCb = frameBuf[i].bufY + (strideY * height);
-		frameBuf[i].bufCr = frameBuf[i].bufCb + ((strideY / 2) * (height / 2));
-		vpu_dec->frame_virt[i] = (guint8 *) IOGetVirtMem(&vpu_dec->frame_mem[i]);
-	}
-	return 0;
-}
-
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_vpu_open
 
@@ -421,16 +346,6 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 	vpu_dec->base_addr = (guint8 *) IOGetVirtMem(&vpu_dec->bit_stream_buf);
 	vpu_dec->start_addr = vpu_dec->base_addr;
 	vpu_dec->end_addr = vpu_dec->start_addr + BUFF_FILL_SIZE;
-
-	if (vpu_dec->codec == STD_AVC) {
-		vpu_dec->ps_mem_desc.size = PS_SAVE_SIZE;
-		IOGetPhyMem(&vpu_dec->ps_mem_desc);
-		vpu_dec->decOP->psSaveBuffer = vpu_dec->ps_mem_desc.phy_addr;
-		vpu_dec->decOP->psSaveBufferSize = PS_SAVE_SIZE;
-
-		vpu_dec->slice_mem_desc.size = SLICE_SAVE_SIZE;
-		IOGetPhyMem(&vpu_dec->slice_mem_desc);
-	}
 
 	vpu_dec->decOP->bitstreamBuffer = vpu_dec->bit_stream_buf.phy_addr;
 	vpu_dec->decOP->bitstreamBufferSize = BUFF_FILL_SIZE;
@@ -471,9 +386,6 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	gint fourcc = GST_STR_FOURCC("I420");
 
-	DecBufInfo bufinfo;
-	guint needFrameBufCount = 0;
-
 	vpu_DecSetEscSeqInit(*vpu_dec->handle, 1);
 	vpu_ret = vpu_DecGetInitialInfo(*vpu_dec->handle, vpu_dec->initialInfo);
 	vpu_DecSetEscSeqInit(*vpu_dec->handle, 0);
@@ -510,8 +422,6 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		     vpu_dec->initialInfo->minFrameBufferCount);
 		return GST_FLOW_ERROR;
 	}
-
-	needFrameBufCount = vpu_dec->initialInfo->minFrameBufferCount + 2;
 
 	/* Padding the width and height to 16 */
 	orgPicW = vpu_dec->initialInfo->picWidth;
@@ -553,7 +463,6 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 			"crop-left-by-pixel", G_TYPE_INT, (crop_left_len + 7) / 8 * 8,
 			"crop-right-by-pixel", G_TYPE_INT, crop_right_by_pixel,
 			"crop-bottom-by-pixel", G_TYPE_INT, crop_bottom_by_pixel,
-			"num-buffers-required", G_TYPE_INT, needFrameBufCount,
 			"framerate", GST_TYPE_FRACTION, vpu_dec->frame_rate_nu, vpu_dec->frame_rate_de,
 			NULL);
 
@@ -562,67 +471,8 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	gst_caps_unref(caps);
 
 	vpu_dec->outsize = (vpu_dec->initialInfo->picWidth * vpu_dec->initialInfo->picHeight * 3) / 2;
-	vpu_dec->numframebufs = needFrameBufCount;
-	/* Allocate the Frame buffers requested by the Decoder */
-	if (vpu_dec->framebufinit_done == FALSE) {
-		if ((mfw_gst_vpudec_FrameBufferInit(vpu_dec)) < 0) {
-			GST_ERROR("Mem system allocation failed!");
-			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
-							    "Allocation of the Frame Buffers Failed");
 
-			return GST_FLOW_ERROR;
-		}
-		vpu_dec->framebufinit_done = TRUE;
-	}
-
-	memset(&bufinfo, 0, sizeof (bufinfo));
-	bufinfo.avcSliceBufInfo.sliceSaveBuffer = vpu_dec->slice_mem_desc.phy_addr;
-	bufinfo.avcSliceBufInfo.sliceSaveBufferSize = SLICE_SAVE_SIZE;
-
-	/* Register the Allocated Frame buffers with the decoder */
-	// for rotation - only register minimum as extra two buffers will be used for display separately
-
-	vpu_ret = vpu_DecRegisterFrameBuffer(*(vpu_dec->handle),
-					     vpu_dec->frameBuf,
-					     (vpu_dec->rotation_angle || vpu_dec->mirror_dir) ?
-			vpu_dec->initialInfo->minFrameBufferCount : vpu_dec->numframebufs,
-			vpu_dec->initialInfo->picWidth, &bufinfo);
-	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_DecRegisterFrameBuffer failed. Error code is %d", vpu_ret);
-		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
-						    "Registration of the Allocated Frame Buffers Failed ");
-		return GST_FLOW_ERROR;
-	}
-
-	// Setup rotation or mirroring which will be output to separate buffers for display
-	if (vpu_dec->rotation_angle || vpu_dec->mirror_dir) {
-		int rotStride = width;
-		if (vpu_dec->rotation_angle) {
-			// must set angle before rotator stride since the stride uses angle for error checking
-			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle),
-					       SET_ROTATION_ANGLE,
-					       &vpu_dec->rotation_angle);
-		}
-		if (vpu_dec->mirror_dir) {
-			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle),
-					       SET_MIRROR_DIRECTION,
-					       &vpu_dec->mirror_dir);
-		}
-		vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle), SET_ROTATOR_STRIDE, &rotStride);
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_Dec SET_ROTATOR_STRIDE failed. ret=%d", vpu_ret);
-			mfw_gst_vpudec_post_fatal_error_msg(vpu_dec,
-							    "VPU SET_ROTATOR_STRIDE failed ");
-			return GST_FLOW_ERROR;
-		}
-		vpu_dec->rot_buff_idx = vpu_dec->initialInfo->minFrameBufferCount;
-		vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle), SET_ROTATOR_OUTPUT,
-				       &vpu_dec->frameBuf[vpu_dec->rot_buff_idx]);
-		if (vpu_dec->rotation_angle)
-			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle), ENABLE_ROTATION, 0);
-		if (vpu_dec->mirror_dir)
-			vpu_ret = vpu_DecGiveCommand(*(vpu_dec->handle), ENABLE_MIRRORING, 0);
-	}
+	vpu_set_mirror_rotation(*vpu_dec->handle, vpu_dec->mirror_dir, vpu_dec->rotation_angle);
 
 	vpu_dec->decParam->prescanEnable = 1;
 	vpu_dec->init = TRUE;
@@ -651,7 +501,10 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFlowReturn retval = GST_FLOW_OK;
-	int i;
+	int strideY;
+	int height;
+	FrameBuffer frame;
+	GstBuffer *pushbuff;
 
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
@@ -683,13 +536,13 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	if (G_UNLIKELY(vpu_dec->eos == TRUE))
 		return GST_FLOW_OK;
 
-	if (vpu_dec->codec == STD_MPEG4) {
+//	if (vpu_dec->codec == STD_MPEG4) {
 		if (!vpu_dec->once) {
 			if (vpu_dec->HdrExtData)
 				buffer = gst_buffer_join(vpu_dec->HdrExtData, buffer);
 			vpu_dec->once = 1;
 		}
-	}
+//	}
 
 	vpu_ret = vpu_DecBufferPush(*vpu_dec->handle, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
 	if (vpu_ret != RETCODE_SUCCESS)
@@ -709,26 +562,46 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		if (vpu_dec->flush == TRUE)
 			break;
 
-		vpu_ret = vpu_DecStartOneFrame(*vpu_dec->handle, vpu_dec->decParam);
-
-		if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-			printf("frame not complete\n");
-			retval = GST_FLOW_OK;
+		retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
+						      vpu_dec->outsize,
+						      GST_PAD_CAPS(vpu_dec->srcpad),
+						      &pushbuff);
+		if (retval != GST_FLOW_OK) {
+			GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
+			     0, retval);
 			goto done;
 		}
 
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecStartOneFrame failed. Error code is %d", vpu_ret);
-			retval = GST_FLOW_ERROR;
-			goto done;
+		if (vpu_dec->framebuf.phy_addr == 0 && (GST_BUFFER_OFFSET(pushbuff) < 0xa0000000 ||
+				GST_BUFFER_OFFSET(pushbuff) >= 0xc0000000)) {
+			printf("ALLOC FRAMEBUF\n");
+			vpu_dec->framebuf.size = vpu_dec->outsize;
+			IOGetPhyMem(&vpu_dec->framebuf);
+			vpu_dec->framebuf_virt = (void *)IOGetVirtMem(&vpu_dec->framebuf);
 		}
 
-		// Wait for output from decode
 		if (G_UNLIKELY(vpu_dec->profiling))
 			gettimeofday(&tv_prof, 0);
 
-		while (vpu_IsBusy())
-			vpu_WaitForInt(1000);
+		if (vpu_dec->rotation_angle == 90 || vpu_dec->rotation_angle == 270) {
+			strideY = vpu_dec->initialInfo->picHeight;
+			height = vpu_dec->initialInfo->picWidth;
+		} else {
+			strideY = vpu_dec->initialInfo->picWidth;
+			height = vpu_dec->initialInfo->picHeight;
+		}
+printf("strideY %d height %d\n", strideY, height);
+		frame.stride = strideY;
+		if (GST_BUFFER_OFFSET(pushbuff) < 0xa0000000 ||
+				GST_BUFFER_OFFSET(pushbuff) >= 0xc0000000)
+			frame.bufY = vpu_dec->framebuf.phy_addr;
+		else
+			frame.bufY = GST_BUFFER_OFFSET(pushbuff);
+		frame.bufCb = frame.bufY + (strideY * height);
+		frame.bufCr = frame.bufCb + ((strideY / 2) * (height / 2));
+
+		vpu_ret = vpu_DecDecodeFrame(*vpu_dec->handle, vpu_dec->decParam, vpu_dec->outputInfo,
+				&frame);
 
 		if (G_UNLIKELY(vpu_dec->profiling)) {
 			gettimeofday(&tv_prof1, 0);
@@ -736,8 +609,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			time_after = (tv_prof1.tv_sec * 1000000) + tv_prof1.tv_usec;
 			vpu_dec->decode_wait_time += time_after - time_before;
 		}
-		// Get the VPU output from decoding
-		vpu_ret = vpu_DecGetOutputInfo(*(vpu_dec->handle), vpu_dec->outputInfo);
 
 		if ((vpu_dec->decParam->prescanEnable == 1)
 		    && (vpu_dec->outputInfo->prescanresult == 0)) {
@@ -752,9 +623,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
-//printf("FFFFICKEN: %d %d\n", vpu_dec->outputInfo->indexFrameDecoded, vpu_dec->outputInfo->indexFrameDisplay);
-		if (vpu_dec->outputInfo->indexFrameDecoded >= 0)
-			vpu_DecClrDispFlag(*(vpu_dec->handle), vpu_dec->outputInfo->indexFrameDecoded);
 			
 		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -1)) {
 			GST_DEBUG("decode done");
@@ -768,51 +636,41 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			break;
 		}
 
-		retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
-						      vpu_dec->outsize,
-						      GST_PAD_CAPS(vpu_dec->srcpad),
-						      &vpu_dec->pushbuff);
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
-			     0, retval);
-			goto done;
+//printf("GST_BUFFER_OFFSET: 0x%08x\n", (unsigned int)GST_BUFFER_OFFSET(vpu_dec->pushbuff));
+
+		if (GST_BUFFER_OFFSET(pushbuff) < 0xa0000000 ||
+				GST_BUFFER_OFFSET(pushbuff) >= 0xc0000000) {
+			memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->framebuf_virt, vpu_dec->outsize);
 		}
 
-		if (vpu_dec->rotation_angle || vpu_dec->mirror_dir)
-			i = vpu_dec->rot_buff_idx;
-		else
-			i = vpu_dec->outputInfo->indexFrameDisplay;
-
-		memcpy(GST_BUFFER_DATA(vpu_dec->pushbuff),
-				vpu_dec->frame_virt[i], vpu_dec->outsize);
-
-		for(i = 0; i < vpu_dec->numframebufs; i++)
-			vpu_DecClrDispFlag(*(vpu_dec->handle), i);
-
 		// Update the time stamp base on the frame-rate
-		GST_BUFFER_SIZE(vpu_dec->pushbuff) = vpu_dec->outsize;
-		GST_BUFFER_TIMESTAMP(vpu_dec->pushbuff) = GST_BUFFER_TIMESTAMP(buffer);
-		GST_BUFFER_DURATION(vpu_dec->pushbuff) = GST_BUFFER_DURATION(buffer);
+		GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
+		GST_BUFFER_TIMESTAMP(pushbuff) = GST_BUFFER_TIMESTAMP(buffer);
+		GST_BUFFER_DURATION(pushbuff) = GST_BUFFER_DURATION(buffer);
 
 		vpu_dec->decoded_frames++;
 
 		GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
-		retval = gst_pad_push(vpu_dec->srcpad, vpu_dec->pushbuff);
+		retval = gst_pad_push(vpu_dec->srcpad, pushbuff);
+		pushbuff = NULL;
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d", retval);
-			// Make sure we clear and release the buffer since it can't be displayed
-			vpu_DecClrDispFlag(*vpu_dec->handle, vpu_dec->outputInfo->indexFrameDisplay);
 		}
 		retval = GST_FLOW_OK;
 	}
-      done:
+done:
 	if (G_UNLIKELY(vpu_dec->profiling)) {
 		gettimeofday(&tv_prof3, 0);
 		time_before = (tv_prof2.tv_sec * 1000000) + tv_prof2.tv_usec;
 		time_after = (tv_prof3.tv_sec * 1000000) + tv_prof3.tv_usec;
 		vpu_dec->chain_Time += time_after - time_before;
 	}
+
 	gst_buffer_unref(buffer);
+
+	if (pushbuff)
+		gst_buffer_unref(pushbuff);
+
 	return retval;
 }
 
@@ -839,7 +697,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	gboolean result = TRUE;
 	RetCode vpu_ret = RETCODE_SUCCESS;
-	gint idx;
 	GstFormat format;
 	gint64 start, stop, position;
 	gdouble rate;
@@ -893,12 +750,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		}
 		vpu_dec->start_addr = vpu_dec->base_addr;
 
-		/* clear all the framebuffer which not in display state */
-//		if (vpu_dec->codec == STD_MPEG4) {
-			for (idx = 0; idx < vpu_dec->numframebufs; idx++)
-				vpu_ret = vpu_DecClrDispFlag(*(vpu_dec->handle), idx);
-//		}
-
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result) {
 			GST_ERROR("Error in pushing the event,result is %d", result);
@@ -948,8 +799,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	gint vpu_ret = RETCODE_SUCCESS;
 	vpu_versioninfo ver;
 	gfloat avg_mcps = 0, avg_plugin_time = 0, avg_dec_time = 0;
-	gint cnt;
-	// gint i=0,err;
 
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
@@ -991,15 +840,9 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->avg_fps_decoding = 0.0;
 		vpu_dec->frames_dropped = 0;
 		vpu_dec->first = FALSE;
-		vpu_dec->framebufinit_done = FALSE;
 		vpu_dec->eos = FALSE;
 
-		for (cnt = 0; cnt < NUM_FRAME_BUF; cnt++)
-			vpu_dec->outbuffers[cnt] = NULL;
-
 		memset(&vpu_dec->bit_stream_buf, 0, sizeof (vpu_mem_desc));
-		memset(&vpu_dec->frameBuf[0], 0, NUM_FRAME_BUF * sizeof (FrameBuffer));
-		memset(&vpu_dec->frame_mem[0], 0, NUM_FRAME_BUF * sizeof (vpu_mem_desc));
 		/* Handle the decoder Initialization over here. */
 		vpu_dec->decOP = g_malloc(sizeof (DecOpenParam));
 		vpu_dec->initialInfo = g_malloc(sizeof (DecInitialInfo));
@@ -1010,8 +853,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		memset(vpu_dec->handle, 0, sizeof (DecHandle));
 		memset(vpu_dec->decParam, 0, sizeof (DecParam));
 		memset(vpu_dec->outputInfo, 0, sizeof (DecOutputInfo));
-		memset(&vpu_dec->ps_mem_desc, 0, sizeof (vpu_mem_desc));
-		memset(&vpu_dec->slice_mem_desc, 0, sizeof (vpu_mem_desc));
 		memset(vpu_dec->initialInfo, 0, sizeof (DecInitialInfo));
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
@@ -1061,20 +902,11 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 			vpu_dec->frames_dropped = 0;
 		}
 
-		mfw_gst_vpudec_FrameBufferClose(vpu_dec);
-
-		/* release framebuffers hold by vpu */
-		for (cnt = 0; cnt < vpu_dec->numframebufs; cnt++) {
-			if (vpu_dec->outbuffers[cnt])
-				gst_buffer_unref(vpu_dec->outbuffers[cnt]);
-		}
-
 		vpu_dec->first = FALSE;
 		vpu_dec->start_addr = NULL;
 		vpu_dec->end_addr = NULL;
 		vpu_dec->base_addr = NULL;
 		vpu_dec->outsize = 0;
-		vpu_dec->framebufinit_done = FALSE;
 
 		if (vpu_dec->vpu_opened) {
 			vpu_ret = vpu_DecClose(*vpu_dec->handle);
@@ -1093,16 +925,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 			IOFreePhyMem(&(vpu_dec->bit_stream_buf));
 			IOFreeVirtMem(&(vpu_dec->bit_stream_buf));
 			vpu_dec->bit_stream_buf.phy_addr = 0;
-		}
-		if (vpu_dec->ps_mem_desc.phy_addr) {
-			IOFreePhyMem(&(vpu_dec->ps_mem_desc));
-			IOFreeVirtMem(&(vpu_dec->ps_mem_desc));
-			vpu_dec->ps_mem_desc.phy_addr = 0;
-		}
-		if (vpu_dec->slice_mem_desc.phy_addr) {
-			IOFreePhyMem(&(vpu_dec->slice_mem_desc));
-			IOFreeVirtMem(&(vpu_dec->slice_mem_desc));
-			vpu_dec->ps_mem_desc.phy_addr = 0;
 		}
 		if (vpu_dec->decOP != NULL) {
 			g_free(vpu_dec->decOP);

@@ -91,9 +91,9 @@ typedef struct _MfwGstVPU_Dec {
 	gboolean init;		/* initialisation flag */
 	gboolean vpu_opened;
 	guint outsize;		/* size of the output image */
-	GstBuffer *outbuffers[NUM_FRAME_BUF];
-	/*output buffers allocated */
-	GstBuffer *pushbuff;	/* out put buffer to be pushed */
+
+	vpu_mem_desc framebuf;
+	void *framebuf_virt;
 
 	/* VPU specific Members */
 	DecHandle *handle;
@@ -106,9 +106,6 @@ typedef struct _MfwGstVPU_Dec {
 	guint8 *start_addr;	/* start addres of the Hardware input buffer */
 	guint8 *end_addr;	/* end addres of the Hardware input buffer */
 	guint8 *base_addr;	/* base addres of the Hardware input buffer */
-	FrameBuffer frameBuf[NUM_FRAME_BUF];
-	/* Hardware output buffer structure */
-	guint8 *frame_virt[NUM_FRAME_BUF];
 	CodStd codec;		/* codec standard to be selected */
 	gint picWidth;		/* Width of the Image obtained through
 				   Caps Neogtiation */
@@ -117,13 +114,9 @@ typedef struct _MfwGstVPU_Dec {
 	GstBuffer *HdrExtData;
 	guint HdrExtDataLen;	/* Heafer Extension Data and length
 				   obtained through Caps Neogtiation */
-	vpu_mem_desc frame_mem[NUM_FRAME_BUF];
 	/* Structure for Frame buffer parameters
 	   if not used with V4LSink */
-	gint numframebufs;	/* Number of Frame buffers */
 	gboolean eos;		/* Flag for end of stream */
-	vpu_mem_desc ps_mem_desc;	/* ps save buffer */
-	vpu_mem_desc slice_mem_desc;	/* slice save buffer */
 
 	/* Misc members */
 	guint64 decoded_frames;	/*number of the decoded frames */
@@ -140,13 +133,11 @@ typedef struct _MfwGstVPU_Dec {
 	/* enable direct rendering in case of V4L */
 	gboolean first;		/* Flag for inserting the RCV Header
 				   fot the first time */
-	gboolean framebufinit_done;
 
 	GMutex *vpu_mutex;
 	gboolean lastframedropped;
 	gboolean flush;		// Flag to indicate the flush event
 	gboolean rotation_angle;	// rotation angle used for VPU to rotate
-	gint rot_buff_idx;	// rotator buf index
 	MirrorDirection mirror_dir;	// VPU mirror direction
 	gboolean dbk_enabled;
 	gint dbk_offset_a;
