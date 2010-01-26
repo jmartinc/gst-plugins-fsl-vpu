@@ -530,7 +530,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
 	long time_before = 0, time_after = 0;
-
+printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
 	// Update Profiling timestamps
 	if (G_UNLIKELY(vpu_dec->profiling))
 		gettimeofday(&tv_prof2, 0);
@@ -656,8 +656,10 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 
 //printf("GST_BUFFER_OFFSET: 0x%08x\n", (unsigned int)GST_BUFFER_OFFSET(vpu_dec->pushbuff));
 
-		if (!buf_valid_for_render(pushbuff))
+		if (!buf_valid_for_render(pushbuff)) {
+			printf("memcpy\n");
 			memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->framebuf_virt, vpu_dec->outsize);
+		}
 
 		// Update the time stamp base on the frame-rate
 		GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
@@ -686,7 +688,7 @@ done:
 
 	if (pushbuff)
 		gst_buffer_unref(pushbuff);
-
+printf("<<<<<<<<<<<<<<<<<<<<<<<<< DEC <<<<<<<<<<<<<<<<<<<<<<<<\n");
 	return retval;
 }
 
