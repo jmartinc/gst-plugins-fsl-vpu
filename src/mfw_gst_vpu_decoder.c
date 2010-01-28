@@ -45,6 +45,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <gst-plugins-fsl_config.h>
+#include <linux/videodev2.h>
 #include "vpu_io.h"
 #include "vpu_lib.h"
 #include "mfw_gst_vpu_decoder.h"
@@ -336,6 +337,12 @@ POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
 
+static struct v4l2_requestbuffers reqs = {
+	.count	= 4,
+	.type	= V4L2_BUF_TYPE_VIDEO_CAPTURE,
+	.memory	= V4L2_MEMORY_MMAP,
+};
+
 static GstFlowReturn
 mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 {
@@ -351,6 +358,10 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 		return GST_STATE_CHANGE_FAILURE;
 	}
 	vpu_dec->vpu_opened = TRUE;
+
+
+	ioctl(vpu_fd, VPU_IOC_DEC_FORMAT, vpu_dec->codec);
+	ioctl(vpu_fd, VIDIOC_REQBUFS, &reqs);
 	return GST_FLOW_OK;
 }
 
@@ -554,6 +565,9 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
 	long time_before = 0, time_after = 0;
+	struct v4l2_buffer v4l2_buf = {
+		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+	};
 printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
 	// Update Profiling timestamps
 	if (G_UNLIKELY(vpu_dec->profiling))
@@ -643,6 +657,10 @@ printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
 
 		frame.bufCb = frame.bufY + (strideY * height);
 		frame.bufCr = frame.bufCb + ((strideY / 2) * (height / 2));
+
+		printf("call DQBUF\n");
+		retval = ioctl(vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
+		printf("DQBUF done: %d\n", retval);
 
 		vpu_ret = vpu_DecDecodeFrame(*vpu_dec->handle, vpu_dec->decParam, vpu_dec->outputInfo,
 				&frame);
