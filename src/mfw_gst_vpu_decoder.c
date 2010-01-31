@@ -130,7 +130,6 @@ static const gint fpss[][2] = { {24000, 1001},
 /*======================================================================================
                                       STATIC VARIABLES
 =======================================================================================*/
-extern int vpu_fd;
 
 /*======================================================================================
                                  STATIC FUNCTION PROTOTYPES
@@ -309,7 +308,7 @@ PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =============================================================================*/
-
+#if 0
 static void
 mfw_gst_vpudec_post_fatal_error_msg(MfwGstVPU_Dec * vpu_dec, gchar * error_msg)
 {
@@ -323,7 +322,7 @@ mfw_gst_vpudec_post_fatal_error_msg(MfwGstVPU_Dec * vpu_dec, gchar * error_msg)
 						       error_msg));
 	g_error_free(error);
 }
-
+#endif
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_vpu_open
 
@@ -337,12 +336,6 @@ POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
 
-static struct v4l2_requestbuffers reqs = {
-	.count	= 4,
-	.type	= V4L2_BUF_TYPE_VIDEO_CAPTURE,
-	.memory	= V4L2_MEMORY_MMAP,
-};
-
 static GstFlowReturn
 mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 {
@@ -352,16 +345,15 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 	vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
 
 	/* open a VPU's decoder instance */
-	vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
-	if (vpu_ret != RETCODE_SUCCESS) {
+	vpu_dec->vpu_fd = open("/dev/video0", O_RDWR);
+	if (vpu_dec->vpu_fd < 0) {
 		GST_ERROR("vpu_DecOpen failed. Error code is %d", vpu_ret);
 		return GST_STATE_CHANGE_FAILURE;
 	}
 	vpu_dec->vpu_opened = TRUE;
 
+	ioctl(vpu_dec->vpu_fd, VPU_IOC_DEC_FORMAT, vpu_dec->codec);
 
-	ioctl(vpu_fd, VPU_IOC_DEC_FORMAT, vpu_dec->codec);
-	ioctl(vpu_fd, VIDIOC_REQBUFS, &reqs);
 	return GST_FLOW_OK;
 }
 
@@ -377,9 +369,15 @@ PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
+
+static struct v4l2_requestbuffers reqs = {
+	.count	= NUM_BUFFERS,
+	.type	= V4L2_BUF_TYPE_VIDEO_CAPTURE,
+	.memory	= V4L2_MEMORY_MMAP,
+};
+
 static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 {
-	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstCaps *caps;
 	gint crop_top_len, crop_left_len;
 	gint crop_right_len, crop_bottom_len;
@@ -387,43 +385,43 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	gint width, height;
 	gint crop_right_by_pixel, crop_bottom_by_pixel;
 	int rotmir;
+	int i, retval;
+
+	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
+	if (retval)
+		printf("VIDIOC_REQBUFS failed\n");
+
+	for (i = 0; i < NUM_BUFFERS; i++) {
+		struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
+		buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		buf->memory = V4L2_MEMORY_MMAP;
+		buf->index = i;
+
+		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, buf);
+		if (retval) {
+		    	printf("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
+		}
+		vpu_dec->buf_size[i] = buf->length;
+		vpu_dec->buf_data[i] = mmap(NULL, buf->length,
+				   PROT_READ | PROT_WRITE, MAP_SHARED,
+				   vpu_dec->vpu_fd, vpu_dec->buf_v4l2[i].m.offset);
+	}
+
+	for (i = 0; i < NUM_BUFFERS; ++i){
+		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[i]);
+		if (retval)
+		    	printf("VIDIOC_QBUF failed: %s\n", strerror(errno));
+	}
 
 	gint fourcc = GST_STR_FOURCC("I420");
 
-	vpu_ret = vpu_DecGetInitialInfo(*vpu_dec->handle, vpu_dec->initialInfo);
+	vpu_dec->initialInfo->picWidth = 320;
+	vpu_dec->initialInfo->picHeight = 240;
 
-	if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-		return GST_FLOW_OK;
-	}
-	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_DecGetInitialInfo failed. Error code is %d", vpu_ret);
-		mfw_gst_vpudec_post_fatal_error_msg(vpu_dec, "VPU Decoder Initialisation failed ");
-		return GST_FLOW_ERROR;
-	}
-	GST_DEBUG("Dec: min buffer count= %d", vpu_dec->initialInfo->minFrameBufferCount);
 	GST_DEBUG("Dec InitialInfo => picWidth: %u, picHeight: %u, frameRate: %u",
 			vpu_dec->initialInfo->picWidth,
 			vpu_dec->initialInfo->picHeight,
 			(unsigned int) vpu_dec->initialInfo->frameRateInfo);
-
-	/* Check: Minimum resolution limitation */
-	if (vpu_dec->initialInfo->picWidth < MIN_WIDTH || vpu_dec->initialInfo->picHeight < MIN_HEIGHT) {
-		GstMessage *message = NULL;
-		GError *gerror = NULL;
-		gchar *text_msg = "unsupported video resolution.";
-		gerror = g_error_new_literal(1, 0, text_msg);
-		message = gst_message_new_error(GST_OBJECT(GST_ELEMENT(vpu_dec)), gerror, "debug none");
-		gst_element_post_message(GST_ELEMENT(vpu_dec), message);
-		g_error_free(gerror);
-
-		return GST_FLOW_ERROR;
-	}
-
-	if (vpu_dec->initialInfo->minFrameBufferCount > NUM_MAX_VPU_REQUIRED) {
-		g_print("vpu required frames number exceed max limitation, required %d.",
-		     vpu_dec->initialInfo->minFrameBufferCount);
-		return GST_FLOW_ERROR;
-	}
 
 	/* Padding the width and height to 16 */
 	orgPicW = vpu_dec->initialInfo->picWidth;
@@ -504,34 +502,11 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		break;
 	}
 
-	ioctl(vpu_fd, VPU_IOC_ROTATE_MIRROR, rotmir);
+	ioctl(vpu_dec->vpu_fd, VPU_IOC_ROTATE_MIRROR, rotmir);
 
 	vpu_dec->decParam->prescanEnable = 1;
 	vpu_dec->init = TRUE;
 	return GST_FLOW_OK;
-}
-
-/*
- * Check whether a buffer is suitable for direct DMA.
- * In this plugin we are serving a DMA engine from userspace. What
- * we basically want is to fill the buffers which the v4l2sink gave
- * us without copying the buffer. If GST_BUFFER_OFFSET() is in physical
- * SDRAM space we assume it is safe for direct render.
- *
- * For this to work the gstreamer v4l2sink has to be patches as the
- * buffer offset is normally set to zero.
- *
- * This function also reveals the security issues with this approach:
- * As we do DMA from userspace we can access and corrupt the whole
- * physical memory with this plugin. Bang! Move this into the kernel.
- *
- */
-static int buf_valid_for_render(GstBuffer *buffer)
-{
-	if (GST_BUFFER_OFFSET(buffer) > 0xa0000000 &&
-			GST_BUFFER_OFFSET(buffer) < 0xc0000000)
-		return 1;
-	return 0;
 }
 
 /*======================================================================================
@@ -556,19 +531,18 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFlowReturn retval = GST_FLOW_OK;
-	int strideY;
-	int height;
-	FrameBuffer frame;
 	GstBuffer *pushbuff;
 	int ret;
-
+	unsigned long type = V4L2_MEMORY_MMAP;
 	struct timeval tv_prof, tv_prof1;
 	struct timeval tv_prof2, tv_prof3;
 	long time_before = 0, time_after = 0;
 	struct v4l2_buffer v4l2_buf = {
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	};
-printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
+	static int fill = 0;
+	int i;
+
 	// Update Profiling timestamps
 	if (G_UNLIKELY(vpu_dec->profiling))
 		gettimeofday(&tv_prof2, 0);
@@ -585,7 +559,7 @@ printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
 	if (G_UNLIKELY(buffer == NULL)) {
 		/* now end of stream */
 		vpu_dec->eos = TRUE;
-		ret = write(vpu_fd, NULL, 0);
+		ret = write(vpu_dec->vpu_fd, NULL, 0);
 		if (ret) {
 			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
 			return GST_FLOW_ERROR;
@@ -603,21 +577,33 @@ printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
 		}
 //	}
 
-	ret = write(vpu_fd, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+	ret = write(vpu_dec->vpu_fd, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
 	if (ret == -1)
 		return GST_FLOW_ERROR;
 	if (ret < (int)GST_BUFFER_SIZE(buffer))
 		GST_ERROR("Not enough space in FIFO. Currently not handled\n");
+	fill += ret;
+	if (fill < 32768 * 8)
+		return GST_FLOW_OK;
 
-	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
+	if (G_UNLIKELY(vpu_dec->init == FALSE)) {		
 		retval = mfw_gst_vpudec_vpu_init(vpu_dec);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
 			goto done;
 		}
+		printf("STREAMON...\n");
+		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_STREAMON, &type);
+		if (retval) {
+			printf("streamon failed\n");
+			return GST_FLOW_ERROR;
+		}
+		printf("STREAMON done\n");
 	}
 
 	while (1) {
+		int done = 0;
+
 		if (vpu_dec->flush == TRUE)
 			break;
 
@@ -631,39 +617,28 @@ printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
 			goto done;
 		}
 
-		if (vpu_dec->framebuf.phy_addr == 0 && !buf_valid_for_render(pushbuff)) {
-			printf("ALLOC FRAMEBUF\n");
-			vpu_dec->framebuf.size = vpu_dec->outsize;
-			IOGetPhyMem(&vpu_dec->framebuf);
-			vpu_dec->framebuf_virt = (void *)IOGetVirtMem(&vpu_dec->framebuf);
-		}
-
 		if (G_UNLIKELY(vpu_dec->profiling))
 			gettimeofday(&tv_prof, 0);
 
-		if (vpu_dec->rotation_angle == 90 || vpu_dec->rotation_angle == 270) {
-			strideY = vpu_dec->initialInfo->picHeight;
-			height = vpu_dec->initialInfo->picWidth;
-		} else {
-			strideY = vpu_dec->initialInfo->picWidth;
-			height = vpu_dec->initialInfo->picHeight;
+
+		for (i = 0; i < NUM_BUFFERS; i++) {
+			v4l2_buf.index = i;
+			retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, &v4l2_buf);
+			done |= v4l2_buf.flags & V4L2_BUF_FLAG_DONE;
+			if (done)
+				break;
 		}
-
-		frame.stride = strideY;
-		if (buf_valid_for_render(pushbuff))
-			frame.bufY = GST_BUFFER_OFFSET(pushbuff);
-		else
-			frame.bufY = vpu_dec->framebuf.phy_addr;
-
-		frame.bufCb = frame.bufY + (strideY * height);
-		frame.bufCr = frame.bufCb + ((strideY / 2) * (height / 2));
+		if (!done)
+			break;
 
 		printf("call DQBUF\n");
-		retval = ioctl(vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
-		printf("DQBUF done: %d\n", retval);
-
-		vpu_ret = vpu_DecDecodeFrame(*vpu_dec->handle, vpu_dec->decParam, vpu_dec->outputInfo,
-				&frame);
+		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
+		printf("DQBUF done: %d %d\n", retval, v4l2_buf.index);
+		if (retval) {
+			ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[v4l2_buf.index]);
+			retval = GST_FLOW_OK;
+			break;
+		}
 
 		if (G_UNLIKELY(vpu_dec->profiling)) {
 			gettimeofday(&tv_prof1, 0);
@@ -672,38 +647,12 @@ printf(">>>>>>>>>>>>>>>>>>>>>>>>> DEC >>>>>>>>>>>>>>>>>>>>>>>>\n");
 			vpu_dec->decode_wait_time += time_after - time_before;
 		}
 
-		if ((vpu_dec->decParam->prescanEnable == 1)
-		    && (vpu_dec->outputInfo->prescanresult == 0)) {
-			/* No complete frame in bitstream. Bail out. */
-			GST_DEBUG("no complete");
-			retval = GST_FLOW_OK;
-			goto done;
-		}
-
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR("vpu_DecGetOutputInfo failed. Error code is %d", vpu_ret);
-			retval = GST_FLOW_ERROR;
-			goto done;
-		}
-			
-		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -1)) {
-			GST_DEBUG("decode done");
-			break;	/* decoding done */
-		}
-
-		// BIT don't have picture to be displayed
-		if (G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -3)
-		    || G_UNLIKELY(vpu_dec->outputInfo->indexFrameDisplay == -2)) {
-			GST_DEBUG("Decoded frame not to display!");
-			break;
-		}
+		printf("memcpy %d %d\n", v4l2_buf.index, vpu_dec->outsize);
+		memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
+		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &v4l2_buf);
 
 //printf("GST_BUFFER_OFFSET: 0x%08x\n", (unsigned int)GST_BUFFER_OFFSET(vpu_dec->pushbuff));
 
-		if (!buf_valid_for_render(pushbuff)) {
-			printf("memcpy\n");
-			memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->framebuf_virt, vpu_dec->outsize);
-		}
 
 		// Update the time stamp base on the frame-rate
 		GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
@@ -864,11 +813,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	case GST_STATE_CHANGE_NULL_TO_READY:
 
 		GST_DEBUG("VPU State: Null to Ready");
-		vpu_ret = vpu_Init((PhysicalAddress) (NULL));
-		if (vpu_ret < 0) {
-			GST_DEBUG("Error in initializing the VPU, error is %d",vpu_ret);
-			return GST_STATE_CHANGE_FAILURE;
-		}
 
 #define MFW_GST_VPU_DECODER_PLUGIN VERSION
 		PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);

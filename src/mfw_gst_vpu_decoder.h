@@ -39,6 +39,9 @@
 =============================================================================*/
 #ifndef __MFW_GST_VPU_DECODER_H__
 #define __MFW_GST_VPU_DECODER_H__
+
+#include <linux/videodev2.h>
+
 /*=============================================================================
                                            CONSTANTS
 =============================================================================*/
@@ -66,6 +69,7 @@
 /*=============================================================================
                                             MACROS
 =============================================================================*/
+#define NUM_BUFFERS 4
 
 G_BEGIN_DECLS
 #define MFW_GST_TYPE_VPU_DEC (mfw_gst_type_vpu_dec_get_type())
@@ -138,6 +142,11 @@ typedef struct _MfwGstVPU_Dec {
 	gboolean dbk_enabled;
 	gint dbk_offset_a;
 	gint dbk_offset_b;
+
+	struct v4l2_buffer buf_v4l2[NUM_BUFFERS];
+	unsigned char *buf_data[NUM_BUFFERS];
+	unsigned int buf_size[NUM_BUFFERS];
+	int vpu_fd;
 
 	int once;
 } MfwGstVPU_Dec;
