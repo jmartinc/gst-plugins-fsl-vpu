@@ -70,69 +70,9 @@ G_BEGIN_DECLS
 
 #define MFW_GST_TYPE_VPU_ENC_CODEC (mfw_gst_vpuenc_codec_get_type())
 
-
-
-
-
-
 /*=============================================================================
                                  STRUCTURES AND OTHER TYPEDEFS
 =============================================================================*/
-
-typedef struct {
-	gint Index;
-	gint AddrY;
-	gint AddrCb;
-	gint AddrCr;
-	gint StrideY;
-	gint StrideC;		/* Stride Cb/Cr */
-
-	gint DispY;		/* DispY is the page aligned AddrY */
-	gint DispCb;		/* DispCb is the page aligned AddrCb */
-	gint DispCr;
-	vpu_mem_desc CurrImage;	/* Current memory descriptor for user space */
-} FRAME_BUF;
-
-typedef struct _MfwGstVPU_Enc 
-{
-	GstElement      element;		/* instance of base class */
-	GstPad          *sinkpad;
-	GstPad          *srcpad;	    /* source and sink pad of element */
-	GstElementClass *parent_class;
-		                                    /* VPU Specific defined in vpu_lib.h */
-    	EncHandle       handle;
-	EncOpenParam    *encOP;
-	EncInitialInfo  *initialInfo;
-	EncOutputInfo   *outputInfo;
-	EncParam        *encParam;
-    	vpu_mem_desc    bit_stream_buf;
-    
-	gboolean        init;           /* initialisation flag */
-	guint8          *start_addr;    /* start addres of the Hardware input buffer */
-	gfloat          	frame_rate;     /* Frame rate of display */
-	gboolean        profile;
-	CodStd          codec;                     /* codec standard to be selected */
-	guint           	width;
-	guint           	height;
-	gfloat          	framerate;
-	gboolean        wait;
-	gint            	numframebufs;
-	guint8*         	header[NUM_INPUT_BUF];
-	guint           	headersize[NUM_INPUT_BUF];
-	gint            	headercount;
-	gboolean        directrender;
-	gint            	frameIdx;
-	FrameBuffer   	frameBuf[NUM_INPUT_BUF];
-	FRAME_BUF    FrameBufPool[NUM_INPUT_BUF];
-	gint            	bitrate;
-	gint            	gopsize;	
-	gboolean 	codecTypeProvided; 	/* Set when the user provides the compression format on the command line */
-}MfwGstVPU_Enc;
-
-
-
-
-
 
 typedef struct _MfwGstVPU_EncClass 
 {
