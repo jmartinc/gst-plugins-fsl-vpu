@@ -46,8 +46,6 @@
 #include <gst/base/gstadapter.h>
 #include <gst-plugins-fsl_config.h>
 #include <linux/videodev2.h>
-#include "vpu_io.h"
-#include "vpu_lib.h"
 #include "mfw_gst_vpu_decoder.h"
 #include "mfw_gst_utils.h"
 
@@ -298,13 +296,12 @@ IMPORTANT NOTES:    None
 static GstFlowReturn
 mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 {
-	RetCode vpu_ret = RETCODE_SUCCESS;
 	GST_DEBUG("codec=%d", vpu_dec->codec);
 
 	/* open a VPU's decoder instance */
 	vpu_dec->vpu_fd = open(VPU_DEVICE, O_RDWR);
 	if (vpu_dec->vpu_fd < 0) {
-		GST_ERROR("opening %s failed with %d", VPU_DEVICE, vpu_ret);
+		GST_ERROR("opening %s failed", VPU_DEVICE);
 		return GST_STATE_CHANGE_FAILURE;
 	}
 	vpu_dec->vpu_opened = TRUE;
@@ -540,9 +537,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 {
 
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
-	RetCode vpu_ret = RETCODE_SUCCESS;
+	int ret = 0;
 	GstFlowReturn retval = GST_FLOW_OK;
-	int ret;
 	unsigned long type = V4L2_MEMORY_MMAP;
 
 //	int i;
@@ -562,7 +558,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		vpu_dec->eos = TRUE;
 		ret = write(vpu_dec->vpu_fd, NULL, 0);
 		if (ret) {
-			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", vpu_ret);
+			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", ret);
 			return GST_FLOW_ERROR;
 		}
 	}

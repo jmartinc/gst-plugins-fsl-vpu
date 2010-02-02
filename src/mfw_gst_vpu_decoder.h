@@ -59,7 +59,7 @@ typedef struct _MfwGstVPU_Dec {
 	gboolean vpu_opened;
 	guint outsize;		/* size of the output image */
 
-	CodStd codec;		/* codec standard to be selected */
+	gint codec;		/* codec standard to be selected */
 	gint picWidth;		/* Width of the Image obtained through
 				   Caps Neogtiation */
 	gint picHeight;		/* Height of the Image obtained through
@@ -83,7 +83,7 @@ typedef struct _MfwGstVPU_Dec {
 				   fot the first time */
 	gboolean flush;		// Flag to indicate the flush event
 	gboolean rotation_angle;	// rotation angle used for VPU to rotate
-	MirrorDirection mirror_dir;	// VPU mirror direction
+	gint mirror_dir;	// VPU mirror direction
 	gboolean dbk_enabled;
 	gint dbk_offset_a;
 	gint dbk_offset_b;
@@ -106,6 +106,35 @@ typedef struct _MfwGstVPU_DecClass {
 
 GType mfw_gst_type_vpu_dec_get_type(void);
 GType mfw_gst_vpudec_codec_get_type(void);
+
+typedef enum {
+	STD_MPEG2 = -1,
+	STD_VC = -1,
+	STD_MPEG4 = 0,
+	STD_H263,
+	STD_AVC
+} CodStd;
+
+typedef enum {
+	MIRDIR_NONE,
+	MIRDIR_VER,
+	MIRDIR_HOR,
+	MIRDIR_HOR_VER,
+} MirrorDirection;
+
+#define MIRROR_NONE	0
+#define MIRROR_VER	4
+#define MIRROR_HOR	8
+#define MIRROR_HOR_VER	0xc
+
+#define ROTATE_0	0
+#define ROTATE_90	1
+#define ROTATE_180	2
+#define ROTATE_270	3
+
+#define	VPU_IOC_MAGIC		'V'
+#define	VPU_IOC_ROTATE_MIRROR	_IO(VPU_IOC_MAGIC, 7)
+#define VPU_IOC_DEC_FORMAT	_IO(VPU_IOC_MAGIC, 8)
 
 G_END_DECLS
 #endif				/* __MFW_GST_VPU_DECODER_H__ */
