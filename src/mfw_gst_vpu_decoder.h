@@ -149,6 +149,10 @@ typedef struct _MfwGstVPU_Dec {
 	int vpu_fd;
 
 	int once;
+
+	GstTask *task;
+	GStaticRecMutex *task_lock;
+
 } MfwGstVPU_Dec;
 
 typedef struct _MfwGstVPU_DecClass {

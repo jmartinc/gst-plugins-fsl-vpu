@@ -386,91 +386,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	gint crop_right_by_pixel, crop_bottom_by_pixel;
 	int rotmir;
 	int i, retval;
-
-	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
-	if (retval)
-		printf("VIDIOC_REQBUFS failed\n");
-
-	for (i = 0; i < NUM_BUFFERS; i++) {
-		struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
-		buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		buf->memory = V4L2_MEMORY_MMAP;
-		buf->index = i;
-
-		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, buf);
-		if (retval) {
-		    	printf("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
-		}
-		vpu_dec->buf_size[i] = buf->length;
-		vpu_dec->buf_data[i] = mmap(NULL, buf->length,
-				   PROT_READ | PROT_WRITE, MAP_SHARED,
-				   vpu_dec->vpu_fd, vpu_dec->buf_v4l2[i].m.offset);
-	}
-
-	for (i = 0; i < NUM_BUFFERS; ++i){
-		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[i]);
-		if (retval)
-		    	printf("VIDIOC_QBUF failed: %s\n", strerror(errno));
-	}
-
-	gint fourcc = GST_STR_FOURCC("I420");
-
-	vpu_dec->initialInfo->picWidth = 320;
-	vpu_dec->initialInfo->picHeight = 240;
-
-	GST_DEBUG("Dec InitialInfo => picWidth: %u, picHeight: %u, frameRate: %u",
-			vpu_dec->initialInfo->picWidth,
-			vpu_dec->initialInfo->picHeight,
-			(unsigned int) vpu_dec->initialInfo->frameRateInfo);
-
-	/* Padding the width and height to 16 */
-	orgPicW = vpu_dec->initialInfo->picWidth;
-	orgPicH = vpu_dec->initialInfo->picHeight;
-	vpu_dec->initialInfo->picWidth = (vpu_dec->initialInfo->picWidth + 15) / 16 * 16;
-	vpu_dec->initialInfo->picHeight = (vpu_dec->initialInfo->picHeight + 15) / 16 * 16;
-	if (vpu_dec->codec == STD_AVC && (vpu_dec->initialInfo->picCropRect.right > 0
-			&& vpu_dec->initialInfo->picCropRect.bottom > 0)) {
-		crop_top_len = vpu_dec->initialInfo->picCropRect.top;
-		crop_left_len = vpu_dec->initialInfo->picCropRect.left;
-		crop_right_len = vpu_dec->initialInfo->picWidth - vpu_dec->initialInfo->picCropRect.right;
-		crop_bottom_len = vpu_dec->initialInfo->picHeight - vpu_dec->initialInfo->picCropRect.bottom;
-	} else {
-		crop_top_len = 0;
-		crop_left_len = 0;
-		crop_right_len = vpu_dec->initialInfo->picWidth - orgPicW;
-		crop_bottom_len = vpu_dec->initialInfo->picHeight - orgPicH;
-	}
-
-	if (vpu_dec->rotation_angle == 90 || vpu_dec->rotation_angle == 270) {
-		width = vpu_dec->initialInfo->picHeight;
-		height = vpu_dec->initialInfo->picWidth;
-		crop_right_by_pixel = (crop_right_len + 7) / 8 * 8;
-		crop_bottom_by_pixel = crop_right_len;
-	} else {
-		width = vpu_dec->initialInfo->picWidth;
-		height = vpu_dec->initialInfo->picHeight;
-		crop_right_by_pixel = (crop_bottom_len + 7) / 8 * 8;
-		crop_bottom_by_pixel = crop_bottom_len;
-	}
-
-	/* set the capabilites on the source pad */
-	caps = gst_caps_new_simple("video/x-raw-yuv",
-			"format", GST_TYPE_FOURCC, fourcc,
-			"width", G_TYPE_INT, width,
-			"height", G_TYPE_INT, height,
-			"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
-			"crop-top-by-pixel", G_TYPE_INT, crop_top_len,
-			"crop-left-by-pixel", G_TYPE_INT, (crop_left_len + 7) / 8 * 8,
-			"crop-right-by-pixel", G_TYPE_INT, crop_right_by_pixel,
-			"crop-bottom-by-pixel", G_TYPE_INT, crop_bottom_by_pixel,
-			"framerate", GST_TYPE_FRACTION, vpu_dec->frame_rate_nu, vpu_dec->frame_rate_de,
-			NULL);
-
-	if (!(gst_pad_set_caps(vpu_dec->srcpad, caps)))
-		GST_ERROR("Could not set the caps for the VPU decoder's src pad");
-	gst_caps_unref(caps);
-
-	vpu_dec->outsize = (vpu_dec->initialInfo->picWidth * vpu_dec->initialInfo->picHeight * 3) / 2;
+	struct v4l2_format fmt;
 
 	switch (vpu_dec->mirror_dir) {
 	case MIRDIR_NONE:
@@ -504,8 +420,147 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	ioctl(vpu_dec->vpu_fd, VPU_IOC_ROTATE_MIRROR, rotmir);
 
+	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_G_FMT, &fmt);
+	if (retval) {
+		printf("VIDIOC_G_FMT failed\n");
+		return GST_FLOW_ERROR;
+	}
+
+	printf("format: %d x %x\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
+
+	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
+	if (retval)
+		printf("VIDIOC_REQBUFS failed\n");
+
+	for (i = 0; i < NUM_BUFFERS; i++) {
+		struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
+		buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		buf->memory = V4L2_MEMORY_MMAP;
+		buf->index = i;
+
+		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, buf);
+		if (retval) {
+		    	printf("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
+		}
+		vpu_dec->buf_size[i] = buf->length;
+		vpu_dec->buf_data[i] = mmap(NULL, buf->length,
+				   PROT_READ | PROT_WRITE, MAP_SHARED,
+				   vpu_dec->vpu_fd, vpu_dec->buf_v4l2[i].m.offset);
+	}
+
+	for (i = 0; i < NUM_BUFFERS; ++i){
+		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[i]);
+		if (retval)
+		    	printf("VIDIOC_QBUF failed: %s\n", strerror(errno));
+	}
+
+	gint fourcc = GST_STR_FOURCC("I420");
+
+	vpu_dec->initialInfo->picWidth = fmt.fmt.pix.width;
+	vpu_dec->initialInfo->picHeight = fmt.fmt.pix.height;
+
+	GST_DEBUG("Dec InitialInfo => picWidth: %u, picHeight: %u, frameRate: %u",
+			vpu_dec->initialInfo->picWidth,
+			vpu_dec->initialInfo->picHeight,
+			(unsigned int) vpu_dec->initialInfo->frameRateInfo);
+
+	/* Padding the width and height to 16 */
+	orgPicW = vpu_dec->initialInfo->picWidth;
+	orgPicH = vpu_dec->initialInfo->picHeight;
+	vpu_dec->initialInfo->picWidth = (vpu_dec->initialInfo->picWidth + 15) / 16 * 16;
+	vpu_dec->initialInfo->picHeight = (vpu_dec->initialInfo->picHeight + 15) / 16 * 16;
+	if (vpu_dec->codec == STD_AVC && (vpu_dec->initialInfo->picCropRect.right > 0
+			&& vpu_dec->initialInfo->picCropRect.bottom > 0)) {
+		crop_top_len = vpu_dec->initialInfo->picCropRect.top;
+		crop_left_len = vpu_dec->initialInfo->picCropRect.left;
+		crop_right_len = vpu_dec->initialInfo->picWidth - vpu_dec->initialInfo->picCropRect.right;
+		crop_bottom_len = vpu_dec->initialInfo->picHeight - vpu_dec->initialInfo->picCropRect.bottom;
+	} else {
+		crop_top_len = 0;
+		crop_left_len = 0;
+		crop_right_len = vpu_dec->initialInfo->picWidth - orgPicW;
+		crop_bottom_len = vpu_dec->initialInfo->picHeight - orgPicH;
+	}
+
+	width = vpu_dec->initialInfo->picWidth;
+	height = vpu_dec->initialInfo->picHeight;
+	crop_right_by_pixel = (crop_bottom_len + 7) / 8 * 8;
+	crop_bottom_by_pixel = crop_bottom_len;
+
+	/* set the capabilites on the source pad */
+	caps = gst_caps_new_simple("video/x-raw-yuv",
+			"format", GST_TYPE_FOURCC, fourcc,
+			"width", G_TYPE_INT, width,
+			"height", G_TYPE_INT, height,
+			"pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1,
+			"crop-top-by-pixel", G_TYPE_INT, crop_top_len,
+			"crop-left-by-pixel", G_TYPE_INT, (crop_left_len + 7) / 8 * 8,
+			"crop-right-by-pixel", G_TYPE_INT, crop_right_by_pixel,
+			"crop-bottom-by-pixel", G_TYPE_INT, crop_bottom_by_pixel,
+			"framerate", GST_TYPE_FRACTION, vpu_dec->frame_rate_nu, vpu_dec->frame_rate_de,
+			NULL);
+
+	if (!(gst_pad_set_caps(vpu_dec->srcpad, caps)))
+		GST_ERROR("Could not set the caps for the VPU decoder's src pad");
+	gst_caps_unref(caps);
+
+	vpu_dec->outsize = (vpu_dec->initialInfo->picWidth * vpu_dec->initialInfo->picHeight * 3) / 2;
+
 	vpu_dec->decParam->prescanEnable = 1;
 	vpu_dec->init = TRUE;
+	return GST_FLOW_OK;
+}
+
+static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
+{
+	GstBuffer *pushbuff;
+	struct v4l2_buffer v4l2_buf = {
+		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+	};
+	int retval;
+//	int done = 0;
+//	printf("%s\n", __func__);
+
+	if (vpu_dec->flush == TRUE)
+		goto done;
+
+	retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
+					      vpu_dec->outsize,
+					      GST_PAD_CAPS(vpu_dec->srcpad),
+					      &pushbuff);
+	if (retval != GST_FLOW_OK) {
+		GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
+		     0, retval);
+		goto done;
+	}
+
+//	printf("call DQBUF\n");
+	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
+//	printf("DQBUF done: %d %d\n", retval, v4l2_buf.index);
+
+//	printf("memcpy %d %d\n", v4l2_buf.index, vpu_dec->outsize);
+	memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
+	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &v4l2_buf);
+
+//printf("GST_BUFFER_OFFSET: 0x%08x\n", (unsigned int)GST_BUFFER_OFFSET(vpu_dec->pushbuff));
+
+
+	// Update the time stamp base on the frame-rate
+	GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
+//	GST_BUFFER_TIMESTAMP(pushbuff) = GST_BUFFER_TIMESTAMP(buffer);
+//	GST_BUFFER_DURATION(pushbuff) = GST_BUFFER_DURATION(buffer);
+
+	vpu_dec->decoded_frames++;
+
+	GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
+	retval = gst_pad_push(vpu_dec->srcpad, pushbuff);
+	pushbuff = NULL;
+	if (retval != GST_FLOW_OK) {
+		GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d", retval);
+	}
+	retval = GST_FLOW_OK;
+done:
 	return GST_FLOW_OK;
 }
 
@@ -531,21 +586,11 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFlowReturn retval = GST_FLOW_OK;
-	GstBuffer *pushbuff;
 	int ret;
 	unsigned long type = V4L2_MEMORY_MMAP;
-	struct timeval tv_prof, tv_prof1;
-	struct timeval tv_prof2, tv_prof3;
-	long time_before = 0, time_after = 0;
-	struct v4l2_buffer v4l2_buf = {
-		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
-	};
-	static int fill = 0;
-	int i;
 
-	// Update Profiling timestamps
-	if (G_UNLIKELY(vpu_dec->profiling))
-		gettimeofday(&tv_prof2, 0);
+//	int i;
+//printf("%s\n", __func__);
 
 	// Open VPU is not already opened
 	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
@@ -582,9 +627,6 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		return GST_FLOW_ERROR;
 	if (ret < (int)GST_BUFFER_SIZE(buffer))
 		GST_ERROR("Not enough space in FIFO. Currently not handled\n");
-	fill += ret;
-	if (fill < 32768 * 8)
-		return GST_FLOW_OK;
 
 	if (G_UNLIKELY(vpu_dec->init == FALSE)) {		
 		retval = mfw_gst_vpudec_vpu_init(vpu_dec);
@@ -599,89 +641,16 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			return GST_FLOW_ERROR;
 		}
 		printf("STREAMON done\n");
+		gst_task_start (vpu_dec->task);
 	}
 
-	while (1) {
-		int done = 0;
-
-		if (vpu_dec->flush == TRUE)
-			break;
-
-		retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
-						      vpu_dec->outsize,
-						      GST_PAD_CAPS(vpu_dec->srcpad),
-						      &pushbuff);
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
-			     0, retval);
-			goto done;
-		}
-
-		if (G_UNLIKELY(vpu_dec->profiling))
-			gettimeofday(&tv_prof, 0);
-
-
-		for (i = 0; i < NUM_BUFFERS; i++) {
-			v4l2_buf.index = i;
-			retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, &v4l2_buf);
-			done |= v4l2_buf.flags & V4L2_BUF_FLAG_DONE;
-			if (done)
-				break;
-		}
-		if (!done)
-			break;
-
-		printf("call DQBUF\n");
-		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
-		printf("DQBUF done: %d %d\n", retval, v4l2_buf.index);
-		if (retval) {
-			ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[v4l2_buf.index]);
-			retval = GST_FLOW_OK;
-			break;
-		}
-
-		if (G_UNLIKELY(vpu_dec->profiling)) {
-			gettimeofday(&tv_prof1, 0);
-			time_before = (tv_prof.tv_sec * 1000000) + tv_prof.tv_usec;
-			time_after = (tv_prof1.tv_sec * 1000000) + tv_prof1.tv_usec;
-			vpu_dec->decode_wait_time += time_after - time_before;
-		}
-
-		printf("memcpy %d %d\n", v4l2_buf.index, vpu_dec->outsize);
-		memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
-		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &v4l2_buf);
-
-//printf("GST_BUFFER_OFFSET: 0x%08x\n", (unsigned int)GST_BUFFER_OFFSET(vpu_dec->pushbuff));
-
-
-		// Update the time stamp base on the frame-rate
-		GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
-		GST_BUFFER_TIMESTAMP(pushbuff) = GST_BUFFER_TIMESTAMP(buffer);
-		GST_BUFFER_DURATION(pushbuff) = GST_BUFFER_DURATION(buffer);
-
-		vpu_dec->decoded_frames++;
-
-		GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
-		retval = gst_pad_push(vpu_dec->srcpad, pushbuff);
-		pushbuff = NULL;
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d", retval);
-		}
-		retval = GST_FLOW_OK;
-	}
 done:
-	if (G_UNLIKELY(vpu_dec->profiling)) {
-		gettimeofday(&tv_prof3, 0);
-		time_before = (tv_prof2.tv_sec * 1000000) + tv_prof2.tv_usec;
-		time_after = (tv_prof3.tv_sec * 1000000) + tv_prof3.tv_usec;
-		vpu_dec->chain_Time += time_after - time_before;
-	}
 
 	gst_buffer_unref(buffer);
 
-	if (pushbuff)
-		gst_buffer_unref(pushbuff);
-printf("<<<<<<<<<<<<<<<<<<<<<<<<< DEC <<<<<<<<<<<<<<<<<<<<<<<<\n");
+//	if (pushbuff)
+//		gst_buffer_unref(pushbuff);
+//printf("<<<<<<<<<<<<<<<<<<<<<<<<< DEC <<<<<<<<<<<<<<<<<<<<<<<<\n");
 	return retval;
 }
 
@@ -813,6 +782,12 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	case GST_STATE_CHANGE_NULL_TO_READY:
 
 		GST_DEBUG("VPU State: Null to Ready");
+vpu_dec->task = gst_task_create((GstTaskFunction) vpu_dec_loop, vpu_dec);
+vpu_dec->task_lock = g_new (GStaticRecMutex, 1);
+  g_static_rec_mutex_init (vpu_dec->task_lock);
+
+gst_task_set_lock(vpu_dec->task, vpu_dec->task_lock);
+
 
 #define MFW_GST_VPU_DECODER_PLUGIN VERSION
 		PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);
@@ -1245,7 +1220,22 @@ mfw_gst_vpudec_class_init(MfwGstVPU_DecClass * klass)
 							 G_PARAM_READWRITE));
 
 }
+#if 0
+static gboolean vpu_dec_sink_activate (GstPad * sinkpad)
+{
+	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(sinkpad));
+	gint ret;
 
+	printf("%s\n", __func__);
+	ret = gst_pad_start_task (sinkpad, (GstTaskFunction) vpu_dec_loop, sinkpad);
+	GST_PAD_STREAM_UNLOCK (vpu_dec->sinkpad);
+	return ret;
+}
+
+static gboolean vpu_dec_sink_activate_push (GstPad * sinkpad, gboolean active)
+{
+}
+#endif
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_init
 
@@ -1277,7 +1267,8 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 
 	gst_pad_set_chain_function(vpu_dec->sinkpad,
 				   mfw_gst_vpudec_chain_stream_mode);
-
+//	gst_pad_set_activate_function (vpu_dec->sinkpad, vpu_dec_sink_activate);
+//	gst_pad_set_activatepush_function (vpu_dec->sinkpad, vpu_dec_sink_activate_push);
 	gst_pad_set_setcaps_function(vpu_dec->sinkpad, mfw_gst_vpudec_setcaps);
 	gst_pad_set_event_function(vpu_dec->sinkpad,
 				   GST_DEBUG_FUNCPTR
