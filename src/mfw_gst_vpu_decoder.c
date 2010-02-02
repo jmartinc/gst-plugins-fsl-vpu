@@ -51,18 +51,6 @@
 #include "mfw_gst_vpu_decoder.h"
 #include "mfw_gst_utils.h"
 
-/*======================================================================================
-                                     LOCAL CONSTANTS
-=======================================================================================*/
-
-#define BUFF_FILL_SIZE (512 * 1024)
-#define PS_SAVE_SIZE		0x028000
-#define SLICE_SAVE_SIZE		0x02D800
-#define MIN_WIDTH       64
-#define MIN_HEIGHT      64
-
-#define PROCESSOR_CLOCK    333
-
 #define MFW_GST_VPUDEC_VIDEO_CAPS \
     "video/mpeg, " \
     "width = (int) [16, 720], " \
@@ -115,10 +103,16 @@ GST_STATIC_PAD_TEMPLATE("sink",
 			GST_STATIC_CAPS(MFW_GST_VPUDEC_VIDEO_CAPS));
 
 /* table with framerates expressed as fractions */
-static const gint fpss[][2] = { {24000, 1001},
-{24, 1}, {25, 1}, {30000, 1001},
-{30, 1}, {50, 1}, {60000, 1001},
-{60, 1}, {0, 1}
+static const gint fpss[][2] = {
+	{24000, 1001},
+	{24, 1},
+	{25, 1},
+	{30000, 1001},
+	{30, 1},
+	{50, 1},
+	{60000, 1001},
+	{60, 1},
+	{0, 1},
 };
 
 /*======================================================================================
@@ -192,11 +186,6 @@ mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
 {
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(object);
 	switch (prop_id) {
-	case MFW_GST_VPU_PROF_ENABLE:
-		vpu_dec->profiling = g_value_get_boolean(value);
-		GST_DEBUG("profiling=%d", vpu_dec->profiling);
-		break;
-
 	case MFW_GST_VPU_CODEC_TYPE:
 		vpu_dec->codec = g_value_get_enum(value);
 		GST_DEBUG("codec=%d", vpu_dec->codec);
@@ -266,9 +255,6 @@ mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(object);
 	switch (prop_id) {
-	case MFW_GST_VPU_PROF_ENABLE:
-		g_value_set_boolean(value, vpu_dec->profiling);
-		break;
 	case MFW_GST_VPU_CODEC_TYPE:
 		g_value_set_enum(value, vpu_dec->codec);
 		break;
@@ -295,34 +281,6 @@ mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 	return;
 }
 
-/*=============================================================================
-FUNCTION:           mfw_gst_vpudec_post_fatal_error_msg
-
-DESCRIPTION:        This function is used to post a fatal error message and
-                    terminate the pipeline during an unrecoverable error.
-
-ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context error_msg message to be posted
-
-RETURN VALUE:       None
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=============================================================================*/
-#if 0
-static void
-mfw_gst_vpudec_post_fatal_error_msg(MfwGstVPU_Dec * vpu_dec, gchar * error_msg)
-{
-	GError *error = NULL;
-	GQuark domain;
-	domain = g_quark_from_string("mfw_vpudecoder");
-	error = g_error_new(domain, 10, "fatal error");
-	gst_element_post_message(GST_ELEMENT(vpu_dec),
-				 gst_message_new_error(GST_OBJECT
-						       (vpu_dec), error,
-						       error_msg));
-	g_error_free(error);
-}
-#endif
 /*======================================================================================
 FUNCTION:           mfw_gst_vpudec_vpu_open
 
@@ -335,6 +293,7 @@ PRE-CONDITIONS:     None
 POST-CONDITIONS:    None
 IMPORTANT NOTES:    None
 =======================================================================================*/
+#define VPU_DEVICE "/dev/video0"
 
 static GstFlowReturn
 mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
@@ -342,12 +301,10 @@ mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GST_DEBUG("codec=%d", vpu_dec->codec);
 
-	vpu_dec->decOP->bitstreamFormat = vpu_dec->codec;
-
 	/* open a VPU's decoder instance */
-	vpu_dec->vpu_fd = open("/dev/video0", O_RDWR);
+	vpu_dec->vpu_fd = open(VPU_DEVICE, O_RDWR);
 	if (vpu_dec->vpu_fd < 0) {
-		GST_ERROR("vpu_DecOpen failed. Error code is %d", vpu_ret);
+		GST_ERROR("opening %s failed with %d", VPU_DEVICE, vpu_ret);
 		return GST_STATE_CHANGE_FAILURE;
 	}
 	vpu_dec->vpu_opened = TRUE;
@@ -457,19 +414,19 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	gint fourcc = GST_STR_FOURCC("I420");
 
-	vpu_dec->initialInfo->picWidth = fmt.fmt.pix.width;
-	vpu_dec->initialInfo->picHeight = fmt.fmt.pix.height;
+	vpu_dec->picWidth = fmt.fmt.pix.width;
+	vpu_dec->picHeight = fmt.fmt.pix.height;
 
-	GST_DEBUG("Dec InitialInfo => picWidth: %u, picHeight: %u, frameRate: %u",
-			vpu_dec->initialInfo->picWidth,
-			vpu_dec->initialInfo->picHeight,
-			(unsigned int) vpu_dec->initialInfo->frameRateInfo);
+	GST_DEBUG("Dec InitialInfo => picWidth: %u, picHeight: %u",
+			vpu_dec->picWidth,
+			vpu_dec->picHeight);
 
 	/* Padding the width and height to 16 */
-	orgPicW = vpu_dec->initialInfo->picWidth;
-	orgPicH = vpu_dec->initialInfo->picHeight;
-	vpu_dec->initialInfo->picWidth = (vpu_dec->initialInfo->picWidth + 15) / 16 * 16;
-	vpu_dec->initialInfo->picHeight = (vpu_dec->initialInfo->picHeight + 15) / 16 * 16;
+	orgPicW = vpu_dec->picWidth;
+	orgPicH = vpu_dec->picHeight;
+	vpu_dec->picWidth = (vpu_dec->picWidth + 15) / 16 * 16;
+	vpu_dec->picHeight = (vpu_dec->picHeight + 15) / 16 * 16;
+#if 0
 	if (vpu_dec->codec == STD_AVC && (vpu_dec->initialInfo->picCropRect.right > 0
 			&& vpu_dec->initialInfo->picCropRect.bottom > 0)) {
 		crop_top_len = vpu_dec->initialInfo->picCropRect.top;
@@ -477,14 +434,14 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		crop_right_len = vpu_dec->initialInfo->picWidth - vpu_dec->initialInfo->picCropRect.right;
 		crop_bottom_len = vpu_dec->initialInfo->picHeight - vpu_dec->initialInfo->picCropRect.bottom;
 	} else {
-		crop_top_len = 0;
-		crop_left_len = 0;
-		crop_right_len = vpu_dec->initialInfo->picWidth - orgPicW;
-		crop_bottom_len = vpu_dec->initialInfo->picHeight - orgPicH;
-	}
+#endif
+	crop_top_len = 0;
+	crop_left_len = 0;
+	crop_right_len = vpu_dec->picWidth - orgPicW;
+	crop_bottom_len = vpu_dec->picHeight - orgPicH;
 
-	width = vpu_dec->initialInfo->picWidth;
-	height = vpu_dec->initialInfo->picHeight;
+	width = vpu_dec->picWidth;
+	height = vpu_dec->picHeight;
 	crop_right_by_pixel = (crop_bottom_len + 7) / 8 * 8;
 	crop_bottom_by_pixel = crop_bottom_len;
 
@@ -505,9 +462,8 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		GST_ERROR("Could not set the caps for the VPU decoder's src pad");
 	gst_caps_unref(caps);
 
-	vpu_dec->outsize = (vpu_dec->initialInfo->picWidth * vpu_dec->initialInfo->picHeight * 3) / 2;
+	vpu_dec->outsize = (vpu_dec->picWidth * vpu_dec->picHeight * 3) / 2;
 
-	vpu_dec->decParam->prescanEnable = 1;
 	vpu_dec->init = TRUE;
 	return GST_FLOW_OK;
 }
@@ -676,7 +632,6 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 {
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	gboolean result = TRUE;
-	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFormat format;
 	gint64 start, stop, position;
 	gdouble rate;
@@ -704,30 +659,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		vpu_dec->flush = TRUE;
 
 		/* The below block of code is used to Flush the buffered input stream data */
-		if (vpu_dec->codec == STD_AVC) {
-			vpu_ret = vpu_DecClose(*vpu_dec->handle);
-			if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-				vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
-				vpu_ret = vpu_DecClose(*vpu_dec->handle);
-			}
-
-			if (RETCODE_SUCCESS != vpu_ret)
-				GST_ERROR("error in vpu_DecClose");
-
-			vpu_dec->init = FALSE;
-
-			vpu_ret = vpu_DecOpen(vpu_dec->handle, vpu_dec->decOP);
-			if (vpu_ret != RETCODE_SUCCESS)
-				GST_ERROR("vpu_DecOpen failed. Error code is %d", vpu_ret);
-		} else {
-			vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
-			if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-				vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
-				vpu_ret = vpu_DecBitBufferFlush(*vpu_dec->handle);
-			}
-			if (RETCODE_SUCCESS != vpu_ret)
-				GST_ERROR("error in flushing the bitstream buffer");
-		}
+		printf("GST_EVENT_FLUSH_STOP: not handled\n");
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result) {
@@ -775,18 +707,16 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 {
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(element);
-	gint vpu_ret = RETCODE_SUCCESS;
-	gfloat avg_mcps = 0, avg_plugin_time = 0, avg_dec_time = 0;
 
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 
 		GST_DEBUG("VPU State: Null to Ready");
-vpu_dec->task = gst_task_create((GstTaskFunction) vpu_dec_loop, vpu_dec);
-vpu_dec->task_lock = g_new (GStaticRecMutex, 1);
-  g_static_rec_mutex_init (vpu_dec->task_lock);
 
-gst_task_set_lock(vpu_dec->task, vpu_dec->task_lock);
+		vpu_dec->task = gst_task_create((GstTaskFunction) vpu_dec_loop, vpu_dec);
+		vpu_dec->task_lock = g_new (GStaticRecMutex, 1);
+		g_static_rec_mutex_init (vpu_dec->task_lock);
+		gst_task_set_lock(vpu_dec->task, vpu_dec->task_lock);
 
 
 #define MFW_GST_VPU_DECODER_PLUGIN VERSION
@@ -797,25 +727,10 @@ gst_task_set_lock(vpu_dec->task, vpu_dec->task_lock);
 		vpu_dec->init = FALSE;
 		vpu_dec->vpu_opened = FALSE;
 		vpu_dec->outsize = 0;
-		vpu_dec->decode_wait_time = 0;
-		vpu_dec->chain_Time = 0;
-		vpu_dec->decoded_frames = 0;
 		vpu_dec->avg_fps_decoding = 0.0;
-		vpu_dec->frames_dropped = 0;
 		vpu_dec->first = FALSE;
 		vpu_dec->eos = FALSE;
 
-		/* Handle the decoder Initialization over here. */
-		vpu_dec->decOP = g_malloc(sizeof (DecOpenParam));
-		vpu_dec->initialInfo = g_malloc(sizeof (DecInitialInfo));
-		vpu_dec->decParam = g_malloc(sizeof (DecParam));
-		vpu_dec->handle = g_malloc(sizeof (DecHandle));
-		vpu_dec->outputInfo = g_malloc(sizeof (DecOutputInfo));
-		memset(vpu_dec->decOP, 0, sizeof (DecOpenParam));
-		memset(vpu_dec->handle, 0, sizeof (DecHandle));
-		memset(vpu_dec->decParam, 0, sizeof (DecParam));
-		memset(vpu_dec->outputInfo, 0, sizeof (DecOutputInfo));
-		memset(vpu_dec->initialInfo, 0, sizeof (DecInitialInfo));
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
 		GST_DEBUG("VPU State: Paused to Playing");
@@ -833,79 +748,13 @@ gst_task_set_lock(vpu_dec->task, vpu_dec->task_lock);
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		GST_DEBUG("VPU State: Paused to Ready");
-		if (vpu_dec->profiling) {
-			g_print("PROFILE FIGURES OF VPU DECODER PLUGIN");
-			g_print("\nTotal decode wait time is            %fus", (gfloat) vpu_dec->decode_wait_time);
-			g_print("\nTotal plugin time is                 %lldus", vpu_dec->chain_Time);
-			g_print("\nTotal number of frames decoded is    %lld", vpu_dec->decoded_frames);
-			g_print("\nTotal number of frames dropped is    %lld\n",vpu_dec->frames_dropped);
-			if (g_compare_float(vpu_dec->frame_rate, 0) != FLOAT_MATCH) {
-				avg_mcps =((float) vpu_dec->decode_wait_time * PROCESSOR_CLOCK /
-					(1000000 * (vpu_dec->decoded_frames - vpu_dec->frames_dropped)))
-					* vpu_dec->frame_rate;
-				g_print("\nAverage decode WAIT MCPS is          %f", avg_mcps);
-				avg_mcps = ((float) vpu_dec->chain_Time * PROCESSOR_CLOCK /
-					(1000000 * (vpu_dec->decoded_frames - vpu_dec->frames_dropped)))
-					* vpu_dec->frame_rate;
-				g_print("\nAverage plug-in MCPS is              %f", avg_mcps);
-			} else {
-				g_print("enable the Frame Rate property of the decoder to get the MCPS"
-						" ... \n ! mfw_mpeg4decoder framerate=value ! .... "
-						"\n Note: value denotes the framerate to be set");
-			}
-			avg_dec_time = ((float) vpu_dec->decode_wait_time) / vpu_dec->decoded_frames;
-			g_print("\nAverage decoding Wait time is        %fus", avg_dec_time);
-			avg_plugin_time = ((float) vpu_dec->chain_Time) / vpu_dec->decoded_frames;
-			g_print("\nAverage plugin time is               %fus\n", avg_plugin_time);
-			vpu_dec->decode_wait_time = 0;
-			vpu_dec->chain_Time = 0;
-			vpu_dec->decoded_frames = 0;
-			vpu_dec->avg_fps_decoding = 0.0;
-			vpu_dec->frames_dropped = 0;
-		}
 
 		vpu_dec->first = FALSE;
 		vpu_dec->outsize = 0;
 
-		if (vpu_dec->vpu_opened) {
-			vpu_ret = vpu_DecClose(*vpu_dec->handle);
+		if (vpu_dec->vpu_fd)
+			close(vpu_dec->vpu_fd);
 
-			if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-				vpu_DecGetOutputInfo(*vpu_dec->handle, vpu_dec->outputInfo);
-				vpu_ret = vpu_DecClose(*vpu_dec->handle);
-				if (vpu_ret < 0) {
-					GST_ERROR("Error in closing the VPU decoder,error is %d", vpu_ret);
-					return GST_STATE_CHANGE_FAILURE;
-				}
-			}
-			vpu_dec->vpu_opened = FALSE;
-		}
-		if (vpu_dec->decOP != NULL) {
-			g_free(vpu_dec->decOP);
-			vpu_dec->decOP = NULL;
-		}
-		if (vpu_dec->initialInfo != NULL) {
-			g_free(vpu_dec->initialInfo);
-			vpu_dec->initialInfo = NULL;
-		}
-		if (vpu_dec->decParam != NULL) {
-			g_free(vpu_dec->decParam);
-			vpu_dec->decParam = NULL;
-		}
-		if (vpu_dec->outputInfo != NULL) {
-			g_free(vpu_dec->outputInfo);
-			vpu_dec->outputInfo = NULL;
-		}
-		if (vpu_dec->handle != NULL) {
-			g_free(vpu_dec->handle);
-			vpu_dec->handle = NULL;
-		}
-
-		/* Unlock the mutex to free the mutex
-		 * in case of date terminated.
-		 */
-		g_mutex_free(vpu_dec->vpu_mutex);
-		vpu_dec->vpu_mutex = NULL;
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
 		GST_DEBUG("VPU State: Ready to Null");
@@ -1168,12 +1017,6 @@ mfw_gst_vpudec_class_init(MfwGstVPU_DecClass * klass)
 	gstelement_class->change_state = mfw_gst_vpudec_change_state;
 	gobject_class->set_property = mfw_gst_vpudec_set_property;
 	gobject_class->get_property = mfw_gst_vpudec_get_property;
-	g_object_class_install_property(gobject_class, MFW_GST_VPU_PROF_ENABLE,
-					g_param_spec_boolean("profiling",
-							     "Profiling",
-							     "enable time profiling of the vpu decoder plug-in",
-							     FALSE,
-							     G_PARAM_READWRITE));
 
 	g_object_class_install_property(gobject_class, MFW_GST_VPU_CODEC_TYPE,
 					g_param_spec_enum("codec-type",
@@ -1277,9 +1120,6 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 	vpu_dec->rotation_angle = 0;
 	vpu_dec->mirror_dir = MIRDIR_NONE;
 	vpu_dec->codec = STD_AVC;
-
-	vpu_dec->vpu_mutex = g_mutex_new();
-	vpu_dec->lastframedropped = FALSE;
 
 	vpu_dec->dbk_enabled = FALSE;
 	vpu_dec->dbk_offset_a = vpu_dec->dbk_offset_b = DEFAULT_DBK_OFFSET_VALUE;
