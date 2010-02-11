@@ -473,7 +473,7 @@ static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 	};
 	int retval;
 //	int done = 0;
-//	printf("%s\n", __func__);
+	printf("%s >>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", __func__);
 
 	if (vpu_dec->flush == TRUE)
 		goto done;
@@ -488,9 +488,9 @@ static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 		goto done;
 	}
 
-//	printf("call DQBUF\n");
+	printf("call DQBUF\n");
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
-//	printf("DQBUF done: %d %d\n", retval, v4l2_buf.index);
+	printf("DQBUF done: %d %d\n", retval, v4l2_buf.index);
 
 //	printf("memcpy %d %d\n", v4l2_buf.index, vpu_dec->outsize);
 	memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
@@ -508,30 +508,15 @@ static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 
 	GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
 	retval = gst_pad_push(vpu_dec->srcpad, pushbuff);
-	pushbuff = NULL;
 	if (retval != GST_FLOW_OK) {
 		GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d", retval);
 	}
 	retval = GST_FLOW_OK;
 done:
+	printf("%s <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n", __func__);
 	return GST_FLOW_OK;
 }
 
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_chain_stream_mode
-
-DESCRIPTION:        The main processing function where the data comes in as buffer. This
-                    data is decoded, and then pushed onto the next element for further
-                    processing.
-
-ARGUMENTS PASSED:   pad - pointer to the sinkpad of this element
-                    buffer - pointer to the input buffer which has the H.264 data.
-
-RETURN VALUE:       GstFlowReturn - Success or Failure.
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
 static GstFlowReturn
 mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 {
@@ -542,7 +527,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	unsigned long type = V4L2_MEMORY_MMAP;
 
 //	int i;
-//printf("%s\n", __func__);
+printf("%s\n", __func__);
 
 	// Open VPU is not already opened
 	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
@@ -593,17 +578,21 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 			return GST_FLOW_ERROR;
 		}
 		printf("STREAMON done\n");
-		gst_task_start (vpu_dec->task);
+		gst_pad_start_task (vpu_dec->srcpad, (GstTaskFunction) vpu_dec_loop, vpu_dec);
 	}
 
 done:
 
 	gst_buffer_unref(buffer);
 
-//	if (pushbuff)
-//		gst_buffer_unref(pushbuff);
-//printf("<<<<<<<<<<<<<<<<<<<<<<<<< DEC <<<<<<<<<<<<<<<<<<<<<<<<\n");
 	return retval;
+}
+
+static gboolean
+mfw_gst_vpudec_src_event(GstPad * pad, GstEvent * event)
+{
+	printf("%s\n", __func__);
+	return TRUE;
 }
 
 /*======================================================================================
@@ -631,7 +620,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 	GstFormat format;
 	gint64 start, stop, position;
 	gdouble rate;
-
+printf("%s\n", __func__);
 	switch (GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
 		gst_event_parse_new_segment(event, NULL, &rate, &format,
@@ -664,6 +653,7 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		}
 		break;
 	case GST_EVENT_EOS:
+		printf("%s: EOS\n", __func__);
 		mfw_gst_vpudec_chain_stream_mode(vpu_dec->sinkpad, NULL);
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
@@ -678,36 +668,16 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 
 }
 
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_change_state
-
-DESCRIPTION:        This function keeps track of different states of pipeline.
-
-ARGUMENTS PASSED:
-                element     -   pointer to element
-                transition  -   state of the pipeline
-
-RETURN VALUE:
-                GST_STATE_CHANGE_FAILURE    - the state change failed
-                GST_STATE_CHANGE_SUCCESS    - the state change succeeded
-                GST_STATE_CHANGE_ASYNC      - the state change will happen asynchronously
-                GST_STATE_CHANGE_NO_PREROLL - the state change cannot be prerolled
-
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
-
 static GstStateChangeReturn
 mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 {
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(element);
-
+printf("%s: %d\n", __func__, transition);
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 
-		GST_DEBUG("VPU State: Null to Ready");
+		printf("VPU State: Null to Ready");
 
 		vpu_dec->task = gst_task_create((GstTaskFunction) vpu_dec_loop, vpu_dec);
 		vpu_dec->task_lock = g_new (GStaticRecMutex, 1);
@@ -719,7 +689,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);
 		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
-		GST_DEBUG("VPU State: Ready to Paused");
+		printf("VPU State: Ready to Paused");
 		vpu_dec->init = FALSE;
 		vpu_dec->vpu_opened = FALSE;
 		vpu_dec->outsize = 0;
@@ -729,21 +699,31 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-		GST_DEBUG("VPU State: Paused to Playing");
+		printf("VPU State: Paused to Playing");
+		break;
+	case GST_STATE_CHANGE_PAUSED_TO_READY:
+		printf("VPU State: Paused to Ready");
+		gst_pad_stop_task(vpu_dec->srcpad);
+		printf("task stopped\n");
+		GST_OBJECT_UNLOCK (element);
 		break;
 	default:
+		printf("default1\n");
 		break;
 	}
-
+printf("SUMSEN\n");
 	ret = vpu_dec->parent_class->change_state(element, transition);
-	GST_DEBUG("State Change for VPU returned %d", ret);
+
+	printf("State Change for VPU returned %d", ret);
 
 	switch (transition) {
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-		GST_DEBUG("VPU State: Playing to Paused");
+		printf("VPU State: Playing to Paused");
+		gst_pad_pause_task(vpu_dec->srcpad);
+		printf("task paused\n");
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
-		GST_DEBUG("VPU State: Paused to Ready");
+		printf("VPU State: Paused to Ready");
 
 		vpu_dec->first = FALSE;
 		vpu_dec->outsize = 0;
@@ -753,12 +733,13 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
-		GST_DEBUG("VPU State: Ready to Null");
+		printf("VPU State: Ready to Null");
 		break;
 	default:
+		printf("default2\n");
 		break;
 	}
-
+printf("done\n");
 	return ret;
 
 }
@@ -1112,6 +1093,10 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 	gst_pad_set_event_function(vpu_dec->sinkpad,
 				   GST_DEBUG_FUNCPTR
 				   (mfw_gst_vpudec_sink_event));
+
+	gst_pad_set_event_function(vpu_dec->srcpad,
+				   GST_DEBUG_FUNCPTR
+				   (mfw_gst_vpudec_src_event));
 
 	vpu_dec->rotation_angle = 0;
 	vpu_dec->mirror_dir = MIRDIR_NONE;
