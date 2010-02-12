@@ -279,50 +279,7 @@ mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 	return;
 }
 
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_vpu_open
-
-DESCRIPTION:        Open VPU
-
-ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-
-RETURN VALUE:       GstFlowReturn - Success or Failure.
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
 #define VPU_DEVICE "/dev/video0"
-
-static GstFlowReturn
-mfw_gst_vpudec_vpu_open(MfwGstVPU_Dec * vpu_dec)
-{
-	GST_DEBUG("codec=%d", vpu_dec->codec);
-
-	/* open a VPU's decoder instance */
-	vpu_dec->vpu_fd = open(VPU_DEVICE, O_RDWR);
-	if (vpu_dec->vpu_fd < 0) {
-		GST_ERROR("opening %s failed", VPU_DEVICE);
-		return GST_STATE_CHANGE_FAILURE;
-	}
-	vpu_dec->vpu_opened = TRUE;
-
-	ioctl(vpu_dec->vpu_fd, VPU_IOC_DEC_FORMAT, vpu_dec->codec);
-
-	return GST_FLOW_OK;
-}
-
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_vpu_init
-
-DESCRIPTION:        Initialize VPU
-
-ARGUMENTS PASSED:   vpu_dec  - VPU decoder plugins context
-
-RETURN VALUE:       GstFlowReturn - Success or Failure.
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
 
 static struct v4l2_requestbuffers reqs = {
 	.count	= NUM_BUFFERS,
@@ -473,7 +430,7 @@ static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 	};
 	int retval;
 //	int done = 0;
-	printf("%s >>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", __func__);
+//	printf("%s >>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", __func__);
 
 	if (vpu_dec->flush == TRUE)
 		goto done;
@@ -488,9 +445,10 @@ static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 		goto done;
 	}
 
-	printf("call DQBUF\n");
+//	printf("call DQBUF\n");
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
-	printf("DQBUF done: %d %d\n", retval, v4l2_buf.index);
+//	printf("DQBUF done: %d %d\n", retval, v4l2_buf.index);
+//	printf("timestamp: %ld %ld\n", v4l2_buf.timestamp.tv_sec, v4l2_buf.timestamp.tv_usec);
 
 //	printf("memcpy %d %d\n", v4l2_buf.index, vpu_dec->outsize);
 	memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
@@ -501,7 +459,7 @@ static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 
 	// Update the time stamp base on the frame-rate
 	GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
-//	GST_BUFFER_TIMESTAMP(pushbuff) = GST_BUFFER_TIMESTAMP(buffer);
+	GST_BUFFER_TIMESTAMP(pushbuff) = GST_TIMEVAL_TO_TIME(v4l2_buf.timestamp);
 //	GST_BUFFER_DURATION(pushbuff) = GST_BUFFER_DURATION(buffer);
 
 	vpu_dec->decoded_frames++;
@@ -513,7 +471,7 @@ static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 	}
 	retval = GST_FLOW_OK;
 done:
-	printf("%s <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n", __func__);
+//	printf("%s <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n", __func__);
 	return GST_FLOW_OK;
 }
 
@@ -527,16 +485,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 	unsigned long type = V4L2_MEMORY_MMAP;
 
 //	int i;
-printf("%s\n", __func__);
-
-	// Open VPU is not already opened
-	if (G_UNLIKELY(!vpu_dec->vpu_opened)) {
-		retval = mfw_gst_vpudec_vpu_open(vpu_dec);
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("mfw_gst_vpudec_stream_buff_read failed. Error code is %d", retval);
-			goto done;
-		}
-	}
+//printf("%s\n", __func__);
 
 	if (G_UNLIKELY(buffer == NULL)) {
 		/* now end of stream */
@@ -558,14 +507,15 @@ printf("%s\n", __func__);
 			vpu_dec->once = 1;
 		}
 //	}
-
+printf("enter write\n");
 	ret = write(vpu_dec->vpu_fd, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+printf("leave write: %d\n", ret);
 	if (ret == -1)
 		return GST_FLOW_ERROR;
 	if (ret < (int)GST_BUFFER_SIZE(buffer))
 		GST_ERROR("Not enough space in FIFO. Currently not handled\n");
 
-	if (G_UNLIKELY(vpu_dec->init == FALSE)) {		
+	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
 		retval = mfw_gst_vpudec_vpu_init(vpu_dec);
 		if (retval != GST_FLOW_OK) {
 			GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
@@ -578,7 +528,8 @@ printf("%s\n", __func__);
 			return GST_FLOW_ERROR;
 		}
 		printf("STREAMON done\n");
-		gst_pad_start_task (vpu_dec->srcpad, (GstTaskFunction) vpu_dec_loop, vpu_dec);
+//		gst_pad_start_task (vpu_dec->srcpad, (GstTaskFunction) vpu_dec_loop, vpu_dec);
+		gst_task_start (vpu_dec->task);
 	}
 
 done:
@@ -673,17 +624,30 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 {
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(element);
-printf("%s: %d\n", __func__, transition);
+	GstState state, next;
+
+	state = (GstState) GST_STATE_TRANSITION_CURRENT (transition);
+	next = GST_STATE_TRANSITION_NEXT (transition);
+
+	printf("%s: from %s to %s\n", __func__, 
+			gst_element_state_get_name (state),
+			gst_element_state_get_name (next));
+
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 
 		printf("VPU State: Null to Ready");
 
+		vpu_dec->vpu_fd = open(VPU_DEVICE, O_RDWR);
+		if (vpu_dec->vpu_fd < 0) {
+			GST_ERROR("opening %s failed", VPU_DEVICE);
+			return GST_STATE_CHANGE_FAILURE;
+		}
+
 		vpu_dec->task = gst_task_create((GstTaskFunction) vpu_dec_loop, vpu_dec);
 		vpu_dec->task_lock = g_new (GStaticRecMutex, 1);
 		g_static_rec_mutex_init (vpu_dec->task_lock);
 		gst_task_set_lock(vpu_dec->task, vpu_dec->task_lock);
-
 
 #define MFW_GST_VPU_DECODER_PLUGIN VERSION
 		PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);
@@ -691,26 +655,18 @@ printf("%s: %d\n", __func__, transition);
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		printf("VPU State: Ready to Paused");
 		vpu_dec->init = FALSE;
-		vpu_dec->vpu_opened = FALSE;
-		vpu_dec->outsize = 0;
 		vpu_dec->avg_fps_decoding = 0.0;
-		vpu_dec->first = FALSE;
 		vpu_dec->eos = FALSE;
 
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
 		printf("VPU State: Paused to Playing");
 		break;
-	case GST_STATE_CHANGE_PAUSED_TO_READY:
-		printf("VPU State: Paused to Ready");
-		gst_pad_stop_task(vpu_dec->srcpad);
-		printf("task stopped\n");
-		GST_OBJECT_UNLOCK (element);
-		break;
 	default:
 		printf("default1\n");
 		break;
 	}
+
 printf("SUMSEN\n");
 	ret = vpu_dec->parent_class->change_state(element, transition);
 
@@ -719,17 +675,16 @@ printf("SUMSEN\n");
 	switch (transition) {
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
 		printf("VPU State: Playing to Paused");
-		gst_pad_pause_task(vpu_dec->srcpad);
+		gst_task_stop(vpu_dec->task);
+		gst_task_join(vpu_dec->task);
+//		gst_pad_pause_task(vpu_dec->srcpad);
+		close(vpu_dec->vpu_fd);
 		printf("task paused\n");
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		printf("VPU State: Paused to Ready");
 
-		vpu_dec->first = FALSE;
-		vpu_dec->outsize = 0;
-
-		if (vpu_dec->vpu_fd)
-			close(vpu_dec->vpu_fd);
+		close(vpu_dec->vpu_fd);
 
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
@@ -841,6 +796,8 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 		GST_ERROR(" Codec Standard not supporded");
 		return FALSE;
 	}
+
+	ioctl(vpu_dec->vpu_fd, VPU_IOC_DEC_FORMAT, vpu_dec->codec);
 
 	gst_structure_get_fraction(structure, "framerate",
 			&vpu_dec->frame_rate_nu, &vpu_dec->frame_rate_de);
@@ -1050,10 +1007,6 @@ static gboolean vpu_dec_sink_activate (GstPad * sinkpad)
 	ret = gst_pad_start_task (sinkpad, (GstTaskFunction) vpu_dec_loop, sinkpad);
 	GST_PAD_STREAM_UNLOCK (vpu_dec->sinkpad);
 	return ret;
-}
-
-static gboolean vpu_dec_sink_activate_push (GstPad * sinkpad, gboolean active)
-{
 }
 #endif
 /*======================================================================================
