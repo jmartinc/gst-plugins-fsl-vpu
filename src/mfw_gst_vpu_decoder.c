@@ -28,19 +28,12 @@
  * Portability:    This code is written for Linux OS and Gstreamer
  */
 
-/*
- * Changelog:
- *
- */
-
-/*======================================================================================
-                            INCLUDE FILES
-=======================================================================================*/
 #include <string.h>
-#include <fcntl.h>		/* fcntl */
+#include <fcntl.h>
 #include <unistd.h>
-#include <sys/mman.h>		/* mmap */
-#include <sys/ioctl.h>		/* fopen/fread */
+#include <poll.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
 #include <sys/time.h>
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
@@ -298,6 +291,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	int rotmir;
 	int i, retval;
 	struct v4l2_format fmt;
+	unsigned long type = V4L2_MEMORY_MMAP;
 
 	switch (vpu_dec->mirror_dir) {
 	case MIRDIR_NONE:
@@ -418,22 +412,34 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	vpu_dec->outsize = (vpu_dec->picWidth * vpu_dec->picHeight * 3) / 2;
 
+	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_STREAMON, &type);
+	if (retval) {
+		GST_ERROR("streamon failed with %d", retval);
+		return GST_FLOW_ERROR;
+	}
+
 	vpu_dec->init = TRUE;
+
 	return GST_FLOW_OK;
 }
 
-static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
+static int vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 {
 	GstBuffer *pushbuff;
 	struct v4l2_buffer v4l2_buf = {
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	};
 	int retval;
-//	int done = 0;
-//	printf("%s >>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", __func__);
 
 	if (vpu_dec->flush == TRUE)
 		goto done;
+
+	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
+	if (retval) {
+		if (errno == EAGAIN)
+			return -EAGAIN;
+		return -1;
+	}
 
 	retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
 					      vpu_dec->outsize,
@@ -445,17 +451,8 @@ static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 		goto done;
 	}
 
-//	printf("call DQBUF\n");
-	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
-//	printf("DQBUF done: %d %d\n", retval, v4l2_buf.index);
-//	printf("timestamp: %ld %ld\n", v4l2_buf.timestamp.tv_sec, v4l2_buf.timestamp.tv_usec);
-
-//	printf("memcpy %d %d\n", v4l2_buf.index, vpu_dec->outsize);
 	memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &v4l2_buf);
-
-//printf("GST_BUFFER_OFFSET: 0x%08x\n", (unsigned int)GST_BUFFER_OFFSET(vpu_dec->pushbuff));
-
 
 	// Update the time stamp base on the frame-rate
 	GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
@@ -471,21 +468,18 @@ static GstFlowReturn vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 	}
 	retval = GST_FLOW_OK;
 done:
-//	printf("%s <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n", __func__);
 	return GST_FLOW_OK;
 }
 
 static GstFlowReturn
-mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
+mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 {
 
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	int ret = 0;
 	GstFlowReturn retval = GST_FLOW_OK;
-	unsigned long type = V4L2_MEMORY_MMAP;
-
-//	int i;
-//printf("%s\n", __func__);
+	int remaining, ofs, handled = 0;
+	struct pollfd pollfd;
 
 	if (G_UNLIKELY(buffer == NULL)) {
 		/* now end of stream */
@@ -497,71 +491,57 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer * buffer)
 		}
 	}
 
-	if (G_UNLIKELY(vpu_dec->eos == TRUE))
-		return GST_FLOW_OK;
-
-//	if (vpu_dec->codec == STD_MPEG4) {
-		if (!vpu_dec->once) {
-			if (vpu_dec->HdrExtData)
-				buffer = gst_buffer_join(vpu_dec->HdrExtData, buffer);
-			vpu_dec->once = 1;
-		}
-//	}
-printf("enter write\n");
-	ret = write(vpu_dec->vpu_fd, GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-printf("leave write: %d\n", ret);
-	if (ret == -1)
-		return GST_FLOW_ERROR;
-	if (ret < (int)GST_BUFFER_SIZE(buffer))
-		GST_ERROR("Not enough space in FIFO. Currently not handled\n");
-
-	if (G_UNLIKELY(vpu_dec->init == FALSE)) {
-		retval = mfw_gst_vpudec_vpu_init(vpu_dec);
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
-			goto done;
-		}
-		printf("STREAMON...\n");
-		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_STREAMON, &type);
-		if (retval) {
-			printf("streamon failed\n");
-			return GST_FLOW_ERROR;
-		}
-		printf("STREAMON done\n");
-//		gst_pad_start_task (vpu_dec->srcpad, (GstTaskFunction) vpu_dec_loop, vpu_dec);
-		gst_task_start (vpu_dec->task);
+	if (!vpu_dec->once) {
+		if (vpu_dec->HdrExtData)
+			buffer = gst_buffer_join(vpu_dec->HdrExtData, buffer);
+		vpu_dec->once = 1;
 	}
 
-done:
+	if (G_UNLIKELY(vpu_dec->eos == TRUE))
+		return GST_FLOW_OK;
+	pollfd.fd = vpu_dec->vpu_fd;
+	pollfd.events = POLLIN | POLLOUT;
 
+	remaining = GST_BUFFER_SIZE(buffer);
+	ofs = 0;
+
+	while (!handled) {
+		ret = poll(&pollfd, 1, -1);
+		if (ret < 0)
+			return GST_FLOW_ERROR;
+
+		if (pollfd.revents & POLLERR)
+			printf("POLLERR\n");
+
+		if (pollfd.revents & POLLOUT) {
+			ret = write(vpu_dec->vpu_fd, GST_BUFFER_DATA(buffer) + ofs,
+					remaining);
+			if (ret == -1)
+				return GST_FLOW_ERROR;
+			remaining -= ret;
+			ofs += ret;
+
+			if (G_UNLIKELY(vpu_dec->init == FALSE)) {
+				retval = mfw_gst_vpudec_vpu_init(vpu_dec);
+				if (retval != GST_FLOW_OK) {
+					GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
+					goto done;
+				}
+			}
+			if (!remaining)
+				handled = 1;
+		}
+
+		if (pollfd.revents & POLLIN) {
+			while (!vpu_dec_loop(vpu_dec));
+			handled = 1;
+		}
+	}
+done:
 	gst_buffer_unref(buffer);
 
 	return retval;
 }
-
-static gboolean
-mfw_gst_vpudec_src_event(GstPad * pad, GstEvent * event)
-{
-	printf("%s\n", __func__);
-	return TRUE;
-}
-
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_sink_event
-
-DESCRIPTION:        This function handles the events the occur on the sink pad
-                    Like EOS
-
-ARGUMENTS PASSED:   pad - pointer to the sinkpad of this element
-                    event - event generated.
-
-RETURN VALUE:       TRUE   event handled success fully.
-                    FALSE .event not handled properly
-
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
 
 static gboolean
 mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
@@ -635,84 +615,49 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
-
-		printf("VPU State: Null to Ready");
-
-		vpu_dec->vpu_fd = open(VPU_DEVICE, O_RDWR);
+		vpu_dec->vpu_fd = open(VPU_DEVICE, O_RDWR | O_NONBLOCK);
 		if (vpu_dec->vpu_fd < 0) {
 			GST_ERROR("opening %s failed", VPU_DEVICE);
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
-		vpu_dec->task = gst_task_create((GstTaskFunction) vpu_dec_loop, vpu_dec);
-		vpu_dec->task_lock = g_new (GStaticRecMutex, 1);
-		g_static_rec_mutex_init (vpu_dec->task_lock);
-		gst_task_set_lock(vpu_dec->task, vpu_dec->task_lock);
-
 #define MFW_GST_VPU_DECODER_PLUGIN VERSION
 		PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);
 		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
-		printf("VPU State: Ready to Paused");
 		vpu_dec->init = FALSE;
 		vpu_dec->avg_fps_decoding = 0.0;
 		vpu_dec->eos = FALSE;
 
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-		printf("VPU State: Paused to Playing");
 		break;
 	default:
-		printf("default1\n");
 		break;
 	}
 
-printf("SUMSEN\n");
-	ret = vpu_dec->parent_class->change_state(element, transition);
 
-	printf("State Change for VPU returned %d", ret);
+	ret = vpu_dec->parent_class->change_state(element, transition);
 
 	switch (transition) {
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-		printf("VPU State: Playing to Paused");
-		gst_task_stop(vpu_dec->task);
-		gst_task_join(vpu_dec->task);
-//		gst_pad_pause_task(vpu_dec->srcpad);
-		close(vpu_dec->vpu_fd);
-		printf("task paused\n");
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
-		printf("VPU State: Paused to Ready");
-
 		close(vpu_dec->vpu_fd);
 
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
-		printf("VPU State: Ready to Null");
+		close(vpu_dec->vpu_fd);
 		break;
 	default:
-		printf("default2\n");
 		break;
 	}
-printf("done\n");
+
 	return ret;
 
 }
 
-/*=============================================================================
-FUNCTION:           src_templ
-
-DESCRIPTION:        Template to create a srcpad for the decoder
-
-ARGUMENTS PASSED:   None
-
-RETURN VALUE:       GstPadTemplate
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=============================================================================*/
-static GstPadTemplate *
-src_templ(void)
+static GstPadTemplate *src_templ(void)
 {
 	static GstPadTemplate *templ = NULL;
 	GstCaps *caps;
@@ -753,24 +698,6 @@ src_templ(void)
 	templ = gst_pad_template_new("src", GST_PAD_SRC, GST_PAD_ALWAYS, caps);
 	return templ;
 }
-
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_setcaps
-
-DESCRIPTION:        This function negoatiates the caps set on the sink pad
-
-ARGUMENTS PASSED:
-                pad   -   pointer to the sinkpad of this element
-                caps  -     pointer to the caps set
-
-RETURN VALUE:
-               TRUE         negotiation success full
-               FALSE        negotiation Failed
-
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
 
 static gboolean
 mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
@@ -830,20 +757,6 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 	return gst_pad_set_caps(pad, caps);
 }
 
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_base_init
-
-DESCRIPTION:        Element details are registered with the plugin during
-                    _base_init ,This function will initialise the class and child
-                    class properties during each new child class creation
-
-ARGUMENTS PASSED:   klass - void pointer
-
-RETURN VALUE:       None
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
 static void
 mfw_gst_vpudec_base_init(MfwGstVPU_DecClass * klass)
 {
@@ -860,21 +773,6 @@ mfw_gst_vpudec_base_init(MfwGstVPU_DecClass * klass)
 
 }
 
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_codec_get_type
-
-DESCRIPTION:        Gets an enumeration for the different
-                    codec standars supported by the decoder
-
-ARGUMENTS PASSED:   None
-
-RETURN VALUE:       enumerated type of the codec standards
-                    supported by the decoder
-
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-========================================================================================*/
 GType
 mfw_gst_vpudec_codec_get_type(void)
 {
@@ -893,19 +791,6 @@ mfw_gst_vpudec_codec_get_type(void)
 	return vpudec_codec_type;
 }
 
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_mirror_get_type
-
-DESCRIPTION:        Gets an enumeration for mirror directions
-
-ARGUMENTS PASSED:   None
-
-RETURN VALUE:       Enumerated type of the mirror directions supported by VPU
-
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-========================================================================================*/
 GType
 mfw_gst_vpudec_mirror_get_type(void)
 {
@@ -923,22 +808,6 @@ mfw_gst_vpudec_mirror_get_type(void)
 	}
 	return vpudec_mirror_type;
 }
-
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_class_init
-
-DESCRIPTION:        Initialise the class.(specifying what signals,
-                    arguments and virtual functions the class has and setting up
-                    global states)
-
-ARGUMENTS PASSED:
-                klass - pointer to H.264Decoder element class
-
-RETURN VALUE:       None
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
 
 static void
 mfw_gst_vpudec_class_init(MfwGstVPU_DecClass * klass)
@@ -997,32 +866,6 @@ mfw_gst_vpudec_class_init(MfwGstVPU_DecClass * klass)
 							 G_PARAM_READWRITE));
 
 }
-#if 0
-static gboolean vpu_dec_sink_activate (GstPad * sinkpad)
-{
-	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(sinkpad));
-	gint ret;
-
-	printf("%s\n", __func__);
-	ret = gst_pad_start_task (sinkpad, (GstTaskFunction) vpu_dec_loop, sinkpad);
-	GST_PAD_STREAM_UNLOCK (vpu_dec->sinkpad);
-	return ret;
-}
-#endif
-/*======================================================================================
-FUNCTION:           mfw_gst_vpudec_init
-
-DESCRIPTION:        Create the pad template that has been registered with the
-                    element class in the _base_init
-
-ARGUMENTS PASSED:
-                vpu_dec -    pointer to vpu_decoder element structure
-
-RETURN VALUE:       None
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=======================================================================================*/
 
 static void
 mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
@@ -1040,16 +883,10 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 
 	gst_pad_set_chain_function(vpu_dec->sinkpad,
 				   mfw_gst_vpudec_chain_stream_mode);
-//	gst_pad_set_activate_function (vpu_dec->sinkpad, vpu_dec_sink_activate);
-//	gst_pad_set_activatepush_function (vpu_dec->sinkpad, vpu_dec_sink_activate_push);
 	gst_pad_set_setcaps_function(vpu_dec->sinkpad, mfw_gst_vpudec_setcaps);
 	gst_pad_set_event_function(vpu_dec->sinkpad,
 				   GST_DEBUG_FUNCPTR
 				   (mfw_gst_vpudec_sink_event));
-
-	gst_pad_set_event_function(vpu_dec->srcpad,
-				   GST_DEBUG_FUNCPTR
-				   (mfw_gst_vpudec_src_event));
 
 	vpu_dec->rotation_angle = 0;
 	vpu_dec->mirror_dir = MIRDIR_NONE;

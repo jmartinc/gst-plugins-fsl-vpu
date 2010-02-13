@@ -56,7 +56,6 @@ typedef struct _MfwGstVPU_Dec {
 	GstPad *srcpad;		/* source and sink pad of element */
 	GstElementClass *parent_class;
 	gboolean init;		/* initialisation flag */
-	gboolean vpu_opened;
 	guint outsize;		/* size of the output image */
 
 	gint codec;		/* codec standard to be selected */
