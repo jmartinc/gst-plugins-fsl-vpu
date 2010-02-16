@@ -63,10 +63,6 @@
 
 #define DEFAULT_DBK_OFFSET_VALUE    5
 
-/*======================================================================================
-                          STATIC TYPEDEFS (STRUCTURES, UNIONS, ENUMS)
-=======================================================================================*/
-
 enum {
 	MFW_GST_VPU_PROP_0,
 	MFW_GST_VPU_CODEC_TYPE,
@@ -93,32 +89,8 @@ GST_STATIC_PAD_TEMPLATE("sink",
 			GST_PAD_ALWAYS,
 			GST_STATIC_CAPS(MFW_GST_VPUDEC_VIDEO_CAPS));
 
-/* table with framerates expressed as fractions */
-static const gint fpss[][2] = {
-	{24000, 1001},
-	{24, 1},
-	{25, 1},
-	{30000, 1001},
-	{30, 1},
-	{50, 1},
-	{60000, 1001},
-	{60, 1},
-	{0, 1},
-};
-
-/*======================================================================================
-                                        LOCAL MACROS
-=======================================================================================*/
 
 #define	GST_CAT_DEFAULT	mfw_gst_vpudec_debug
-
-/*======================================================================================
-                                      STATIC VARIABLES
-=======================================================================================*/
-
-/*======================================================================================
-                                 STATIC FUNCTION PROTOTYPES
-=======================================================================================*/
 
 GST_DEBUG_CATEGORY_STATIC(mfw_gst_vpudec_debug);
 
@@ -134,42 +106,6 @@ static void mfw_gst_vpudec_get_property(GObject *, guint, GValue *,
 					GParamSpec *);
 static gboolean mfw_gst_vpudec_sink_event(GstPad *, GstEvent *);
 static gboolean mfw_gst_vpudec_setcaps(GstPad *, GstCaps *);
-/*======================================================================================
-                                     GLOBAL VARIABLES
-=======================================================================================*/
-/*======================================================================================
-                                     LOCAL FUNCTIONS
-=======================================================================================*/
-
-/* helper function for float comparison with 0.00001 precision */
-#define FLOAT_MATCH 1
-#define FLOAT_UNMATCH 0
-static inline guint
-g_compare_float(const gfloat a, const gfloat b)
-{
-	const gfloat precision = 0.00001;
-	if (((a - precision) < b) && (a + precision) > b)
-		return FLOAT_MATCH;
-	else
-		return FLOAT_UNMATCH;
-}
-
-/*=============================================================================
-FUNCTION:           mfw_gst_vpudec_set_property
-
-DESCRIPTION:        Sets the property of the element
-
-ARGUMENTS PASSED:
-        object     - pointer to the elements object
-        prop_id    - ID of the property;
-        value      - value of the property set by the application
-        pspec      - pointer to the attributes of the property
-
-RETURN VALUE:       None
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=============================================================================*/
 
 static void
 mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
@@ -215,30 +151,13 @@ mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
 			break;
 		}
 		break;
-
-	default:		// else rotation will fall through with invalid parameter
+	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
 	}
 	return;
 }
 
-/*=============================================================================
-FUNCTION:           mfw_gst_vpudec_set_property
-
-DESCRIPTION:        Gets the property of the element
-
-ARGUMENTS PASSED:
-        object     - pointer to the elements object
-        prop_id    - ID of the property;
-        value      - value of the property set by the application
-        pspec      - pointer to the attributes of the property
-
-RETURN VALUE:       None
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-=============================================================================*/
 static void
 mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 			    GValue * value, GParamSpec * pspec)
@@ -328,15 +247,17 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_G_FMT, &fmt);
 	if (retval) {
-		printf("VIDIOC_G_FMT failed\n");
+		GST_ERROR("VIDIOC_G_FMT failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
 
-	printf("format: %d x %x\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
+	GST_DEBUG("format: %d x %x\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
 
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
-	if (retval)
-		printf("VIDIOC_REQBUFS failed\n");
+	if (retval) {
+		GST_ERROR("VIDIOC_REQBUFS failed: %s\n", strerror(errno));
+		return GST_FLOW_ERROR;
+	}
 
 	for (i = 0; i < NUM_BUFFERS; i++) {
 		struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
@@ -346,7 +267,8 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, buf);
 		if (retval) {
-		    	printf("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
+			GST_ERROR("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
+			return GST_FLOW_ERROR;
 		}
 		vpu_dec->buf_size[i] = buf->length;
 		vpu_dec->buf_data[i] = mmap(NULL, buf->length,
@@ -356,8 +278,10 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	for (i = 0; i < NUM_BUFFERS; ++i){
 		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[i]);
-		if (retval)
-		    	printf("VIDIOC_QBUF failed: %s\n", strerror(errno));
+		if (retval) {
+			GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
+			return GST_FLOW_ERROR;
+		}
 	}
 
 	gint fourcc = GST_STR_FOURCC("I420");
@@ -374,15 +298,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	orgPicH = vpu_dec->picHeight;
 	vpu_dec->picWidth = (vpu_dec->picWidth + 15) / 16 * 16;
 	vpu_dec->picHeight = (vpu_dec->picHeight + 15) / 16 * 16;
-#if 0
-	if (vpu_dec->codec == STD_AVC && (vpu_dec->initialInfo->picCropRect.right > 0
-			&& vpu_dec->initialInfo->picCropRect.bottom > 0)) {
-		crop_top_len = vpu_dec->initialInfo->picCropRect.top;
-		crop_left_len = vpu_dec->initialInfo->picCropRect.left;
-		crop_right_len = vpu_dec->initialInfo->picWidth - vpu_dec->initialInfo->picCropRect.right;
-		crop_bottom_len = vpu_dec->initialInfo->picHeight - vpu_dec->initialInfo->picCropRect.bottom;
-	} else {
-#endif
+
 	crop_top_len = 0;
 	crop_left_len = 0;
 	crop_right_len = vpu_dec->picWidth - orgPicW;
@@ -426,10 +342,10 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 static int vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 {
 	GstBuffer *pushbuff;
+	int retval;
 	struct v4l2_buffer v4l2_buf = {
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	};
-	int retval;
 
 	if (vpu_dec->flush == TRUE)
 		goto done;
@@ -446,7 +362,7 @@ static int vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 					      GST_PAD_CAPS(vpu_dec->srcpad),
 					      &pushbuff);
 	if (retval != GST_FLOW_OK) {
-		GST_ERROR("Error in allocating the Framebuffer[%d] 2, error is %d",
+		GST_ERROR("Allocating the Framebuffer[%d] failed with %d",
 		     0, retval);
 		goto done;
 	}
@@ -454,17 +370,16 @@ static int vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 	memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &v4l2_buf);
 
-	// Update the time stamp base on the frame-rate
+	/* Update the time stamp based on the frame-rate */
 	GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
 	GST_BUFFER_TIMESTAMP(pushbuff) = GST_TIMEVAL_TO_TIME(v4l2_buf.timestamp);
-//	GST_BUFFER_DURATION(pushbuff) = GST_BUFFER_DURATION(buffer);
 
 	vpu_dec->decoded_frames++;
 
 	GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
 	retval = gst_pad_push(vpu_dec->srcpad, pushbuff);
 	if (retval != GST_FLOW_OK) {
-		GST_ERROR("Error in Pushing the Output onto the Source Pad,error is %d", retval);
+		GST_ERROR("Pushing the Output onto the Source Pad failed with %d", retval);
 	}
 	retval = GST_FLOW_OK;
 done:
@@ -474,7 +389,6 @@ done:
 static GstFlowReturn
 mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 {
-
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	int ret = 0;
 	GstFlowReturn retval = GST_FLOW_OK;
@@ -482,11 +396,12 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 	struct pollfd pollfd;
 
 	if (G_UNLIKELY(buffer == NULL)) {
-		/* now end of stream */
+		/* EOS */
+		printf("EEEEEEEEEEEEEEEEEOOOOOOOOOOOs\n");
 		vpu_dec->eos = TRUE;
 		ret = write(vpu_dec->vpu_fd, NULL, 0);
 		if (ret) {
-			GST_ERROR("vpu_DecUpdateBitstreamBuffer failed. Error code is %d", ret);
+			GST_ERROR("write failed: %s\n", strerror(errno));
 			return GST_FLOW_ERROR;
 		}
 	}
@@ -507,17 +422,25 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 
 	while (!handled) {
 		ret = poll(&pollfd, 1, -1);
-		if (ret < 0)
-			return GST_FLOW_ERROR;
+		if (ret < 0) {
+			retval = GST_FLOW_ERROR;
+			goto done;
+		}
 
-		if (pollfd.revents & POLLERR)
+		if (pollfd.revents & POLLERR) {
 			printf("POLLERR\n");
+			retval = GST_FLOW_ERROR;
+			goto done;
+		}
 
 		if (pollfd.revents & POLLOUT) {
 			ret = write(vpu_dec->vpu_fd, GST_BUFFER_DATA(buffer) + ofs,
 					remaining);
-			if (ret == -1)
-				return GST_FLOW_ERROR;
+			if (ret == -1) {
+				retval = GST_FLOW_ERROR;
+				goto done;
+			}
+
 			remaining -= ret;
 			ofs += ret;
 
@@ -662,7 +585,7 @@ static GstPadTemplate *src_templ(void)
 	static GstPadTemplate *templ = NULL;
 	GstCaps *caps;
 	GstStructure *structure;
-	GValue list = { 0 }, fps = {0}, fmt = {0};
+	GValue list = { 0 }, fmt = {0};
 
 	char *fmts[] = { "YV12", "I420", "Y42B", "NV12", NULL };
 	guint n;
@@ -671,19 +594,12 @@ static GstPadTemplate *src_templ(void)
 				   GST_MAKE_FOURCC('I', '4', '2', '0'),
 				   "width", GST_TYPE_INT_RANGE, 16, 4096,
 				   "height", GST_TYPE_INT_RANGE, 16, 4096,
+				   "framerate", GST_TYPE_FRACTION_RANGE, 1, G_MAXINT, G_MAXINT, 1,
 				   NULL);
 
 	structure = gst_caps_get_structure(caps, 0);
 
 	g_value_init(&list, GST_TYPE_LIST);
-	g_value_init(&fps, GST_TYPE_FRACTION);
-	for (n = 0; fpss[n][0] != 0; n++) {
-		gst_value_set_fraction(&fps, fpss[n][0], fpss[n][1]);
-		gst_value_list_append_value(&list, &fps);
-	}
-	gst_structure_set_value(structure, "framerate", &list);
-	g_value_unset(&list);
-	g_value_unset(&fps);
 
 	g_value_init(&list, GST_TYPE_LIST);
 	g_value_init(&fmt, GST_TYPE_FOURCC);
@@ -897,21 +813,6 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 
 }
 
-/*======================================================================================
-FUNCTION:           mfw_gst_type_vpu_dec_get_type
-
-DESCRIPTION:        Interfaces are initiated in this function.you can register one
-                    or more interfaces after having registered the type itself.
-
-ARGUMENTS PASSED:   None
-
-RETURN VALUE:       A numerical value ,which represents the unique identifier
-                    of this element.
-
-PRE-CONDITIONS:     None
-POST-CONDITIONS:    None
-IMPORTANT NOTES:    None
-========================================================================================*/
 GType
 mfw_gst_type_vpu_dec_get_type(void)
 {
