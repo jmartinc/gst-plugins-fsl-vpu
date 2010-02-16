@@ -74,7 +74,6 @@ typedef struct _MfwGstVPU_Enc
 	guint8*		header[NUM_INPUT_BUF];
 	guint		headersize[NUM_INPUT_BUF];
 	gint		headercount;
-	gboolean	directrender;
 	gint		frameIdx;
 	FrameBuffer	frameBuf[NUM_INPUT_BUF];
 	FRAME_BUF	FrameBufPool[NUM_INPUT_BUF];
@@ -272,11 +271,9 @@ static void mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
 	int ret = 0;
 	GST_DEBUG("mfw_gst_vpuenc_cleanup");
 
-	if (vpu_enc->directrender == FALSE) {
-		for (i = 0; i < NUM_INPUT_BUF; i++) {
-			IOFreeVirtMem(&(vpu_enc->FrameBufPool[i].CurrImage));
-			IOFreePhyMem(&(vpu_enc->FrameBufPool[i].CurrImage));
-		}
+	for (i = 0; i < NUM_INPUT_BUF; i++) {
+		IOFreeVirtMem(&(vpu_enc->FrameBufPool[i].CurrImage));
+		IOFreePhyMem(&(vpu_enc->FrameBufPool[i].CurrImage));
 	}
 
 	if (vpu_enc->handle > 0) {
@@ -428,25 +425,6 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstCaps *caps = NULL;;
 
-	/* store the physical addresses of the buffers used by the source
-	   to register them in the encoder */
-	if (GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_LAST)) {
-
-		i = vpu_enc->numframebufs;
-
-		vpu_enc->frameBuf[i].bufY = GST_BUFFER_OFFSET(buffer);
-		vpu_enc->frameBuf[i].bufCb = GST_BUFFER_OFFSET(buffer) +
-				(vpu_enc->width * vpu_enc->height);
-		vpu_enc->frameBuf[i].bufCr = vpu_enc->frameBuf[i].bufCb +
-				(vpu_enc->width * vpu_enc->height) / 4;
-
-		vpu_enc->directrender = TRUE;
-		vpu_enc->numframebufs++;
-
-		if (vpu_enc->numframebufs < NUM_INPUT_BUF)
-			return GST_FLOW_OK;
-	}
-
 	if (!vpu_enc->codecTypeProvided) {
 		GST_ERROR("Incomplete command line.\n");
 		GError *error = NULL;
@@ -507,31 +485,29 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 
 	/* allocate the frame buffers if the buffers cannot be shared with the
 	   source element */
-	if (vpu_enc->directrender == FALSE) {
-		ret = mfw_gst_vpuenc_FrameBuffer_alloc(vpu_enc->width,
-						       vpu_enc->height,
-						       vpu_enc->
-						       FrameBufPool,
-						       NUM_INPUT_BUF);
+	ret = mfw_gst_vpuenc_FrameBuffer_alloc(vpu_enc->width,
+					       vpu_enc->height,
+					       vpu_enc->
+					       FrameBufPool,
+					       NUM_INPUT_BUF);
 
-		if (ret < 0) {
-			GError *error = NULL;
-			GQuark domain;
-			domain = g_quark_from_string("mfw_vpuencoder");
-			error = g_error_new(domain, 10, "fatal error");
-			gst_element_post_message(GST_ELEMENT(vpu_enc),
-						 gst_message_new_error
-						 (GST_OBJECT(vpu_enc),
-						  error,
-						  "Allocation for frame buffers failed "));
-			return GST_FLOW_ERROR;
-		}
-		for (i = 0; i < NUM_INPUT_BUF; ++i) {
-			pFrame[i] = &vpu_enc->FrameBufPool[i];
-			vpu_enc->frameBuf[i].bufY = pFrame[i]->AddrY;
-			vpu_enc->frameBuf[i].bufCb = pFrame[i]->AddrCb;
-			vpu_enc->frameBuf[i].bufCr = pFrame[i]->AddrCr;
-		}
+	if (ret < 0) {
+		GError *error = NULL;
+		GQuark domain;
+		domain = g_quark_from_string("mfw_vpuencoder");
+		error = g_error_new(domain, 10, "fatal error");
+		gst_element_post_message(GST_ELEMENT(vpu_enc),
+					 gst_message_new_error
+					 (GST_OBJECT(vpu_enc),
+					  error,
+					  "Allocation for frame buffers failed "));
+		return GST_FLOW_ERROR;
+	}
+	for (i = 0; i < NUM_INPUT_BUF; ++i) {
+		pFrame[i] = &vpu_enc->FrameBufPool[i];
+		vpu_enc->frameBuf[i].bufY = pFrame[i]->AddrY;
+		vpu_enc->frameBuf[i].bufCb = pFrame[i]->AddrCb;
+		vpu_enc->frameBuf[i].bufCr = pFrame[i]->AddrCr;
 	}
 
 	/* register the framebuffers with the encoder */
@@ -611,35 +587,15 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 			return retval;
 
 		vpu_enc->init = TRUE;
-
-		if (vpu_enc->directrender)
-			return GST_FLOW_OK;
 	}
 
-	if (vpu_enc->directrender == FALSE) {
-
-		/* copy the input Frame into the allocated buffer */
-		i = vpu_enc->numframebufs;
-		vpu_enc->encParam->sourceFrame = &vpu_enc->frameBuf[i];
-		memcpy((guint8 *) vpu_enc->FrameBufPool[i].CurrImage.virt_uaddr,
-		       GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-		vpu_enc->numframebufs = (vpu_enc->numframebufs + 1) % 3;
-		gst_buffer_unref(buffer);
-	} else {
-
-		/* search the exact Frame buffer in which the incoming frame is
-		   present */
-		for (i = 0; i < NUM_INPUT_BUF; i++) {
-			if (vpu_enc->frameBuf[i].bufY ==
-			    GST_BUFFER_OFFSET(buffer))
-				break;
-		}
-		if (i == NUM_INPUT_BUF) {
-			GST_ERROR("vpuenc:could not find the right frame\n");
-			return GST_FLOW_ERROR;
-		}
-		vpu_enc->encParam->sourceFrame = &vpu_enc->frameBuf[i];
-	}
+	/* copy the input Frame into the allocated buffer */
+	i = vpu_enc->numframebufs;
+	vpu_enc->encParam->sourceFrame = &vpu_enc->frameBuf[i];
+	memcpy((guint8 *) vpu_enc->FrameBufPool[i].CurrImage.virt_uaddr,
+	       GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+	vpu_enc->numframebufs = (vpu_enc->numframebufs + 1) % 3;
+	gst_buffer_unref(buffer);
 
 	/* Wait for the VPU to complete the Processing */
 	if (vpu_enc->wait == TRUE) {
