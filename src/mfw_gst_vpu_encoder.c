@@ -1,5 +1,8 @@
 /*
  * Copyright 2005-2007 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Module Name:            mfw_gst_vpu_encoder.c
+ *
+ * General Description:    Implementation of Hardware (VPU) Encoder Plugin for Gstreamer.
  */
 
 /*
@@ -19,23 +22,11 @@
  * Boston, MA 02111-1307, USA.
  */
 
-/*======================================================================================
-
-    Module Name:            mfw_gst_vpu_encoder.c
-
-    General Description:    Implementation of Hardware (VPU) Encoder Plugin for Gstreamer.
-
-========================================================================================
-Portability:    compatable with Linux OS and Gstreamer 10.11 and below
-
-========================================================================================
-                            INCLUDE FILES
-=======================================================================================*/
 #include <gst/gst.h>
 #include <string.h>
-#include <fcntl.h>		/* fcntl */
-#include <sys/mman.h>		/* mmap */
-#include <sys/ioctl.h>		/* fopen/fread */
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
 #include <gst-plugins-fsl_config.h>
 #include "vpu_io.h"
 #include "vpu_lib.h"
@@ -92,10 +83,6 @@ typedef struct _MfwGstVPU_Enc
 	gboolean 	codecTypeProvided; 	/* Set when the user provides the compression format on the command line */
 }MfwGstVPU_Enc;
 
-/*======================================================================================
-                                     LOCAL CONSTANTS
-=======================================================================================*/
-
 /*maximum limit of the output buffer */
 #define BUFF_FILL_SIZE (200 * 1024)
 
@@ -125,10 +112,6 @@ to be chnaged for other platforms */
 /* 	Chroma Subsampling ratio - assuming 4:2:0. */
 /*	Not providing ability to set this on the command line because I'm not sure if VPU supports 4:2:2 - r58604 */
 #define CHROMA_SAMPLING_MULTIPLE	1.5
-
-/*======================================================================================
-                          STATIC TYPEDEFS (STRUCTURES, UNIONS, ENUMS)
-=======================================================================================*/
 
 /* properties set on the encoder */
 enum {
@@ -165,52 +148,9 @@ GST_STATIC_PAD_TEMPLATE("sink",
 					"framerate = (fraction) [ 0/1, 60/1 ]")
     );
 
-/*======================================================================================
-                                        LOCAL MACROS
-=======================================================================================*/
-
 #define	GST_CAT_DEFAULT	mfw_gst_vpuenc_debug
 
-/*======================================================================================
-                                      STATIC VARIABLES
-=======================================================================================*/
-
-/*======================================================================================
-                                 STATIC FUNCTION PROTOTYPES
-=======================================================================================*/
-
 GST_DEBUG_CATEGORY_STATIC(mfw_gst_vpuenc_debug);
-
-/*======================================================================================
-                                     GLOBAL VARIABLES
-=======================================================================================*/
-
-/*======================================================================================
-                                     LOCAL FUNCTIONS
-=======================================================================================*/
-
-/*=============================================================================
-FUNCTION: mfw_gst_vpuenc_set_property
-
-DESCRIPTION: sets the property of the element
-
-ARGUMENTS PASSED:
-        object     - pointer to the elements object
-        prop_id    - ID of the property;
-        value      - value of the property set by the application
-        pspec      - pointer to the attributes of the property
-
-RETURN VALUE:
-        None
-
-PRE-CONDITIONS:
-        None
-
-POST-CONDITIONS:
-
-IMPORTANT NOTES:
-        None
-=============================================================================*/
 
 static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 			    const GValue * value, GParamSpec * pspec)
@@ -252,28 +192,6 @@ static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 	return;
 }
 
-/*=============================================================================
-FUNCTION: mfw_gst_vpuenc_set_property
-
-DESCRIPTION: gets the property of the element
-
-ARGUMENTS PASSED:
-        object     - pointer to the elements object
-        prop_id    - ID of the property;
-        value      - value of the property set by the application
-        pspec      - pointer to the attributes of the property
-
-RETURN VALUE:
-        None
-
-PRE-CONDITIONS:
-        None
-
-POST-CONDITIONS:
-
-IMPORTANT NOTES:
-        None
-=============================================================================*/
 static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 			    GValue * value, GParamSpec * pspec)
 {
@@ -309,31 +227,6 @@ static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 
 }
 
-/*=============================================================================
-FUNCTION:       mfw_gst_vpuenc_FrameBuffer_alloc
-
-DESCRIPTION:    Allocates the Framebuffers required to store the
-                input frames for the encoder.
-
-ARGUMENTS PASSED:
-        strideY         - width of the image
-        height          - height of the image.
-        FrameBuf        - pointer to structure used for allocating the
-                          frame buffers.
-        FrameNumber     - Number of Frame Buffers to be allocated.
-
-RETURN VALUE:
-        0               - Succesful Allocation
-       -1               - Error in Allocation.
-
-PRE-CONDITIONS:
-        None
-
-POST-CONDITIONS:
-
-IMPORTANT NOTES:
-        None
-=============================================================================*/
 static int mfw_gst_vpuenc_FrameBuffer_alloc(int strideY, int height,
 				 FRAME_BUF * FrameBuf, int FrameNumber)
 {
@@ -370,26 +263,6 @@ static int mfw_gst_vpuenc_FrameBuffer_alloc(int strideY, int height,
 	}
 	return 0;
 }
-
-/*=============================================================================
-FUNCTION:       mfw_gst_vpuenc_cleanup
-
-DESCRIPTION:    Closes the Encoder and frees all the memory allocated
-
-ARGUMENTS PASSED:
-        vpu_enc         - Plug-in context.
-
-RETURN VALUE:
-       None
-
-PRE-CONDITIONS:
-        None
-
-POST-CONDITIONS:
-
-IMPORTANT NOTES:
-        None
-=============================================================================*/
 
 static void mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
 {
@@ -443,27 +316,6 @@ static void mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
 	IOFreeVirtMem(&(vpu_enc->bit_stream_buf));
 
 }
-
-/*=============================================================================
-FUNCTION:       mfw_gst_encoder_fill_headers
-
-DESCRIPTION:    Writes the Headers incase of MPEG4 and H.264 before encoding the
-                Frame.
-
-ARGUMENTS PASSED:
-        vpu_enc         - Plug-in context.
-
-RETURN VALUE:
-       None
-
-PRE-CONDITIONS:
-        None
-
-POST-CONDITIONS:
-
-IMPORTANT NOTES:
-        None
-=============================================================================*/
 
 static int mfw_gst_encoder_fill_headers(MfwGstVPU_Enc * vpu_enc)
 {
@@ -738,30 +590,6 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 	return GST_FLOW_OK;
 }
 
-/*======================================================================================
-
-FUNCTION:          mfw_gst_vpuenc_chain
-
-DESCRIPTION:       The main processing function where the data comes in as buffer. This
-                    data is encoded, and then pushed onto the next element for further
-                    processing.
-
-ARGUMENTS PASSED:  pad - pointer to the sinkpad of this element
-                   buffer - pointer to the input buffer which has the H.264 data.
-
-RETURN VALUE:
-                    GstFlowReturn - Success of Failure.
-
-PRE-CONDITIONS:
-                    None
-
-POST-CONDITIONS:
-                    None
-
-IMPORTANT NOTES:
-                    None
-
-=======================================================================================*/
 static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 {
 	MfwGstVPU_Enc *vpu_enc = NULL;
@@ -876,34 +704,6 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	vpu_enc->wait = TRUE;
 	return retval;
 }
-
-/*======================================================================================
-
-FUNCTION:       mfw_gst_vpuenc_change_state
-
-DESCRIPTION:    This function keeps track of different states of pipeline.
-
-ARGUMENTS PASSED:
-                element     -   pointer to element
-                transition  -   state of the pipeline
-
-RETURN VALUE:
-                GST_STATE_CHANGE_FAILURE    - the state change failed
-                GST_STATE_CHANGE_SUCCESS    - the state change succeeded
-                GST_STATE_CHANGE_ASYNC      - the state change will happen
-                                                asynchronously
-                GST_STATE_CHANGE_NO_PREROLL - the state change cannot be prerolled
-
-PRE-CONDITIONS:
-                None
-
-POST-CONDITIONS:
-                None
-
-IMPORTANT NOTES:
-                None
-
-=======================================================================================*/
 
 static GstStateChangeReturn mfw_gst_vpuenc_change_state
     (GstElement * element, GstStateChange transition)
@@ -1050,30 +850,6 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 
 }
 
-/*==================================================================================================
-
-FUNCTION:       mfw_gst_vpuenc_sink_event
-
-DESCRIPTION:    send an event to sink  pad of mp3decoder element
-
-ARGUMENTS PASSED:
-        pad        -    pointer to pad
-        event      -    pointer to event
-RETURN VALUE:
-        TRUE       -    event is handled properly
-        FALSE      -	event is not handled properly
-
-PRE-CONDITIONS:
-        None
-
-POST-CONDITIONS:
-        None
-
-IMPORTANT NOTES:
-        None
-
-==================================================================================================*/
-
 static gboolean mfw_gst_vpuenc_sink_event(GstPad * pad, GstEvent * event)
 {
 	MfwGstVPU_Enc *vpu_enc = NULL;
@@ -1113,31 +889,6 @@ static gboolean mfw_gst_vpuenc_sink_event(GstPad * pad, GstEvent * event)
 	return ret;
 }
 
-/*======================================================================================
-
-FUNCTION:       mfw_gst_vpuenc_setcaps
-
-DESCRIPTION:    this function negoatiates the caps set on the sink pad
-
-ARGUMENTS PASSED:
-                pad     -   pointer to the sinkpad of this element
-                caps  -     pointer to the caps set
-
-RETURN VALUE:
-               TRUE         negotiation success full
-               FALSE        negotiation Failed
-
-PRE-CONDITIONS:
-                None
-
-POST-CONDITIONS:
-                None
-
-IMPORTANT NOTES:
-                None
-
-=======================================================================================*/
-
 static gboolean mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 {
 	MfwGstVPU_Enc *vpu_enc = NULL;
@@ -1171,29 +922,6 @@ static gboolean mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 
 }
 
-/*======================================================================================
-
-FUNCTION:          mfw_gst_vpuenc_base_init
-
-DESCRIPTION:       Element details are registered with the plugin during
-                   _base_init ,This function will initialise the class and child
-                   class properties during each new child class creation
-
-ARGUMENTS PASSED:  klass - void pointer
-
-RETURN VALUE:
-                    None
-
-PRE-CONDITIONS:
-                    None
-
-POST-CONDITIONS:
-                    None
-
-IMPORTANT NOTES:
-                    None
-
-=======================================================================================*/
 static void mfw_gst_vpuenc_base_init(MfwGstVPU_EncClass * klass)
 {
 
@@ -1211,30 +939,6 @@ static void mfw_gst_vpuenc_base_init(MfwGstVPU_EncClass * klass)
 
 }
 
-/*======================================================================================
-
-FUNCTION:       mfw_gst_vpuenc_codec_get_type
-
-DESCRIPTION:    Gets an enumeration for the different
-                codec standars supported by the encoder
-ARGUMENTS PASSED:
-                None
-
-RETURN VALUE:
-                enumerated type of the codec standatds
-                supported by the encoder
-
-PRE-CONDITIONS:
-                None
-
-POST-CONDITIONS:
-                None
-
-IMPORTANT NOTES:
-                None
-
-========================================================================================*/
-
 GType mfw_gst_vpuenc_codec_get_type(void)
 {
 	static GType vpuenc_codec_type = 0;
@@ -1250,31 +954,6 @@ GType mfw_gst_vpuenc_codec_get_type(void)
 	}
 	return vpuenc_codec_type;
 }
-
-/*======================================================================================
-
-FUNCTION:       mfw_gst_vpuenc_class_init
-
-DESCRIPTION:    Initialise the class.(specifying what signals,
-                 arguments and virtual functions the class has and setting up
-                 global states)
-
-ARGUMENTS PASSED:
-                klass - pointer to H.264Encoder element class
-
-RETURN VALUE:
-                None
-
-PRE-CONDITIONS:
-                None
-
-POST-CONDITIONS:
-                None
-
-IMPORTANT NOTES:
-                None
-
-=======================================================================================*/
 
 static void
 mfw_gst_vpuenc_class_init(MfwGstVPU_EncClass * klass)
@@ -1326,29 +1005,6 @@ mfw_gst_vpuenc_class_init(MfwGstVPU_EncClass * klass)
 
 }
 
-/*======================================================================================
-FUNCTION:       mfw_gst_vpuenc_init
-
-DESCRIPTION:    create the pad template that has been registered with the
-                element class in the _base_init
-
-ARGUMENTS PASSED:
-                vpu_enc -    pointer to vpu_encoder element structure
-
-RETURN VALUE:
-                None
-
-PRE-CONDITIONS:
-                None
-
-POST-CONDITIONS:
-                None
-
-IMPORTANT NOTES:
-                None
-
-=======================================================================================*/
-
 static void
 mfw_gst_vpuenc_init(MfwGstVPU_Enc * vpu_enc, MfwGstVPU_EncClass * gclass)
 {
@@ -1381,30 +1037,6 @@ mfw_gst_vpuenc_init(MfwGstVPU_Enc * vpu_enc, MfwGstVPU_EncClass * gclass)
 	vpu_enc->codecTypeProvided = FALSE;
 }
 
-/*======================================================================================
-
-FUNCTION:       mfw_gst_type_vpu_enc_get_type
-
-DESCRIPTION:    Intefaces are initiated in this function.you can register one
-                or more interfaces after having registered the type itself.
-
-ARGUMENTS PASSED:
-                None
-
-RETURN VALUE:
-                A numerical value ,which represents the unique identifier of this
-                elment.
-
-PRE-CONDITIONS:
-                None
-
-POST-CONDITIONS:
-                None
-
-IMPORTANT NOTES:
-                None
-
-========================================================================================*/
 GType mfw_gst_type_vpu_enc_get_type(void)
 {
 	static GType vpu_enc_type = 0;
