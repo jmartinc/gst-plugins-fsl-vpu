@@ -25,9 +25,12 @@
 #include <gst/gst.h>
 #include <string.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <gst-plugins-fsl_config.h>
+#include <linux/videodev2.h>
+
 #include "vpu_io.h"
 #include "vpu_lib.h"
 #include "mfw_gst_vpu_encoder.h"
@@ -45,6 +48,8 @@ typedef struct {
 	gint DispCr;
 	vpu_mem_desc CurrImage;	/* Current memory descriptor for user space */
 } FRAME_BUF;
+
+#define NUM_BUFFERS 3
 
 typedef struct _MfwGstVPU_Enc
 {
@@ -80,7 +85,14 @@ typedef struct _MfwGstVPU_Enc
 	gint		bitrate;
 	gint		gopsize;
 	gboolean 	codecTypeProvided; 	/* Set when the user provides the compression format on the command line */
+	int vpu_fd;
+	struct v4l2_buffer buf_v4l2[NUM_BUFFERS];
+	unsigned char *buf_data[NUM_BUFFERS];
+	unsigned int buf_size[NUM_BUFFERS];
+	unsigned int queued;
 }MfwGstVPU_Enc;
+
+#define VPU_DEVICE "/dev/video0"
 
 /*maximum limit of the output buffer */
 #define BUFF_FILL_SIZE (200 * 1024)
@@ -155,7 +167,7 @@ static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 			    const GValue * value, GParamSpec * pspec)
 {
 	GST_DEBUG("mfw_gst_vpuenc_set_property");
-
+printf("%s\n", __func__);
 	MfwGstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
 	switch (prop_id) {
 	case MFW_GST_VPU_PROF_ENABLE:
@@ -194,7 +206,7 @@ static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 			    GValue * value, GParamSpec * pspec)
 {
-
+printf("%s\n", __func__);
 	GST_DEBUG("mfw_gst_vpuenc_get_property");
 	MfwGstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
 	switch (prop_id) {
@@ -226,98 +238,10 @@ static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 
 }
 
-static int mfw_gst_vpuenc_FrameBuffer_alloc(int strideY, int height,
-				 FRAME_BUF * FrameBuf, int FrameNumber)
-{
-	int i;
-
-	for (i = 0; i < FrameNumber; i++) {
-		memset(&(FrameBuf[i].CurrImage), 0, sizeof (vpu_mem_desc));
-		FrameBuf[i].CurrImage.size =
-		    (strideY * height * CHROMA_SAMPLING_MULTIPLE);
-
-		IOGetPhyMem(&(FrameBuf[i].CurrImage));
-
-		if (FrameBuf[i].CurrImage.phy_addr == 0) {
-			int j;
-			for (j = 0; j < i; j++) {
-				IOFreeVirtMem(&(FrameBuf[j].CurrImage));
-				IOFreePhyMem(&(FrameBuf[j].CurrImage));
-			}
-			GST_ERROR("Not enough mem for framebuffer!\n");
-			return -1;
-		}
-		FrameBuf[i].Index = i;
-		FrameBuf[i].AddrY = FrameBuf[i].CurrImage.phy_addr;
-		FrameBuf[i].AddrCb = FrameBuf[i].AddrY + strideY * height;
-		FrameBuf[i].AddrCr =
-		    FrameBuf[i].AddrCb + strideY / 2 * height / 2;
-		FrameBuf[i].StrideY = strideY;
-		FrameBuf[i].StrideC = strideY / 2;
-		FrameBuf[i].DispY = FrameBuf[i].AddrY;
-		FrameBuf[i].DispCb = FrameBuf[i].AddrCb;
-		FrameBuf[i].DispCr = FrameBuf[i].AddrCr;
-		FrameBuf[i].CurrImage.virt_uaddr =
-		    IOGetVirtMem(&(FrameBuf[i].CurrImage));
-	}
-	return 0;
-}
-
-static void mfw_gst_vpuenc_cleanup(MfwGstVPU_Enc * vpu_enc)
-{
-
-	int i = 0;
-	RetCode vpu_ret = RETCODE_SUCCESS;
-	int ret = 0;
-	GST_DEBUG("mfw_gst_vpuenc_cleanup");
-
-	for (i = 0; i < NUM_INPUT_BUF; i++) {
-		IOFreeVirtMem(&(vpu_enc->FrameBufPool[i].CurrImage));
-		IOFreePhyMem(&(vpu_enc->FrameBufPool[i].CurrImage));
-	}
-
-	if (vpu_enc->handle > 0) {
-		vpu_ret = vpu_EncClose(vpu_enc->handle);
-		if (vpu_ret == RETCODE_FRAME_NOT_COMPLETE) {
-			vpu_EncGetOutputInfo(vpu_enc->handle,
-					     vpu_enc->outputInfo);
-			vpu_ret = vpu_EncClose(vpu_enc->handle);
-			if (ret < 0)
-				GST_ERROR("Error in closing the VPU encoder"
-					  ",error is %d\n", vpu_ret);
-		}
-	}
-
-	if (vpu_enc->encOP != NULL)
-		g_free(vpu_enc->encOP);
-	vpu_enc->encOP = NULL;
-
-	if (vpu_enc->initialInfo != NULL)
-		g_free(vpu_enc->initialInfo);
-	vpu_enc->initialInfo = NULL;
-
-	if (vpu_enc->encParam != NULL)
-		g_free(vpu_enc->encParam);
-	vpu_enc->encParam = NULL;
-
-	if (vpu_enc->outputInfo != NULL)
-		g_free(vpu_enc->outputInfo);
-	vpu_enc->outputInfo = NULL;
-
-	for (i = 0; i < vpu_enc->headercount; i++)
-		g_free(vpu_enc->header[i]);
-
-	vpu_enc->headercount = 0;
-
-	IOFreePhyMem(&(vpu_enc->bit_stream_buf));
-	IOFreeVirtMem(&(vpu_enc->bit_stream_buf));
-
-}
-
 static int mfw_gst_encoder_fill_headers(MfwGstVPU_Enc * vpu_enc)
 {
 	EncHeaderParam enchdr_param = { 0 };
-
+printf("%s\n", __func__);
 	guint8 *ptr;
 	/* Must put encode header before encoding */
 	if (vpu_enc->codec == STD_MPEG4) {
@@ -351,9 +275,8 @@ static int mfw_gst_encoder_fill_headers(MfwGstVPU_Enc * vpu_enc)
 			return -1;
 		}
 
-		ptr =
-		    vpu_enc->start_addr + enchdr_param.buf -
-		    vpu_enc->bit_stream_buf.phy_addr;
+		ptr = vpu_enc->start_addr + enchdr_param.buf -
+			vpu_enc->bit_stream_buf.phy_addr;
 		memcpy(vpu_enc->header[1], ptr, enchdr_param.size);
 
 		enchdr_param.headerType = VOL_HEADER;
@@ -415,16 +338,23 @@ static int mfw_gst_encoder_fill_headers(MfwGstVPU_Enc * vpu_enc)
 	return 0;
 }
 
+static struct v4l2_requestbuffers reqs = {
+	.count	= NUM_BUFFERS,
+	.type	= V4L2_BUF_TYPE_VIDEO_OUTPUT,
+	.memory	= V4L2_MEMORY_MMAP,
+};
+
 static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 {
 	MfwGstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
 	gchar *mime = "undef";
-	gint ret, i;
-	EncInitialInfo initialInfo = { 0 };
-	FRAME_BUF *pFrame[NUM_INPUT_BUF] = { 0 };
-	RetCode vpu_ret = RETCODE_SUCCESS;
-	GstCaps *caps = NULL;;
+	gint ret;
+	GstCaps *caps = NULL;
+	struct v4l2_format fmt;
+	int retval, i;
+	unsigned long type = V4L2_MEMORY_MMAP;
 
+printf("%s\n", __func__);
 	if (!vpu_enc->codecTypeProvided) {
 		GST_ERROR("Incomplete command line.\n");
 		GError *error = NULL;
@@ -436,103 +366,53 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 					  "Incomplete command line - codec type was not provided."));
 		return GST_FLOW_ERROR;
 	}
-
-	vpu_enc->encOP->picWidth = vpu_enc->width;
-	vpu_enc->encOP->picHeight = vpu_enc->height;
-
+#if 0
 	/* The Frame Rate Value is set only in case of MPEG4 and H.264
 	   not set for H.263 */
 	if (vpu_enc->encOP->frameRateInfo != 0x3E87530)
 		vpu_enc->encOP->frameRateInfo =
 		    (gint) (vpu_enc->framerate + 0.5);
+#endif
 
-	/* open a VPU's encoder instance */
-	vpu_ret = vpu_EncOpen(&vpu_enc->handle, vpu_enc->encOP);
-	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_EncOpen failed. Error code is %d \n",
-			  vpu_ret);
-		GError *error = NULL;
-		GQuark domain;
-		domain = g_quark_from_string("mfw_vpuencoder");
-		error = g_error_new(domain, 10, "fatal error");
-		gst_element_post_message(GST_ELEMENT(vpu_enc),
-					 gst_message_new_error
-					 (GST_OBJECT(vpu_enc), error,
-					  "vpu_EncOpen failed"));
+//	vpu_enc->encParam->quantParam = 30;
+//	vpu_enc->encParam->forceIPicture = 0;
+//	vpu_enc->encParam->skipPicture = 0;
+
+	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	fmt.fmt.pix.width = vpu_enc->width;
+	fmt.fmt.pix.height = vpu_enc->height;
+	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YVU420;
+
+	retval = ioctl(vpu_enc->vpu_fd, VIDIOC_S_FMT, &fmt);
+	if (retval) {
+		printf("VIDIOC_S_FMT failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
 
-	/* get the minum number of framebuffers to be allocated  */
-	vpu_ret = vpu_EncGetInitialInfo(vpu_enc->handle, &initialInfo);
-	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR
-		    ("vpu_EncGetInitialInfo failed. Error code is %d \n",
-		     vpu_ret);
-		GError *error = NULL;
-		GQuark domain;
-		domain = g_quark_from_string("mfw_vpuencoder");
-		error = g_error_new(domain, 10, "fatal error");
-		gst_element_post_message(GST_ELEMENT(vpu_enc),
-					 gst_message_new_error
-					 (GST_OBJECT(vpu_enc), error,
-					  "vpu_EncGetInitialInfo failed"));
-		return GST_FLOW_ERROR;
-
-	}
-
-	GST_DEBUG("Enc: min buffer count= %d",
-		  initialInfo.minFrameBufferCount);
-
-	/* allocate the frame buffers if the buffers cannot be shared with the
-	   source element */
-	ret = mfw_gst_vpuenc_FrameBuffer_alloc(vpu_enc->width,
-					       vpu_enc->height,
-					       vpu_enc->
-					       FrameBufPool,
-					       NUM_INPUT_BUF);
-
-	if (ret < 0) {
-		GError *error = NULL;
-		GQuark domain;
-		domain = g_quark_from_string("mfw_vpuencoder");
-		error = g_error_new(domain, 10, "fatal error");
-		gst_element_post_message(GST_ELEMENT(vpu_enc),
-					 gst_message_new_error
-					 (GST_OBJECT(vpu_enc),
-					  error,
-					  "Allocation for frame buffers failed "));
-		return GST_FLOW_ERROR;
-	}
-	for (i = 0; i < NUM_INPUT_BUF; ++i) {
-		pFrame[i] = &vpu_enc->FrameBufPool[i];
-		vpu_enc->frameBuf[i].bufY = pFrame[i]->AddrY;
-		vpu_enc->frameBuf[i].bufCb = pFrame[i]->AddrCb;
-		vpu_enc->frameBuf[i].bufCr = pFrame[i]->AddrCr;
-	}
-
-	/* register the framebuffers with the encoder */
-	vpu_ret = vpu_EncRegisterFrameBuffer(vpu_enc->handle,
-					     vpu_enc->frameBuf,
-					     NUM_INPUT_BUF - 1,
-					     vpu_enc->width);
-	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR
-		    ("vpu_EncRegisterFrameBuffer failed.Error code is %d \n",
-		     vpu_ret);
-		GError *error = NULL;
-		GQuark domain;
-		domain = g_quark_from_string("mfw_vpuencoder");
-		error = g_error_new(domain, 10, "fatal error");
-		gst_element_post_message(GST_ELEMENT(vpu_enc),
-					 gst_message_new_error
-					 (GST_OBJECT(vpu_enc), error,
-					  "vpu_EncRegisterFrameBuffer failed "));
+	retval = ioctl(vpu_enc->vpu_fd, VIDIOC_REQBUFS, &reqs);
+	if (retval) {
+		printf("VIDIOC_REQBUFS failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
 
-	vpu_enc->encParam->quantParam = 30;
-	vpu_enc->encParam->forceIPicture = 0;
-	vpu_enc->encParam->skipPicture = 0;
+	for (i = 0; i < NUM_BUFFERS; i++) {
+		struct v4l2_buffer *buf = &vpu_enc->buf_v4l2[i];
+		buf->type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+		buf->memory = V4L2_MEMORY_MMAP;
+		buf->index = i;
+
+		retval = ioctl(vpu_enc->vpu_fd, VIDIOC_QUERYBUF, buf);
+		if (retval) {
+			GST_ERROR("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
+			return GST_FLOW_ERROR;
+		}
+		vpu_enc->buf_size[i] = buf->length;
+		vpu_enc->buf_data[i] = mmap(NULL, buf->length,
+				   PROT_READ | PROT_WRITE, MAP_SHARED,
+				   vpu_enc->vpu_fd, vpu_enc->buf_v4l2[i].m.offset);
+	}
+
+	if (0) {
 	ret = mfw_gst_encoder_fill_headers(vpu_enc);
 	if (ret < 0) {
 		GError *error = NULL;
@@ -544,6 +424,7 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 					 (GST_OBJECT(vpu_enc), error,
 					  "Allocation for Headers failed "));
 		return GST_FLOW_ERROR;
+	}
 	}
 
 	if (vpu_enc->codec == STD_MPEG4)
@@ -563,58 +444,68 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 
 	gst_pad_set_caps(vpu_enc->srcpad, caps);
 
+	retval = ioctl(vpu_enc->vpu_fd, VIDIOC_STREAMON, &type);
+	if (retval) {
+		printf("streamon failed with %d", retval);
+		return GST_FLOW_ERROR;
+	}
+
+	vpu_enc->init = TRUE;
+
 	return GST_FLOW_OK;
 }
 
 static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 {
 	MfwGstVPU_Enc *vpu_enc = NULL;
-	RetCode vpu_ret = RETCODE_SUCCESS;
+//	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFlowReturn retval = GST_FLOW_OK;
-	GstCaps *src_caps = NULL;;
-	GstBuffer *outbuffer = NULL;
+//	GstCaps *src_caps = NULL;;
+//	GstBuffer *outbuffer = NULL;
 	gint i = 0;
-	gint totalsize = 0;
-	gint offset = 0;
+//	gint totalsize = 0;
+//	gint offset = 0;
+//	int handled = 0;
+	int ret;
+	struct pollfd pollfd;
 
 	GST_DEBUG("mfw_gst_vpuenc_chain");
 
 	vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
+printf("%s: %dx%d\n", __func__, vpu_enc->width, vpu_enc->height);
 
 	if (vpu_enc->init == FALSE) {
 		retval = mfw_gst_vpuenc_init_encoder(pad, buffer);
 		if (retval != GST_FLOW_OK)
 			return retval;
+		printf("VPU ENC initialised\n");
+	}
 
-		vpu_enc->init = TRUE;
+	for (i = 0; i < NUM_BUFFERS; i++) {
+		if (!(vpu_enc->queued & (1 << i)))
+			break;
+	}
+
+	if (i == NUM_BUFFERS) {
+		printf("NO BUFFER AVAILABLE\n");
+		return GST_FLOW_ERROR;
 	}
 
 	/* copy the input Frame into the allocated buffer */
-	i = vpu_enc->numframebufs;
-	vpu_enc->encParam->sourceFrame = &vpu_enc->frameBuf[i];
-	memcpy((guint8 *) vpu_enc->FrameBufPool[i].CurrImage.virt_uaddr,
-	       GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-	vpu_enc->numframebufs = (vpu_enc->numframebufs + 1) % 3;
+	memcpy(vpu_enc->buf_data[i], GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
 	gst_buffer_unref(buffer);
 
-	/* Wait for the VPU to complete the Processing */
-	if (vpu_enc->wait == TRUE) {
-		while (vpu_IsBusy());
+	pollfd.fd = vpu_enc->vpu_fd;
+	pollfd.events = POLLIN | POLLOUT;
 
-		vpu_ret = vpu_EncGetOutputInfo(vpu_enc->handle,
-					       vpu_enc->outputInfo);
-		if (vpu_ret != RETCODE_SUCCESS) {
-			GST_ERROR
-			    ("vpu_EncGetOutputInfo failed. Error code is %d \n",
-			     vpu_ret);
-			return GST_FLOW_ERROR;
-		}
+	vpu_enc->queued |= 1 << i;
+	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_QBUF, &vpu_enc->buf_v4l2[i]);
+	if (ret) {
+		GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
+		return GST_FLOW_ERROR;
+	}
 
-		src_caps = GST_PAD_CAPS(vpu_enc->srcpad);
-
-		for (i = 0; i < vpu_enc->headercount; i++)
-			totalsize += vpu_enc->headersize[i];
-
+#if 0
 		retval = gst_pad_alloc_buffer_and_set_caps(vpu_enc->srcpad,
 			0, vpu_enc->outputInfo->bitstreamSize + totalsize,
 			src_caps, &outbuffer);
@@ -624,12 +515,6 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 			    ("Error in allocating the Framebuffer[%d],"
 			     " error is %d", i, retval);
 			return retval;
-		}
-
-		for (i = 0; i < vpu_enc->headercount; i++) {
-			memcpy(GST_BUFFER_DATA(outbuffer) + offset,
-			       vpu_enc->header[i], vpu_enc->headersize[i]);
-			offset += vpu_enc->headersize[i];
 		}
 
 		memcpy(GST_BUFFER_DATA(outbuffer) + offset,
@@ -644,20 +529,9 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 				  "the Source Pad,error is %d \n",
 				  retval);
 		}
-	}
+#endif
 
-	GST_DEBUG("bitsream size=%d", vpu_enc->outputInfo->bitstreamSize);
-	GST_DEBUG("fram=%d", vpu_enc->frameIdx);
-
-	vpu_ret = vpu_EncStartOneFrame(vpu_enc->handle, vpu_enc->encParam);
-	if (vpu_ret != RETCODE_SUCCESS) {
-		GST_ERROR("vpu_EncStartOneFrame failed. Error code is %d \n",
-			  vpu_ret);
-		return GST_FLOW_ERROR;
-	}
-
-	vpu_enc->frameIdx++;
-	vpu_enc->wait = TRUE;
+//done:
 	return retval;
 }
 
@@ -667,111 +541,43 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	MfwGstVPU_Enc *vpu_enc = NULL;
 	vpu_enc = MFW_GST_VPU_ENC(element);
-	gint vpu_ret = 0;
-	guint8 *virt_bit_stream_buf = NULL;
+//	gint vpu_ret = 0;
 	CodStd mode;
 
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 		GST_DEBUG("VPU State: Null to Ready");
-		vpu_ret = vpu_Init(NULL);
-		if (vpu_ret < 0) {
-			GST_DEBUG("Error in initializing the VPU: error is %d", vpu_ret);
+		vpu_enc->vpu_fd = open(VPU_DEVICE, O_RDWR | O_NONBLOCK);
+		if (vpu_enc->vpu_fd < 0) {
+			GST_ERROR("opening %s failed", VPU_DEVICE);
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
+		ioctl(vpu_enc->vpu_fd, VPU_IOC_SET_ENCODER, 0);
+
+		printf("Enc opened. res: %dx%d\n", vpu_enc->width, vpu_enc->height);
 		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
-		GST_DEBUG("VPU State: Ready to Paused");
-
-		vpu_enc->encOP = g_malloc(sizeof (EncOpenParam));
-		if (vpu_enc->encOP == NULL) {
-			GST_DEBUG("Error in allocating encoder open parameter structure");
-			mfw_gst_vpuenc_cleanup(vpu_enc);
-			return GST_STATE_CHANGE_FAILURE;
-		}
-
-		vpu_enc->initialInfo =
-		    g_malloc(sizeof (EncInitialInfo));
-		if (vpu_enc->initialInfo == NULL) {
-			GST_DEBUG("Error in allocating encoder initial info structure");
-			mfw_gst_vpuenc_cleanup(vpu_enc);
-			return GST_STATE_CHANGE_FAILURE;
-		}
-
-		vpu_enc->encParam = g_malloc(sizeof (EncParam));
-		if (vpu_enc->encParam == NULL) {
-			GST_DEBUG("Error in allocating encoder parameter structure");
-			mfw_gst_vpuenc_cleanup(vpu_enc);
-			return GST_STATE_CHANGE_FAILURE;
-		}
-
-		vpu_enc->outputInfo = g_malloc(sizeof (EncOutputInfo));
-		if (vpu_enc->outputInfo == NULL) {
-			GST_DEBUG("Error in allocating encoder output structure");
-			mfw_gst_vpuenc_cleanup(vpu_enc);
-			return GST_STATE_CHANGE_FAILURE;
-		}
-
-		memset(vpu_enc->initialInfo, 0, sizeof (EncInitialInfo));
-		memset(vpu_enc->encParam, 0, sizeof (EncParam));
-		memset(vpu_enc->encOP, 0, sizeof (EncOpenParam));
-		memset(vpu_enc->outputInfo, 0, sizeof (EncOutputInfo));
-		memset(&vpu_enc->bit_stream_buf, 0, sizeof (vpu_mem_desc));
-
-		vpu_enc->bit_stream_buf.size = BUFF_FILL_SIZE;
-		IOGetPhyMem(&vpu_enc->bit_stream_buf);
-		virt_bit_stream_buf = (guint8 *) IOGetVirtMem(&vpu_enc->bit_stream_buf);
-		vpu_enc->start_addr = virt_bit_stream_buf;
-		vpu_enc->encOP->bitstreamBuffer = vpu_enc->bit_stream_buf.phy_addr;
-		vpu_enc->encOP->bitstreamBufferSize = BUFF_FILL_SIZE;
+		printf("VPU State: Ready to Paused");
+		printf("Enc opened. res: %dx%d\n", vpu_enc->width, vpu_enc->height);
 
 		GST_DEBUG("codec=%d", vpu_enc->codec);
-		mode = vpu_enc->encOP->bitstreamFormat = vpu_enc->codec;
+		mode = vpu_enc->codec;
 
 		vpu_enc->init = FALSE;
 		vpu_enc->wait = FALSE;
-		vpu_enc->frameIdx = 0;
-		vpu_enc->headercount = 0;
-		vpu_enc->handle = 0;
-		vpu_enc->encOP->bitRate = vpu_enc->bitrate;
-		vpu_enc->encOP->initialDelay = 0;
-		vpu_enc->encOP->vbvBufferSize = 0;	/* 0 = ignore 8 */
-		vpu_enc->encOP->enableAutoSkip = 0;
-		vpu_enc->encOP->gopSize = vpu_enc->gopsize;
-		vpu_enc->encOP->slicemode.sliceMode = 1;	/* 1 slice per picture */
-		vpu_enc->encOP->slicemode.sliceSizeMode = 0;
-		vpu_enc->encOP->slicemode.sliceSize = 4000;	/* not used if sliceMode is 0 */
+//		vpu_enc->encOP->bitRate = vpu_enc->bitrate;
+//		vpu_enc->encOP->gopSize = vpu_enc->gopsize;
+//		vpu_enc->encOP->slicemode.sliceMode = 1;	/* 1 slice per picture */
+//		vpu_enc->encOP->slicemode.sliceSize = 4000;	/* not used if sliceMode is 0 */
 		vpu_enc->numframebufs = 0;
 
 		if (mode == STD_MPEG4) {
-			vpu_enc->encOP->EncStdParam.mp4Param.mp4_dataPartitionEnable = 0;
-			vpu_enc->encOP->EncStdParam.mp4Param.mp4_reversibleVlcEnable = 0;
-			vpu_enc->encOP->EncStdParam.mp4Param.mp4_intraDcVlcThr = 0;
 		} else if (mode == STD_H263) {
-
-			vpu_enc->encOP->EncStdParam.h263Param.h263_annexJEnable = 0;
-			vpu_enc->encOP->EncStdParam.h263Param.h263_annexKEnable = 0;
-			vpu_enc->encOP->EncStdParam.h263Param.h263_annexTEnable = 0;
-
-			if (vpu_enc->encOP->EncStdParam.h263Param.h263_annexJEnable == 0
-			    && vpu_enc->encOP->EncStdParam.h263Param.h263_annexKEnable == 0
-			    && vpu_enc->encOP->EncStdParam.h263Param.h263_annexTEnable == 0) {
-				vpu_enc->encOP->frameRateInfo = 0x3E87530;
-			}
+//			vpu_enc->encOP->frameRateInfo = 0x3E87530;
 		} else if (mode == STD_AVC) {
-			vpu_enc->encOP->EncStdParam.avcParam.avc_constrainedIntraPredFlag = 0;
-			vpu_enc->encOP->EncStdParam.avcParam.avc_disableDeblk = 0;
-			vpu_enc->encOP->EncStdParam.avcParam.avc_deblkFilterOffsetAlpha = 0;
-			vpu_enc->encOP->EncStdParam.avcParam.avc_deblkFilterOffsetBeta = 0;
-			vpu_enc->encOP->EncStdParam.avcParam.avc_chromaQpOffset = 0;
-			vpu_enc->encOP->EncStdParam.avcParam.avc_audEnable = 0;
-			vpu_enc->encOP->EncStdParam.avcParam.avc_fmoEnable = 0;
-			vpu_enc->encOP->EncStdParam.avcParam.avc_fmoType = 0;
-			vpu_enc->encOP->EncStdParam.avcParam.avc_fmoSliceNum = 0;
 		} else {
 			GST_ERROR("Encoder: Invalid codec standard mode");
-			mfw_gst_vpuenc_cleanup(vpu_enc);
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
@@ -792,7 +598,6 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		GST_DEBUG("VPU State: Paused to Ready");
-		mfw_gst_vpuenc_cleanup(vpu_enc);
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
 		GST_DEBUG("VPU State: Ready to Null");
@@ -814,7 +619,7 @@ static gboolean mfw_gst_vpuenc_sink_event(GstPad * pad, GstEvent * event)
 	GstFormat format;
 	gint64 start, stop, position;
 	gdouble rate;
-
+printf("%s\n", __func__);
 	switch (GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
 		gst_event_parse_new_segment(event, NULL, &rate, &format,
@@ -852,7 +657,7 @@ static gboolean mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 	gint32 frame_rate_nu = 0;
 	gint width = 0;
 	gint height = 0;
-
+printf("%s\n", __func__);
 	GST_DEBUG("mfw_gst_vpuenc_setcaps");
 	vpu_enc = MFW_GST_VPU_ENC(gst_pad_get_parent(pad));
 
@@ -863,7 +668,6 @@ static gboolean mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 
 	gst_structure_get_int(structure, "height", &height);
 	vpu_enc->height = height;
-
 
 	gst_structure_get_fraction(structure, "framerate",
 				   &frame_rate_nu, &frame_rate_de);

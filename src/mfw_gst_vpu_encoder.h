@@ -95,6 +95,11 @@ typedef struct _MfwGstVPU_EncClass
 GType mfw_gst_type_vpu_enc_get_type(void);
 GType mfw_gst_vpuenc_codec_get_type(void);
 
+#define	VPU_IOC_MAGIC		'V'
+#define	VPU_IOC_SET_ENCODER	_IO(VPU_IOC_MAGIC, 5)
+#define VPU_IOC_SET_DECODER	_IO(VPU_IOC_MAGIC, 6)
+#define	VPU_IOC_ROTATE_MIRROR	_IO(VPU_IOC_MAGIC, 7)
+#define VPU_IOC_DEC_FORMAT	_IO(VPU_IOC_MAGIC, 8)
 
 G_END_DECLS
 #endif				/* __MFW_GST_VPU_ENCODER_H__ */
