@@ -30,6 +30,7 @@
 #include <sys/ioctl.h>
 #include <gst-plugins-fsl_config.h>
 #include <linux/videodev2.h>
+#include <unistd.h>
 
 #include "vpu_io.h"
 #include "vpu_lib.h"
@@ -460,8 +461,8 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	MfwGstVPU_Enc *vpu_enc = NULL;
 //	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFlowReturn retval = GST_FLOW_OK;
-//	GstCaps *src_caps = NULL;;
-//	GstBuffer *outbuffer = NULL;
+	GstCaps *src_caps;
+	GstBuffer *outbuffer;
 	gint i = 0;
 //	gint totalsize = 0;
 //	gint offset = 0;
@@ -498,38 +499,42 @@ printf("%s: %dx%d\n", __func__, vpu_enc->width, vpu_enc->height);
 	pollfd.fd = vpu_enc->vpu_fd;
 	pollfd.events = POLLIN | POLLOUT;
 
-	vpu_enc->queued |= 1 << i;
-	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_QBUF, &vpu_enc->buf_v4l2[i]);
+//	vpu_enc->queued |= 1 << i;
+	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_QBUF, &vpu_enc->buf_v4l2[0]);
 	if (ret) {
 		GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
+printf("queued\n");
+	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_DQBUF, &vpu_enc->buf_v4l2[0]);
+	if (ret) {
+		GST_ERROR("VIDIOC_DQBUF failed: %s\n", strerror(errno));
+		return GST_FLOW_ERROR;
+	}
+printf("dequeued\n");
 
-#if 0
-		retval = gst_pad_alloc_buffer_and_set_caps(vpu_enc->srcpad,
-			0, vpu_enc->outputInfo->bitstreamSize + totalsize,
-			src_caps, &outbuffer);
+	src_caps = GST_PAD_CAPS(vpu_enc->srcpad);
 
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR
-			    ("Error in allocating the Framebuffer[%d],"
-			     " error is %d", i, retval);
-			return retval;
-		}
+	retval = gst_pad_alloc_buffer_and_set_caps(vpu_enc->srcpad,
+			0, 32768, src_caps, &outbuffer);
+	if (retval != GST_FLOW_OK) {
+		GST_ERROR("Allocating buffer failed with %d", ret);
+		return retval;
+	}
 
-		memcpy(GST_BUFFER_DATA(outbuffer) + offset,
-		       vpu_enc->start_addr, vpu_enc->outputInfo->bitstreamSize);
+	ret = read(vpu_enc->vpu_fd, GST_BUFFER_DATA(outbuffer), 32768);
+	if (ret < 0) {
+		printf("read failed: %s\n", strerror(errno));
+		return GST_FLOW_ERROR;
+	}
+	GST_BUFFER_SIZE(outbuffer) = ret;
 
-		GST_BUFFER_SIZE(outbuffer) =
-				vpu_enc->outputInfo->bitstreamSize + totalsize;
-
-		retval = gst_pad_push(vpu_enc->srcpad, outbuffer);
-		if (retval != GST_FLOW_OK) {
-			GST_ERROR("Error in Pushing the Output ont to "
-				  "the Source Pad,error is %d \n",
-				  retval);
-		}
-#endif
+	retval = gst_pad_push(vpu_enc->srcpad, outbuffer);
+	if (retval != GST_FLOW_OK) {
+		GST_ERROR("Error in Pushing the Output ont to "
+			  "the Source Pad,error is %d \n",
+			  retval);
+	}
 
 //done:
 	return retval;
@@ -547,7 +552,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 		GST_DEBUG("VPU State: Null to Ready");
-		vpu_enc->vpu_fd = open(VPU_DEVICE, O_RDWR | O_NONBLOCK);
+		vpu_enc->vpu_fd = open(VPU_DEVICE, O_RDWR); // | O_NONBLOCK);
 		if (vpu_enc->vpu_fd < 0) {
 			GST_ERROR("opening %s failed", VPU_DEVICE);
 			return GST_STATE_CHANGE_FAILURE;
