@@ -473,7 +473,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	GST_DEBUG("mfw_gst_vpuenc_chain");
 
 	vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
-printf("%s: %dx%d\n", __func__, vpu_enc->width, vpu_enc->height);
+//printf("%s: %dx%d\n", __func__, vpu_enc->width, vpu_enc->height);
 
 	if (vpu_enc->init == FALSE) {
 		retval = mfw_gst_vpuenc_init_encoder(pad, buffer);
@@ -505,13 +505,12 @@ printf("%s: %dx%d\n", __func__, vpu_enc->width, vpu_enc->height);
 		GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
-printf("queued\n");
+
 	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_DQBUF, &vpu_enc->buf_v4l2[0]);
 	if (ret) {
 		GST_ERROR("VIDIOC_DQBUF failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
-printf("dequeued\n");
 
 	src_caps = GST_PAD_CAPS(vpu_enc->srcpad);
 

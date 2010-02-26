@@ -372,11 +372,17 @@ static int vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 
 	/* Update the time stamp based on the frame-rate */
 	GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
-	GST_BUFFER_TIMESTAMP(pushbuff) = GST_TIMEVAL_TO_TIME(v4l2_buf.timestamp);
+//	GST_BUFFER_TIMESTAMP(pushbuff) = GST_TIMEVAL_TO_TIME(v4l2_buf.timestamp);
+	GST_BUFFER_TIMESTAMP(pushbuff) = gst_util_uint64_scale(vpu_dec->decoded_frames,
+			vpu_dec->frame_rate_de * GST_SECOND,
+			vpu_dec->frame_rate_nu);
 
 	vpu_dec->decoded_frames++;
 
-	GST_DEBUG("frame decoded : %lld", vpu_dec->decoded_frames);
+	GST_DEBUG_OBJECT(vpu_dec, "frame decoded : %lld ts = %" GST_TIME_FORMAT,
+			vpu_dec->decoded_frames,
+			GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(pushbuff)));
+
 	retval = gst_pad_push(vpu_dec->srcpad, pushbuff);
 	if (retval != GST_FLOW_OK) {
 		GST_ERROR("Pushing the Output onto the Source Pad failed with %d", retval);
@@ -394,6 +400,9 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 	GstFlowReturn retval = GST_FLOW_OK;
 	int remaining, ofs, handled = 0;
 	struct pollfd pollfd;
+
+	GST_DEBUG_OBJECT(vpu_dec, "frame input: ts = %" GST_TIME_FORMAT,
+			GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buffer)));
 
 	if (G_UNLIKELY(buffer == NULL)) {
 		/* EOS */
@@ -456,6 +465,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 		}
 
 		if (pollfd.revents & POLLIN) {
+			GST_DEBUG_OBJECT(vpu_dec, "POLLIN\n");
 			while (!vpu_dec_loop(vpu_dec));
 			handled = 1;
 		}
@@ -810,7 +820,6 @@ mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
 
 	vpu_dec->dbk_enabled = FALSE;
 	vpu_dec->dbk_offset_a = vpu_dec->dbk_offset_b = DEFAULT_DBK_OFFSET_VALUE;
-
 }
 
 GType
