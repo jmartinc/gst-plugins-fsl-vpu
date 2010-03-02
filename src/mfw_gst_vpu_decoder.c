@@ -342,33 +342,31 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 static int vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 {
 	GstBuffer *pushbuff;
-	int retval;
+	int ret;
 	struct v4l2_buffer v4l2_buf = {
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	};
 
-	if (vpu_dec->flush == TRUE)
-		goto done;
+	ret = ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
+	if (ret)
+		return -errno;
 
-	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
-	if (retval) {
-		if (errno == EAGAIN)
-			return -EAGAIN;
-		return -1;
-	}
-
-	retval = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
+	ret = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
 					      vpu_dec->outsize,
 					      GST_PAD_CAPS(vpu_dec->srcpad),
 					      &pushbuff);
-	if (retval != GST_FLOW_OK) {
-		GST_ERROR("Allocating the Framebuffer[%d] failed with %d",
-		     0, retval);
+	if (ret != GST_FLOW_OK) {
+		GST_DEBUG_OBJECT(vpu_dec, "Allocating the Framebuffer[%d] failed with %d",
+		     0, ret);
 		goto done;
 	}
 
 	memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
-	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &v4l2_buf);
+	ret = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &v4l2_buf);
+	if (ret) {
+		GST_DEBUG_OBJECT(vpu_dec, "Decoder qbuf failed?? error: %d\n", errno);
+		return GST_FLOW_ERROR;
+	}
 
 	/* Update the time stamp based on the frame-rate */
 	GST_BUFFER_SIZE(pushbuff) = vpu_dec->outsize;
@@ -383,13 +381,14 @@ static int vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
 			vpu_dec->decoded_frames,
 			GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(pushbuff)));
 
-	retval = gst_pad_push(vpu_dec->srcpad, pushbuff);
-	if (retval != GST_FLOW_OK) {
-		GST_ERROR("Pushing the Output onto the Source Pad failed with %d", retval);
+	ret = gst_pad_push(vpu_dec->srcpad, pushbuff);
+	if (ret != GST_FLOW_OK) {
+		GST_ERROR("Pushing the Output onto the Source Pad failed with %d", ret);
 	}
-	retval = GST_FLOW_OK;
+
+	ret = 0;
 done:
-	return GST_FLOW_OK;
+	return ret;
 }
 
 static GstFlowReturn
@@ -404,25 +403,12 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 	GST_DEBUG_OBJECT(vpu_dec, "frame input: ts = %" GST_TIME_FORMAT,
 			GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buffer)));
 
-	if (G_UNLIKELY(buffer == NULL)) {
-		/* EOS */
-		printf("EEEEEEEEEEEEEEEEEOOOOOOOOOOOs\n");
-		vpu_dec->eos = TRUE;
-		ret = write(vpu_dec->vpu_fd, NULL, 0);
-		if (ret) {
-			GST_ERROR("write failed: %s\n", strerror(errno));
-			return GST_FLOW_ERROR;
-		}
-	}
-
 	if (!vpu_dec->once) {
 		if (vpu_dec->HdrExtData)
 			buffer = gst_buffer_join(vpu_dec->HdrExtData, buffer);
 		vpu_dec->once = 1;
 	}
 
-	if (G_UNLIKELY(vpu_dec->eos == TRUE))
-		return GST_FLOW_OK;
 	pollfd.fd = vpu_dec->vpu_fd;
 	pollfd.events = POLLIN | POLLOUT;
 
@@ -437,12 +423,12 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 		}
 
 		if (pollfd.revents & POLLERR) {
-			printf("POLLERR\n");
+			GST_DEBUG_OBJECT(vpu_dec, "POLLERR\n");
 			retval = GST_FLOW_ERROR;
 			goto done;
 		}
 
-		if (pollfd.revents & POLLOUT) {
+		if ((pollfd.revents & POLLOUT) && buffer) {
 			ret = write(vpu_dec->vpu_fd, GST_BUFFER_DATA(buffer) + ofs,
 					remaining);
 			if (ret == -1) {
@@ -465,9 +451,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 		}
 
 		if (pollfd.revents & POLLIN) {
-			GST_DEBUG_OBJECT(vpu_dec, "POLLIN\n");
 			while (!vpu_dec_loop(vpu_dec));
-			handled = 1;
+				handled = 1;
 		}
 	}
 done:
@@ -484,18 +469,17 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 	GstFormat format;
 	gint64 start, stop, position;
 	gdouble rate;
-printf("%s\n", __func__);
+
 	switch (GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
 		gst_event_parse_new_segment(event, NULL, &rate, &format,
 					    &start, &stop, &position);
-		GST_DEBUG("receiving new seg start = %" GST_TIME_FORMAT
+		GST_DEBUG_OBJECT(vpu_dec, "receiving new seg start = %" GST_TIME_FORMAT
 			  " stop = %" GST_TIME_FORMAT
 			  " position in mpeg4  =%" GST_TIME_FORMAT,
 				GST_TIME_ARGS(start),
 				GST_TIME_ARGS(stop),
 				GST_TIME_ARGS(position));
-		vpu_dec->flush = FALSE;
 		if (GST_FORMAT_TIME == format) {
 			result = gst_pad_push_event(vpu_dec->srcpad, event);
 			if (TRUE != result) {
@@ -504,11 +488,8 @@ printf("%s\n", __func__);
 		}
 		break;
 	case GST_EVENT_FLUSH_STOP:
-		vpu_dec->eos = FALSE;
-		vpu_dec->flush = TRUE;
-
 		/* The below block of code is used to Flush the buffered input stream data */
-		printf("GST_EVENT_FLUSH_STOP: not handled\n");
+		GST_DEBUG_OBJECT(vpu_dec, "GST_EVENT_FLUSH_STOP: not handled\n");
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result) {
@@ -517,19 +498,23 @@ printf("%s\n", __func__);
 		}
 		break;
 	case GST_EVENT_EOS:
-		printf("%s: EOS\n", __func__);
-		mfw_gst_vpudec_chain_stream_mode(vpu_dec->sinkpad, NULL);
+		write(vpu_dec->vpu_fd, NULL, 0);
+		while (1) {
+			result = vpu_dec_loop(vpu_dec);
+			if (result && result != -EAGAIN)
+				break;
+		}
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result)
-			GST_ERROR("Error in pushing the event,result is %d", result);
+			GST_DEBUG_OBJECT(vpu_dec, "Error in pushing the event,result is %d", result);
 		break;
 	default:
 		result = gst_pad_event_default(pad, event);
 		break;
 	}
-	return result;
 
+	return result;
 }
 
 static GstStateChangeReturn
@@ -542,7 +527,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	state = (GstState) GST_STATE_TRANSITION_CURRENT (transition);
 	next = GST_STATE_TRANSITION_NEXT (transition);
 
-	printf("%s: from %s to %s\n", __func__, 
+	GST_DEBUG_OBJECT(vpu_dec, "%s: from %s to %s\n", __func__, 
 			gst_element_state_get_name (state),
 			gst_element_state_get_name (next));
 
@@ -560,10 +545,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		vpu_dec->init = FALSE;
 		vpu_dec->avg_fps_decoding = 0.0;
-		vpu_dec->eos = FALSE;
 
-		break;
-	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
 		break;
 	default:
 		break;
@@ -576,8 +558,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
-		close(vpu_dec->vpu_fd);
-
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
 		close(vpu_dec->vpu_fd);

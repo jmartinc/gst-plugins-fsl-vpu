@@ -459,14 +459,10 @@ printf("%s\n", __func__);
 static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 {
 	MfwGstVPU_Enc *vpu_enc = NULL;
-//	RetCode vpu_ret = RETCODE_SUCCESS;
 	GstFlowReturn retval = GST_FLOW_OK;
 	GstCaps *src_caps;
 	GstBuffer *outbuffer;
 	gint i = 0;
-//	gint totalsize = 0;
-//	gint offset = 0;
-//	int handled = 0;
 	int ret;
 	struct pollfd pollfd;
 
@@ -492,6 +488,9 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 		return GST_FLOW_ERROR;
 	}
 
+	if (!buffer)
+		return GST_FLOW_OK;
+
 	/* copy the input Frame into the allocated buffer */
 	memcpy(vpu_enc->buf_data[i], GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
 	gst_buffer_unref(buffer);
@@ -499,7 +498,6 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	pollfd.fd = vpu_enc->vpu_fd;
 	pollfd.events = POLLIN | POLLOUT;
 
-//	vpu_enc->queued |= 1 << i;
 	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_QBUF, &vpu_enc->buf_v4l2[0]);
 	if (ret) {
 		GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
@@ -515,13 +513,13 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	src_caps = GST_PAD_CAPS(vpu_enc->srcpad);
 
 	retval = gst_pad_alloc_buffer_and_set_caps(vpu_enc->srcpad,
-			0, 32768, src_caps, &outbuffer);
+			0, 128 * 1024, src_caps, &outbuffer);
 	if (retval != GST_FLOW_OK) {
 		GST_ERROR("Allocating buffer failed with %d", ret);
 		return retval;
 	}
 
-	ret = read(vpu_enc->vpu_fd, GST_BUFFER_DATA(outbuffer), 32768);
+	ret = read(vpu_enc->vpu_fd, GST_BUFFER_DATA(outbuffer), 128 * 1024);
 	if (ret < 0) {
 		printf("read failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
@@ -605,7 +603,6 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
 		GST_DEBUG("VPU State: Ready to Null");
-		IOSystemShutdown();
 		break;
 	default:
 		break;

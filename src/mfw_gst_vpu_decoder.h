@@ -66,9 +66,6 @@ typedef struct _MfwGstVPU_Dec {
 	GstBuffer *HdrExtData;
 	guint HdrExtDataLen;	/* Heafer Extension Data and length
 				   obtained through Caps Neogtiation */
-	/* Structure for Frame buffer parameters
-	   if not used with V4LSink */
-	gboolean eos;		/* Flag for end of stream */
 
 	/* Misc members */
 	guint64 decoded_frames;	/*number of the decoded frames */
@@ -80,7 +77,6 @@ typedef struct _MfwGstVPU_Dec {
 	/* enable direct rendering in case of V4L */
 	gboolean first;		/* Flag for inserting the RCV Header
 				   fot the first time */
-	gboolean flush;		// Flag to indicate the flush event
 	gboolean rotation_angle;	// rotation angle used for VPU to rotate
 	gint mirror_dir;	// VPU mirror direction
 	gboolean dbk_enabled;
@@ -93,9 +89,6 @@ typedef struct _MfwGstVPU_Dec {
 	int vpu_fd;
 
 	int once;
-
-	GstTask *task;
-	GStaticRecMutex *task_lock;
 } MfwGstVPU_Dec;
 
 typedef struct _MfwGstVPU_DecClass {
