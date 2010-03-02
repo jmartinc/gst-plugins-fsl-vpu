@@ -12,8 +12,6 @@ AC_CANONICAL_HOST
 
 AM_MAINTAINER_MODE
 
-CFLAGS="${CFLAGS} -Wall"
-
 #
 # libtool library versioning stuff
 #
@@ -116,7 +114,7 @@ AC_ARG_ENABLE(debug,
     [CONFIG_DEBUG=yes])
 AC_MSG_RESULT([${CONFIG_DEBUG}])
 if test "${CONFIG_DEBUG}" = "yes"; then
-    CFLAGS="${CFLAGS} -Werror -Wsign-compare -Wfloat-equal -Wformat-security -g -O1"
+    CFLAGS="${CFLAGS} -Werror -Wfloat-equal -Wformat -Wformat-security -g -O1"
     AC_DEFINE(DEBUG, 1, [debugging])
 else
     CFLAGS="${CFLAGS} -O2"
@@ -199,15 +197,6 @@ AC_SUBST(plugindir)
 dnl set proper LDFLAGS for plugins
 GST_PLUGIN_LDFLAGS='-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*'
 AC_SUBST(GST_PLUGIN_LDFLAGS)
-
-dnl we need the vpu library, no need to link them though.
-FSL_VPU_LIBS_REQUIRED_VERSION=0.2.0
-PKG_CHECK_MODULES(FSL_VPU_LIBS, libfsl-vpu >= $FSL_VPU_LIBS_REQUIRED_VERSION,
-                  HAVE_FSL_VPU_LIBS=yes, HAVE_FSL_VPU_LIBS=no)
-if test "x$HAVE_FSL_VPU_LIBS" = "xno"; then
-  AC_MSG_ERROR([Please install libfsl-vpu version $FSL_VPU_LIBS_REQUIRED_VERSION
-	      or later])
-fi
 
 AC_CONFIG_FILES([
 	GNUmakefile
