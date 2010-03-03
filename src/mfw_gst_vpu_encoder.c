@@ -239,106 +239,6 @@ printf("%s\n", __func__);
 
 }
 
-static int mfw_gst_encoder_fill_headers(MfwGstVPU_Enc * vpu_enc)
-{
-	EncHeaderParam enchdr_param = { 0 };
-printf("%s\n", __func__);
-	guint8 *ptr;
-	/* Must put encode header before encoding */
-	if (vpu_enc->codec == STD_MPEG4) {
-
-		vpu_enc->headercount = 3;
-		enchdr_param.headerType = VOS_HEADER;
-		vpu_EncGiveCommand(vpu_enc->handle, ENC_PUT_MP4_HEADER,
-				   &enchdr_param);
-		vpu_enc->headersize[0] = enchdr_param.size;
-		vpu_enc->header[0] = g_malloc(enchdr_param.size);
-
-		if (vpu_enc->header[0] == NULL) {
-			GST_ERROR
-			    ("Error in Allocating memory for VOS_HEADER\n");
-			return -1;
-		}
-		ptr =
-		    vpu_enc->start_addr + enchdr_param.buf -
-		    vpu_enc->bit_stream_buf.phy_addr;
-		memcpy(vpu_enc->header[0], ptr, enchdr_param.size);
-
-		enchdr_param.headerType = VIS_HEADER;
-		vpu_EncGiveCommand(vpu_enc->handle, ENC_PUT_MP4_HEADER,
-				   &enchdr_param);
-		vpu_enc->headersize[1] = enchdr_param.size;
-
-		vpu_enc->header[1] = g_malloc(enchdr_param.size);
-		if (vpu_enc->header[1] == NULL) {
-			GST_ERROR
-			    ("Error in Allocating memory for VIS_HEADER\n");
-			return -1;
-		}
-
-		ptr = vpu_enc->start_addr + enchdr_param.buf -
-			vpu_enc->bit_stream_buf.phy_addr;
-		memcpy(vpu_enc->header[1], ptr, enchdr_param.size);
-
-		enchdr_param.headerType = VOL_HEADER;
-		vpu_EncGiveCommand(vpu_enc->handle, ENC_PUT_MP4_HEADER,
-				   &enchdr_param);
-		vpu_enc->headersize[2] = enchdr_param.size;
-
-		vpu_enc->header[2] = g_malloc(enchdr_param.size);
-		if (vpu_enc->header[2] == NULL) {
-			GST_ERROR
-			    ("Error in Allocating memory for VOL_HEADER\n");
-			return -1;
-		}
-		ptr =
-		    vpu_enc->start_addr + enchdr_param.buf -
-		    vpu_enc->bit_stream_buf.phy_addr;
-		memcpy(vpu_enc->header[2], ptr, enchdr_param.size);
-
-	}
-
-	else if (vpu_enc->codec == STD_AVC) {
-
-		vpu_enc->headercount = 2;
-		enchdr_param.headerType = SPS_RBSP;
-		vpu_EncGiveCommand(vpu_enc->handle, ENC_PUT_AVC_HEADER,
-				   &enchdr_param);
-		vpu_enc->headersize[0] = enchdr_param.size;
-		vpu_enc->header[0] = g_malloc(enchdr_param.size);
-		if (vpu_enc->header[0] == NULL) {
-			GST_ERROR
-			    ("Error in Allocating memory for SPS_RBSP Header \n");
-			return -1;
-		}
-
-		ptr =
-		    vpu_enc->start_addr + enchdr_param.buf -
-		    vpu_enc->bit_stream_buf.phy_addr;
-		memcpy(vpu_enc->header[0], ptr, enchdr_param.size);
-		enchdr_param.headerType = PPS_RBSP;
-		vpu_EncGiveCommand(vpu_enc->handle, ENC_PUT_AVC_HEADER,
-				   &enchdr_param);
-		vpu_enc->headersize[1] = enchdr_param.size;
-		vpu_enc->header[1] = g_malloc(enchdr_param.size);
-		if (vpu_enc->header[1] == NULL) {
-			GST_ERROR
-			    ("Error in Allocating memory for PPS_RBSP Header \n");
-			return -1;
-		}
-
-		ptr =
-		    vpu_enc->start_addr + enchdr_param.buf -
-		    vpu_enc->bit_stream_buf.phy_addr;
-		memcpy(vpu_enc->header[1], ptr, enchdr_param.size);
-
-		return 0;
-
-	}
-
-	return 0;
-}
-
 static struct v4l2_requestbuffers reqs = {
 	.count	= NUM_BUFFERS,
 	.type	= V4L2_BUF_TYPE_VIDEO_OUTPUT,
@@ -413,27 +313,14 @@ printf("%s\n", __func__);
 				   vpu_enc->vpu_fd, vpu_enc->buf_v4l2[i].m.offset);
 	}
 
-	if (0) {
-	ret = mfw_gst_encoder_fill_headers(vpu_enc);
-	if (ret < 0) {
-		GError *error = NULL;
-		GQuark domain;
-		domain = g_quark_from_string("mfw_vpuencoder");
-		error = g_error_new(domain, 10, "fatal error");
-		gst_element_post_message(GST_ELEMENT(vpu_enc),
-					 gst_message_new_error
-					 (GST_OBJECT(vpu_enc), error,
-					  "Allocation for Headers failed "));
-		return GST_FLOW_ERROR;
-	}
-	}
-
 	if (vpu_enc->codec == STD_MPEG4)
 		mime = "video/mpeg";
 	else if (vpu_enc->codec == STD_AVC)
 		mime = "video/x-h264";
 	else if (vpu_enc->codec == STD_H263)
 		mime = "video/x-h263";
+
+	ioctl(vpu_enc->vpu_fd, VPU_IOC_CODEC, vpu_enc->codec);
 
 	caps = gst_caps_new_simple(mime,
 			   "mpegversion", G_TYPE_INT, 4,
