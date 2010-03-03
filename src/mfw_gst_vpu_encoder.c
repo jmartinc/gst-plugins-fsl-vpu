@@ -32,8 +32,6 @@
 #include <linux/videodev2.h>
 #include <unistd.h>
 
-#include "vpu_io.h"
-#include "vpu_lib.h"
 #include "mfw_gst_vpu_encoder.h"
 
 typedef struct {
