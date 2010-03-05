@@ -267,17 +267,6 @@ printf("%s\n", __func__);
 					  "Incomplete command line - codec type was not provided."));
 		return GST_FLOW_ERROR;
 	}
-#if 0
-	/* The Frame Rate Value is set only in case of MPEG4 and H.264
-	   not set for H.263 */
-	if (vpu_enc->encOP->frameRateInfo != 0x3E87530)
-		vpu_enc->encOP->frameRateInfo =
-		    (gint) (vpu_enc->framerate + 0.5);
-#endif
-
-//	vpu_enc->encParam->quantParam = 30;
-//	vpu_enc->encParam->forceIPicture = 0;
-//	vpu_enc->encParam->skipPicture = 0;
 
 	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 	fmt.fmt.pix.width = vpu_enc->width;
@@ -295,6 +284,8 @@ printf("%s\n", __func__);
 		printf("VIDIOC_REQBUFS failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
+
+	ioctl(vpu_enc->vpu_fd, VPU_IOC_CODEC, vpu_enc->codec);
 
 	for (i = 0; i < NUM_BUFFERS; i++) {
 		struct v4l2_buffer *buf = &vpu_enc->buf_v4l2[i];
@@ -319,8 +310,6 @@ printf("%s\n", __func__);
 		mime = "video/x-h264";
 	else if (vpu_enc->codec == STD_H263)
 		mime = "video/x-h263";
-
-	ioctl(vpu_enc->vpu_fd, VPU_IOC_CODEC, vpu_enc->codec);
 
 	caps = gst_caps_new_simple(mime,
 			   "mpegversion", G_TYPE_INT, 4,

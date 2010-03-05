@@ -74,6 +74,47 @@ enum {
 	MFW_GST_VPU_MIRROR,
 };
 
+typedef struct _MfwGstVPU_Dec {
+	/* Plug-in specific members */
+	GstElement element;	/* instance of base class */
+	GstPad *sinkpad;
+	GstPad *srcpad;		/* source and sink pad of element */
+	GstElementClass *parent_class;
+	gboolean init;		/* initialisation flag */
+	guint outsize;		/* size of the output image */
+
+	gint codec;		/* codec standard to be selected */
+	gint width;		/* Width of the Image obtained through
+				   Caps Neogtiation */
+	gint height;		/* Height of the Image obtained through
+				   Caps Neogtiation */
+	GstBuffer *hdr_ext_data;
+	guint hdr_ext_data_len;	/* Header Extension Data and length
+				   obtained through Caps Neogtiation */
+
+	/* Misc members */
+	guint64 decoded_frames;	/*number of the decoded frames */
+	gfloat frame_rate;	/* Frame rate of display */
+	gint32 frame_rate_de;
+	gint32 frame_rate_nu;
+	/* average fps of decoding  */
+	/* enable direct rendering in case of V4L */
+	gboolean rotation_angle;	// rotation angle used for VPU to rotate
+	gint mirror_dir;	// VPU mirror direction
+	gboolean dbk_enabled;
+	gint dbk_offset_a;
+	gint dbk_offset_b;
+
+	struct v4l2_buffer buf_v4l2[NUM_BUFFERS];
+	unsigned char *buf_data[NUM_BUFFERS];
+	unsigned int buf_size[NUM_BUFFERS];
+	int vpu_fd;
+
+	int once;
+
+	GstState state;
+} MfwGstVPU_Dec;
+
 /* get the element details */
 static GstElementDetails mfw_gst_vpudec_details =
 GST_ELEMENT_DETAILS("Freescale: Hardware (VPU) Decoder",
@@ -246,9 +287,12 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_G_FMT, &fmt);
+	if (retval && errno == EAGAIN) {
+		return -EAGAIN;
+	}
 	if (retval) {
 		GST_ERROR("VIDIOC_G_FMT failed: %s\n", strerror(errno));
-		return GST_FLOW_ERROR;
+		return -errno;
 	}
 
 	GST_DEBUG("format: %d x %x\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
@@ -256,7 +300,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
 	if (retval) {
 		GST_ERROR("VIDIOC_REQBUFS failed: %s\n", strerror(errno));
-		return GST_FLOW_ERROR;
+		return -errno;
 	}
 
 	for (i = 0; i < NUM_BUFFERS; i++) {
@@ -268,7 +312,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, buf);
 		if (retval) {
 			GST_ERROR("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
-			return GST_FLOW_ERROR;
+			return -errno;
 		}
 		vpu_dec->buf_size[i] = buf->length;
 		vpu_dec->buf_data[i] = mmap(NULL, buf->length,
@@ -280,32 +324,32 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[i]);
 		if (retval) {
 			GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
-			return GST_FLOW_ERROR;
+			return -errno;
 		}
 	}
 
 	gint fourcc = GST_STR_FOURCC("I420");
 
-	vpu_dec->picWidth = fmt.fmt.pix.width;
-	vpu_dec->picHeight = fmt.fmt.pix.height;
+	vpu_dec->width = fmt.fmt.pix.width;
+	vpu_dec->height = fmt.fmt.pix.height;
 
-	GST_DEBUG("Dec InitialInfo => picWidth: %u, picHeight: %u",
-			vpu_dec->picWidth,
-			vpu_dec->picHeight);
+	GST_DEBUG("Dec InitialInfo => width: %u, height: %u",
+			vpu_dec->width,
+			vpu_dec->height);
 
 	/* Padding the width and height to 16 */
-	orgPicW = vpu_dec->picWidth;
-	orgPicH = vpu_dec->picHeight;
-	vpu_dec->picWidth = (vpu_dec->picWidth + 15) / 16 * 16;
-	vpu_dec->picHeight = (vpu_dec->picHeight + 15) / 16 * 16;
+	orgPicW = vpu_dec->width;
+	orgPicH = vpu_dec->height;
+	vpu_dec->width = (vpu_dec->width + 15) / 16 * 16;
+	vpu_dec->height = (vpu_dec->height + 15) / 16 * 16;
 
 	crop_top_len = 0;
 	crop_left_len = 0;
-	crop_right_len = vpu_dec->picWidth - orgPicW;
-	crop_bottom_len = vpu_dec->picHeight - orgPicH;
+	crop_right_len = vpu_dec->width - orgPicW;
+	crop_bottom_len = vpu_dec->height - orgPicH;
 
-	width = vpu_dec->picWidth;
-	height = vpu_dec->picHeight;
+	width = vpu_dec->width;
+	height = vpu_dec->height;
 	crop_right_by_pixel = (crop_bottom_len + 7) / 8 * 8;
 	crop_bottom_by_pixel = crop_bottom_len;
 
@@ -326,17 +370,17 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		GST_ERROR("Could not set the caps for the VPU decoder's src pad");
 	gst_caps_unref(caps);
 
-	vpu_dec->outsize = (vpu_dec->picWidth * vpu_dec->picHeight * 3) / 2;
+	vpu_dec->outsize = (vpu_dec->width * vpu_dec->height * 3) / 2;
 
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_STREAMON, &type);
 	if (retval) {
 		GST_ERROR("streamon failed with %d", retval);
-		return GST_FLOW_ERROR;
+		return -errno;
 	}
 
 	vpu_dec->init = TRUE;
 
-	return GST_FLOW_OK;
+	return 0;
 }
 
 static int vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
@@ -404,8 +448,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 			GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buffer)));
 
 	if (!vpu_dec->once) {
-		if (vpu_dec->HdrExtData)
-			buffer = gst_buffer_join(vpu_dec->HdrExtData, buffer);
+		if (vpu_dec->hdr_ext_data)
+			buffer = gst_buffer_join(vpu_dec->hdr_ext_data, buffer);
 		vpu_dec->once = 1;
 	}
 
@@ -441,8 +485,13 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 
 			if (G_UNLIKELY(vpu_dec->init == FALSE)) {
 				retval = mfw_gst_vpudec_vpu_init(vpu_dec);
-				if (retval != GST_FLOW_OK) {
+				if (retval == -EAGAIN) {
+					retval = GST_FLOW_OK;
+					goto done;
+				}
+				if (retval) {
 					GST_ERROR("mfw_gst_vpudec_vpu_init failed initializing VPU");
+					retval = GST_FLOW_ERROR;
 					goto done;
 				}
 			}
@@ -452,7 +501,7 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 
 		if (pollfd.revents & POLLIN) {
 			while (!vpu_dec_loop(vpu_dec));
-				handled = 1;
+			handled = 1;
 		}
 	}
 done:
@@ -499,10 +548,12 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 		break;
 	case GST_EVENT_EOS:
 		write(vpu_dec->vpu_fd, NULL, 0);
-		while (1) {
-			result = vpu_dec_loop(vpu_dec);
-			if (result && result != -EAGAIN)
-				break;
+		if (vpu_dec->state == GST_STATE_PLAYING) {
+			while (1) {
+				result = vpu_dec_loop(vpu_dec);
+				if (result && result != -EAGAIN)
+					break;
+			}
 		}
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
@@ -544,13 +595,10 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		vpu_dec->init = FALSE;
-		vpu_dec->avg_fps_decoding = 0.0;
-
 		break;
 	default:
 		break;
 	}
-
 
 	ret = vpu_dec->parent_class->change_state(element, transition);
 
@@ -565,6 +613,8 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	default:
 		break;
 	}
+
+	vpu_dec->state = next;
 
 	return ret;
 
@@ -630,7 +680,7 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 		return FALSE;
 	}
 
-	ioctl(vpu_dec->vpu_fd, VPU_IOC_DEC_FORMAT, vpu_dec->codec);
+	ioctl(vpu_dec->vpu_fd, VPU_IOC_CODEC, vpu_dec->codec);
 
 	gst_structure_get_fraction(structure, "framerate",
 			&vpu_dec->frame_rate_nu, &vpu_dec->frame_rate_de);
@@ -640,22 +690,22 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 			((gfloat) vpu_dec->frame_rate_nu /
 			 vpu_dec->frame_rate_de);
 
-	gst_structure_get_int(structure, "width", &vpu_dec->picWidth);
-	gst_structure_get_int(structure, "height", &vpu_dec->picHeight);
+	gst_structure_get_int(structure, "width", &vpu_dec->width);
+	gst_structure_get_int(structure, "height", &vpu_dec->height);
 
 	GST_DEBUG("Frame Rate = %f, Input width = %d, Input height = %d",
 			vpu_dec->frame_rate,
-			vpu_dec->picWidth,
-			vpu_dec->picHeight);
+			vpu_dec->width,
+			vpu_dec->height);
 
 	codec_data = (GValue *) gst_structure_get_value(structure, "codec_data");
 	if (codec_data) {
-		vpu_dec->HdrExtData = gst_value_get_buffer(codec_data);
-		vpu_dec->HdrExtDataLen = GST_BUFFER_SIZE(vpu_dec->HdrExtData);
-		GST_DEBUG("Codec specific data length is %d", vpu_dec->HdrExtDataLen);
+		vpu_dec->hdr_ext_data = gst_value_get_buffer(codec_data);
+		vpu_dec->hdr_ext_data_len = GST_BUFFER_SIZE(vpu_dec->hdr_ext_data);
+		GST_DEBUG("Codec specific data length is %d", vpu_dec->hdr_ext_data_len);
 		GST_DEBUG("Header Extension Data is");
-		hdrextdata = GST_BUFFER_DATA(vpu_dec->HdrExtData);
-		for (i = 0; i < vpu_dec->HdrExtDataLen; i++)
+		hdrextdata = GST_BUFFER_DATA(vpu_dec->hdr_ext_data);
+		for (i = 0; i < vpu_dec->hdr_ext_data_len; i++)
 			GST_DEBUG("%02x ", hdrextdata[i]);
 	}
 

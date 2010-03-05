@@ -49,48 +49,6 @@ G_BEGIN_DECLS
 #define MFW_GST_TYPE_VPU_DEC_CODEC (mfw_gst_vpudec_codec_get_type())
 #define MFW_GST_TYPE_VPU_DEC_MIRROR (mfw_gst_vpudec_mirror_get_type())
 
-typedef struct _MfwGstVPU_Dec {
-	/* Plug-in specific members */
-	GstElement element;	/* instance of base class */
-	GstPad *sinkpad;
-	GstPad *srcpad;		/* source and sink pad of element */
-	GstElementClass *parent_class;
-	gboolean init;		/* initialisation flag */
-	guint outsize;		/* size of the output image */
-
-	gint codec;		/* codec standard to be selected */
-	gint picWidth;		/* Width of the Image obtained through
-				   Caps Neogtiation */
-	gint picHeight;		/* Height of the Image obtained through
-				   Caps Neogtiation */
-	GstBuffer *HdrExtData;
-	guint HdrExtDataLen;	/* Heafer Extension Data and length
-				   obtained through Caps Neogtiation */
-
-	/* Misc members */
-	guint64 decoded_frames;	/*number of the decoded frames */
-	gfloat frame_rate;	/* Frame rate of display */
-	gint32 frame_rate_de;
-	gint32 frame_rate_nu;
-	gfloat avg_fps_decoding;
-	/* average fps of decoding  */
-	/* enable direct rendering in case of V4L */
-	gboolean first;		/* Flag for inserting the RCV Header
-				   fot the first time */
-	gboolean rotation_angle;	// rotation angle used for VPU to rotate
-	gint mirror_dir;	// VPU mirror direction
-	gboolean dbk_enabled;
-	gint dbk_offset_a;
-	gint dbk_offset_b;
-
-	struct v4l2_buffer buf_v4l2[NUM_BUFFERS];
-	unsigned char *buf_data[NUM_BUFFERS];
-	unsigned int buf_size[NUM_BUFFERS];
-	int vpu_fd;
-
-	int once;
-} MfwGstVPU_Dec;
-
 typedef struct _MfwGstVPU_DecClass {
 	GstElementClass parent_class;
 
@@ -126,7 +84,7 @@ typedef enum {
 
 #define	VPU_IOC_MAGIC		'V'
 #define	VPU_IOC_ROTATE_MIRROR	_IO(VPU_IOC_MAGIC, 7)
-#define VPU_IOC_DEC_FORMAT	_IO(VPU_IOC_MAGIC, 8)
+#define VPU_IOC_CODEC		_IO(VPU_IOC_MAGIC, 8)
 
 G_END_DECLS
 #endif				/* __MFW_GST_VPU_DECODER_H__ */
