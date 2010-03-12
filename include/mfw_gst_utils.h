@@ -473,5 +473,25 @@ do {                                                            \
     }                                                           \
 }while(0);
 
+/*=============================================================================
+                                 STRUCTURES AND OTHER TYPEDEFS
+=============================================================================*/
+
+typedef enum {
+	MIRDIR_NONE,
+	MIRDIR_VER,
+	MIRDIR_HOR,
+	MIRDIR_HOR_VER,
+} MirrorDirection;
+
+typedef enum {
+	STD_MPEG2 = -1,
+	STD_VC = -1,
+	STD_MPEG4 = 0,
+	STD_H263,
+	STD_AVC
+} CodStd;
+
+
 #endif//__MFW_GST_UTILS_H__			
 

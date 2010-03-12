@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 #include "mfw_gst_vpu_encoder.h"
+#include "mfw_gst_utils.h"
 
 typedef struct {
 	gint Index;
@@ -45,7 +46,6 @@ typedef struct {
 	gint DispY;		/* DispY is the page aligned AddrY */
 	gint DispCb;		/* DispCb is the page aligned AddrCb */
 	gint DispCr;
-	vpu_mem_desc CurrImage;	/* Current memory descriptor for user space */
 } FRAME_BUF;
 
 #define NUM_BUFFERS 3
@@ -56,14 +56,6 @@ typedef struct _MfwGstVPU_Enc
 	GstPad		*sinkpad;
 	GstPad		*srcpad;	/* source and sink pad of element */
 	GstElementClass	*parent_class;
-
-	/* VPU Specific defined in vpu_lib.h */
-    	EncHandle	handle;
-	EncOpenParam	*encOP;
-	EncInitialInfo	*initialInfo;
-	EncOutputInfo	*outputInfo;
-	EncParam	*encParam;
-    	vpu_mem_desc	bit_stream_buf;
 
 	gboolean	init;		/* initialisation flag */
 	guint8		*start_addr;	/* start addres of the Hardware input buffer */
@@ -79,7 +71,6 @@ typedef struct _MfwGstVPU_Enc
 	guint		headersize[NUM_INPUT_BUF];
 	gint		headercount;
 	gint		frameIdx;
-	FrameBuffer	frameBuf[NUM_INPUT_BUF];
 	FRAME_BUF	FrameBufPool[NUM_INPUT_BUF];
 	gint		bitrate;
 	gint		gopsize;
