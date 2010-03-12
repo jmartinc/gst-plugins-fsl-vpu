@@ -1,2 +1,0 @@
-mylibdir=$(libdir)
-dist_mylib_DATA = libmp4_parser_arm11_elinux.so

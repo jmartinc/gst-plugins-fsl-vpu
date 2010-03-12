@@ -1,11 +1,7 @@
 noinst_HEADERS = mfw_gst_vpu_encoder.h \
-		mfw_gst_vpu_decoder.h \
-		mfw_gst_mp4demuxer.h \
-		mfw_gst_v4lsrc.h \
-		mfw_gst_v4lsink.h
+		mfw_gst_vpu_decoder.h
 
-lib_LTLIBRARIES = libgst-plugins-fsl-vpu.la \
-	libgst-plugins-fsl-parser.la
+lib_LTLIBRARIES = libgst-plugins-fsl-vpu.la
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/include \
@@ -15,9 +11,6 @@ libgst_plugins_fsl_vpu_la_SOURCES = \
 	mfw_gst_vpu_encoder.c \
 	mfw_gst_vpu_decoder.c \
 	mfw_gst_vpu.c
-
-libgst_plugins_fsl_parser_la_SOURCES = \
-	mfw_gst_mp4demuxer.c
 
 common_ldflags = \
 		$(GST_PLUGIN_LDFLAGS) -lgstriff-@GST_MAJORMINOR@
@@ -33,33 +26,6 @@ libgst_plugins_fsl_vpu_la_CFLAGS = \
 
 libgst_plugins_fsl_vpu_la_LDFLAGS = \
 	$(common_ldflags)
-
-libgst_plugins_fsl_parser_la_CFLAGS = \
-	$(common_cflags)
-
-libgst_plugins_fsl_parser_la_LIBADD = \
-	$(common_libadd) -L$(top_srcdir)/libs 
-
-libgst_plugins_fsl_parser_la_LDFLAGS = \
-	$(common_ldflags) -lmp4_parser_arm11_elinux
-
-libgst_plugins_fsl_v4lsrc_la_CFLAGS = \
-	$(common_cflags)
-
-libgst_plugins_fsl_v4lsrc_la_LIBADD = \
-	$(common_libadd)
-
-libgst_plugins_fsl_v4lsrc_la_LDFLAGS = \
-	$(common_ldflags)
-
-libgst_plugins_fsl_v4lsink_la_CFLAGS = \
-	$(common_cflags) -DENABLE_TVOUT
-
-libgst_plugins_fsl_v4lsink_la_LIBADD = \
-	$(common_libadd)
-
-libgst_plugins_fsl_v4lsink_la_LDFLAGS = \
-	$(common_ldflags) -lgstvideo-0.10
 
 MAINTAINERCLEANFILES = \
 	GNUmakefile.in

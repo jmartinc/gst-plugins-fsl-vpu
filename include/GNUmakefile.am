@@ -1,7 +1,3 @@
-noinst_HEADERS = mfw_gst_utils.h \
-		mp4_parser/MP4OSMacros.h \
-		mp4_parser/MP4Parser.h
-
 MAINTAINERCLEANFILES = \
 	gst-plugins-fsl-vpu_config.h.in \
 	GNUmakefile.in

@@ -40,7 +40,6 @@
 #include <gst-plugins-fsl_config.h>
 #include <linux/videodev2.h>
 #include "mfw_gst_vpu_decoder.h"
-#include "mfw_gst_utils.h"
 
 #define MFW_GST_VPUDEC_VIDEO_CAPS \
     "video/mpeg, " \
@@ -735,9 +734,9 @@ mfw_gst_vpudec_codec_get_type(void)
 	static GType vpudec_codec_type = 0;
 
 	static GEnumValue vpudec_codecs[] = {
-		{STD_MPEG4, STR(STD_MPEG4), "std_mpeg4"},
-		{STD_H263, STR(STD_H263), "std_h263"},
-		{STD_AVC, STR(STD_AVC), "std_avc"},
+		{STD_MPEG4, "0", "std_mpeg4"},
+		{STD_H263, "1", "std_h263"},
+		{STD_AVC, "2", "std_avc"},
 		{0, NULL, NULL},
 	};
 	if (!vpudec_codec_type) {
@@ -752,10 +751,10 @@ mfw_gst_vpudec_mirror_get_type(void)
 {
 	static GType vpudec_mirror_type = 0;
 	static GEnumValue vpudec_mirror[] = {
-		{MIRDIR_NONE, STR(MIRDIR_NONE), "none"},
-		{MIRDIR_VER, STR(MIRDIR_VER), "ver"},
-		{MIRDIR_HOR, STR(MIRDIR_HOR), "hor"},
-		{MIRDIR_HOR_VER, STR(MIRDIR_HOR_VER), "hor_ver"},
+		{MIRDIR_NONE, "0", "none"},
+		{MIRDIR_VER, "1", "ver"},
+		{MIRDIR_HOR, "2", "hor"},
+		{MIRDIR_HOR_VER, "3", "hor_ver"},
 		{0, NULL, NULL},
 	};
 	if (!vpudec_mirror_type) {

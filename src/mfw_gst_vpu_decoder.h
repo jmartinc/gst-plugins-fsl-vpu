@@ -33,6 +33,7 @@
 #define __MFW_GST_VPU_DECODER_H__
 
 #include <linux/videodev2.h>
+#include "mfw_gst_utils.h"
 
 #define NUM_BUFFERS 4
 
@@ -56,21 +57,6 @@ typedef struct _MfwGstVPU_DecClass {
 
 GType mfw_gst_type_vpu_dec_get_type(void);
 GType mfw_gst_vpudec_codec_get_type(void);
-
-typedef enum {
-	STD_MPEG2 = -1,
-	STD_VC = -1,
-	STD_MPEG4 = 0,
-	STD_H263,
-	STD_AVC
-} CodStd;
-
-typedef enum {
-	MIRDIR_NONE,
-	MIRDIR_VER,
-	MIRDIR_HOR,
-	MIRDIR_HOR_VER,
-} MirrorDirection;
 
 #define MIRROR_NONE	0
 #define MIRROR_VER	4
