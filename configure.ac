@@ -204,7 +204,6 @@ AC_CONFIG_FILES([
 	config/GNUmakefile
 	include/GNUmakefile
 	src/GNUmakefile
-	libs/GNUmakefile
 	])
 AC_OUTPUT
 
