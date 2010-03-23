@@ -639,8 +639,6 @@ static GstPadTemplate *src_templ(void)
 	structure = gst_caps_get_structure(caps, 0);
 
 	g_value_init(&list, GST_TYPE_LIST);
-
-	g_value_init(&list, GST_TYPE_LIST);
 	g_value_init(&fmt, GST_TYPE_FOURCC);
 	for (n = 0; fmts[n] != NULL; n++) {
 		gst_value_set_fourcc(&fmt, GST_STR_FOURCC(fmts[n]));
