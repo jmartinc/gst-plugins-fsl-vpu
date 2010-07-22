@@ -573,6 +573,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(element);
 	GstState state, next;
+	int retval, i;
 
 	state = (GstState) GST_STATE_TRANSITION_CURRENT (transition);
 	next = GST_STATE_TRANSITION_NEXT (transition);
@@ -605,9 +606,20 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
+		vpu_dec->decoded_frames=0;
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
-		close(vpu_dec->vpu_fd);
+		for (i = 0; i < NUM_BUFFERS; ++i){
+			struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
+			munmap(vpu_dec->buf_data[i],buf->length);
+			if (retval) {
+				GST_ERROR("VIDIOC_QBUF munmap failed: %s\n", strerror(errno));
+				return -errno;
+			}
+		}
+		retval = close(vpu_dec->vpu_fd);
+		if(!retval)
+			GST_ERROR("closing filedesriptor error: %d\n", errno);
 		break;
 	default:
 		break;
