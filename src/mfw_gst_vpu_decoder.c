@@ -541,12 +541,18 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
 		if (TRUE != result) {
-			GST_ERROR("Error in pushing the event,result is %d", result);
+			GST_DEBUG_OBJECT(vpu_dec, "Error in pushing the event,result is %d", result);
 			gst_event_unref(event);
 		}
 		break;
 	case GST_EVENT_EOS:
 		write(vpu_dec->vpu_fd, NULL, 0);
+		GST_DEBUG_OBJECT(vpu_dec, "GST_EVENT_EOS: handled\n");
+		result = gst_pad_push_event(vpu_dec->srcpad, event);
+		if (TRUE != result)
+			GST_DEBUG_OBJECT(vpu_dec, "Error in pushing the event,result is %d", result);
+		break;
+	case GST_EVENT_FLUSH_START:
 		if (vpu_dec->state == GST_STATE_PLAYING) {
 			while (1) {
 				result = vpu_dec_loop(vpu_dec);
@@ -555,9 +561,12 @@ mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 			}
 		}
 
+		GST_DEBUG_OBJECT(vpu_dec, "GST_EVENT_FLUSH_START: handled\n");
 		result = gst_pad_push_event(vpu_dec->srcpad, event);
-		if (TRUE != result)
+		if (TRUE != result) {
 			GST_DEBUG_OBJECT(vpu_dec, "Error in pushing the event,result is %d", result);
+			gst_event_unref(event);
+		}
 		break;
 	default:
 		result = gst_pad_event_default(pad, event);
