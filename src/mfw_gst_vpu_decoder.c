@@ -294,7 +294,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 		return -errno;
 	}
 
-	GST_DEBUG("format: %d x %x\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
+	GST_DEBUG("format: %d x %d\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
 
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
 	if (retval) {
