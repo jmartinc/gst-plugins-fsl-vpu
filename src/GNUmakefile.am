@@ -1,7 +1,7 @@
 noinst_HEADERS = mfw_gst_vpu_encoder.h \
 		mfw_gst_vpu_decoder.h
 
-lib_LTLIBRARIES = libgst-plugins-fsl-vpu.la
+plugin_LTLIBRARIES = libgst-plugins-fsl-vpu.la
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/include \
