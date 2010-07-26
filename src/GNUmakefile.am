@@ -10,22 +10,17 @@ AM_CPPFLAGS = \
 libgst_plugins_fsl_vpu_la_SOURCES = \
 	mfw_gst_vpu_encoder.c \
 	mfw_gst_vpu_decoder.c \
-	mfw_gst_vpu.c
-
-common_ldflags = \
-		$(GST_PLUGIN_LDFLAGS) -lgstriff-@GST_MAJORMINOR@
-
-common_cflags = \
-		$(GST_BASE_CFLAGS) $(GST_LIBS_CFLAGS) -O2
-
-common_libadd = \
-		$(GST_PLUGINS_BASE_LIBS) $(GST_BASE_LIBS) $(GST_LIBS)
+	mfw_gst_vpu.c \
+	../include/mfw_gst_utils.h
 
 libgst_plugins_fsl_vpu_la_CFLAGS = \
-	$(common_cflags)
+	$(GST_CFLAGS) $(GST_PLUGINS_BASE_CFLAGS) -O2
+
+libgst_plugins_fsl_vpu_la_LIBADD = \
+	$(GST_LIBS) $(GST_PLUGINS_BASE_LIBS)
 
 libgst_plugins_fsl_vpu_la_LDFLAGS = \
-	$(common_ldflags)
+	$(GST_PLUGIN_LDFLAGS) -lgstriff-@GST_MAJORMINOR@ -Wl,--no-undefined
 
 MAINTAINERCLEANFILES = \
 	GNUmakefile.in
