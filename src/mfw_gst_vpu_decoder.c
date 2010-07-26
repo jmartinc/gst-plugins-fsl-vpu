@@ -37,7 +37,6 @@
 #include <sys/time.h>
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
-#include <gst-plugins-fsl_config.h>
 #include <linux/videodev2.h>
 #include "mfw_gst_vpu_decoder.h"
 

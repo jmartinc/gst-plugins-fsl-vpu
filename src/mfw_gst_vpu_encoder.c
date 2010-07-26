@@ -28,7 +28,6 @@
 #include <poll.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-#include <gst-plugins-fsl_config.h>
 #include <linux/videodev2.h>
 #include <unistd.h>
 

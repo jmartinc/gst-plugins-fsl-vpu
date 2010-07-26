@@ -3,7 +3,6 @@
 AC_PREREQ(2.59)
 
 AC_INIT([gst-plugins-fsl-vpu], [trunk], [bugs@pengutronix.de])
-AC_CONFIG_HEADERS([include/gst-plugins-fsl_config.h])
 AC_CONFIG_SRCDIR([src/mfw_gst_vpu_encoder.c])
 AC_CONFIG_MACRO_DIR([config/m4])
 AC_CONFIG_AUX_DIR([config/autoconf])
@@ -119,33 +118,6 @@ if test "${CONFIG_DEBUG}" = "yes"; then
 else
     CFLAGS="${CFLAGS} -O2"
 fi
-
-#
-# VPU version
-#
-AC_ARG_WITH(vpu-version,
-    AS_HELP_STRING([--with-vpu-version=@<:@mx27|mx37|mx51@:>@], [select vpu version @<:@default=mx27@:>@]),
-    [case "$withval" in
-	mx37)
-	AC_DEFINE(VPU_MX37, 1, [VPU on a MX37])
-	VPU_TYPE="vpu_mx37"
-	;;
-	mx51)
-	AC_DEFINE(VPU_MX51, 1, [VPU on a MX51])
-	VPU_TYPE="vpu_mx51"
-	;;
-        mx27 | *)
-	AC_DEFINE(VPU_MX27, 1, [VPU on a MX27])
-	VPU_TYPE="vpu_mx27"
-	;;
-    esac])
-
-AC_MSG_CHECKING([vpu version])
-if test -z ${VPU_TYPE}; then
-	AC_DEFINE(VPU_MX27, 1, [VPU on a MX27])
-	VPU_TYPE="vpu_mx27"
-fi
-AC_MSG_RESULT([${VPU_TYPE}])
 
 dnl Check for pkgconfig first
 AC_CHECK_PROG(HAVE_PKGCONFIG, pkg-config, yes, no)
