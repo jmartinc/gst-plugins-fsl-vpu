@@ -1167,7 +1167,7 @@ static int vpu_version_info(struct vpu *vpu)
 
 	version = (u16) ver;
 
-	dev_info(vpu->dev, "VPU firmware version %d.%d.%d\n",
+	printk("VPU firmware version %d.%d.%d\n",
 			(version >> 12) & 0x0f,
 			(version >> 8) & 0x0f,
 			version & 0xff);
