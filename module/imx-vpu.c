@@ -1578,8 +1578,6 @@ static int vpu_dev_remove(struct platform_device *pdev)
 {
 	struct vpu *vpu = platform_get_drvdata(pdev);
 
-	platform_set_drvdata(pdev, NULL);
-
 	free_irq(vpu_data->irq, vpu);
 
 	clk_disable(vpu_data->clk);
@@ -1591,7 +1589,12 @@ static int vpu_dev_remove(struct platform_device *pdev)
 	dma_free_coherent(NULL, CODE_BUF_SIZE, vpu->vpu_code_table,
 			vpu->vpu_code_table_phys);
 
-	kfree(vpu->vdev);
+	video_unregister_device(vpu_data->vdev);
+
+	device_remove_file(&pdev->dev, &dev_attr_info);
+	platform_set_drvdata(pdev, NULL);
+
+
 
 	return 0;
 }
