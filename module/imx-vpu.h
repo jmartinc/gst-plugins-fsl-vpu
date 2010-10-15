@@ -133,7 +133,7 @@
 #define CMD_ENC_SEQ_INTRA_REFRESH	0x1B4
 #define CMD_ENC_SEQ_FMO			0x1B8
 #define CMD_ENC_SEQ_INTRA_QP		0x1BC
-
+#define CMD_ENC_SEQ_RC_QP_MAX		0x1C8
 #define RET_ENC_SEQ_SUCCESS		0x1C0
 
 /*--------------------------------------------------------------------------

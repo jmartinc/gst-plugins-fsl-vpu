@@ -36,7 +36,6 @@
 
 #include "vpu_codetable_mx27.h"
 
-#include <linux/slab.h>
 #include "imx-vpu.h"
 
 #define VPU_IOC_MAGIC  'V'
@@ -123,6 +122,9 @@ struct vpu_instance {
 	struct videobuf_queue vidq;
 	int in_use;
 
+	dma_addr_t	nullbuf_phys;
+	void __iomem	*null_buf;
+
 	dma_addr_t	bitstream_buf_phys;
 	void __iomem	*bitstream_buf;
 
@@ -135,6 +137,8 @@ struct vpu_instance {
 	dma_addr_t	ps_mem_buf_phys;
 	void __iomem	*ps_mem_buf;
 
+	u32 framerate;
+	u32 gopsize;
 	u32 rotmir;
 	int hold;
 	wait_queue_head_t waitq;
@@ -401,15 +405,17 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 {
 	int ret;
 	u32 data;
-	u32 sliceSizeMode = 0;
+	u32 sliceSizeMode = 1;
 	u32 sliceMode = 1;
-	u32 bitrate = 32767; /* auto bitrate */
+	/* u32 bitrate = 32767; [> auto bitrate <] */
+	/* u32 bitrate = 1024; [> auto bitrate <] */
+	u32 bitrate = 0; /* auto bitrate */
 	u32 enableAutoSkip = 0;
-	u32 initialDelay = 0;
+	u32 initialDelay = 1;
 	u32 sliceReport = 0;
 	u32 mbReport = 0;
 	u32 rcIntraQp = 0;
-	u32 mp4_verid = 1;
+	/* u32 rcIntraQp = 1024; */
 
 	switch (instance->standard) {
 	case STD_MPEG4:
@@ -423,7 +429,15 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		return -EINVAL;
 	};
 
+	/* data = VpuReadReg(BIT_BIT_STREAM_CTRL); */
+	/* data &= 0xFFE7; */
+		/* data |= (1 << 4); */
+		/* data |= 1 << 3; */
+	/* printk("setting stream ctrl: 0x%08x", data); */
+	/* VpuWriteReg(BIT_BIT_STREAM_CTRL, data); */
+
 	VpuWriteReg(BIT_BIT_STREAM_CTRL, 0xc);
+	/* VpuWriteReg(BIT_FRAME_MEM_CTRL, 0xff); */
 	VpuWriteReg(BIT_PARA_BUF_ADDR, instance->para_buf_phys);
 
 	VpuWriteReg(BIT_WR_PTR(instance->idx), instance->bitstream_buf_phys);
@@ -431,13 +445,15 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 
 	data = (instance->width << 10) | instance->height;
 	VpuWriteReg(CMD_ENC_SEQ_SRC_SIZE, data);
-	VpuWriteReg(CMD_ENC_SEQ_SRC_F_RATE, 0x03e87530);
+	VpuWriteReg(CMD_ENC_SEQ_SRC_F_RATE, 0x03e87530); /* 0x03e87530 */
+	/* VpuWriteReg(CMD_ENC_SEQ_SRC_F_RATE, 0x0000001e); [> 0x03e87530 <] */
 
 	if (instance->standard == STD_MPEG4) {
-		u32 mp4_intraDcVlcThr = 0;
+		u32 mp4_intraDcVlcThr = 7;
 		u32 mp4_reversibleVlcEnable = 0;
 		u32 mp4_dataPartitionEnable = 0;
 		u32 mp4_hecEnable = 0;
+		u32 mp4_verid = 1;
 
 		VpuWriteReg(CMD_ENC_SEQ_COD_STD, STD_MPEG4);
 
@@ -473,7 +489,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	} else if (instance->standard == STD_AVC) {
 		u32 avc_deblkFilterOffsetBeta = 0;
 		u32 avc_deblkFilterOffsetAlpha = 0;
-		u32 avc_disableDeblk = 0;
+		u32 avc_disableDeblk = 1;
 		u32 avc_constrainedIntraPredFlag = 0;
 		u32 avc_chromaQpOffset = 0;
 
@@ -487,26 +503,33 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		VpuWriteReg(CMD_ENC_SEQ_264_PARA, data);
 	}
 
-	data = 4000 << 2 | /* slice size */
+	data = 8000 << 2 | /* slice size */
 		sliceSizeMode << 1 | sliceMode;
 
 	VpuWriteReg(CMD_ENC_SEQ_SLICE_MODE, data);
-	VpuWriteReg(CMD_ENC_SEQ_GOP_NUM, 0); /* gop size */
+	VpuWriteReg(CMD_ENC_SEQ_GOP_NUM, 1); /* gop size */
 
 	if (bitrate) {	/* rate control enabled */
-		data = (!enableAutoSkip) << 31 | initialDelay << 16 | bitrate << 1 | 1;
+		data = (!enableAutoSkip) << 31 |
+			initialDelay << 16 |
+			bitrate << 1 |
+			0;
 		VpuWriteReg(CMD_ENC_SEQ_RC_PARA, data);
 	} else {
 		VpuWriteReg(CMD_ENC_SEQ_RC_PARA, 0);
 	}
 
-	VpuWriteReg(CMD_ENC_SEQ_RC_BUF_SIZE, 0 ); /* vbv buffer size */
+	VpuWriteReg(CMD_ENC_SEQ_RC_BUF_SIZE, 0); /* vbv buffer size */
+	/* VpuWriteReg(CMD_ENC_SEQ_INTRA_QP, -1); [> let the vpu decide <] */
 	VpuWriteReg(CMD_ENC_SEQ_INTRA_REFRESH, 0);
+	/* VpuWriteReg(CMD_ENC_SEQ_INTRA_QP, 128); */
 
 	VpuWriteReg(CMD_ENC_SEQ_BB_START, instance->bitstream_buf_phys);
 	VpuWriteReg(CMD_ENC_SEQ_BB_SIZE, BITSTREAM_BUF_SIZE / 1024);
 
 	data = (sliceReport << 1) | mbReport;
+
+	VpuWriteReg(CMD_ENC_SEQ_RC_QP_MAX, 4096);
 
 	if (rcIntraQp >= 0)
 		data |= (1 << 5);
@@ -518,7 +541,20 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 //		data |= (encOP.EncStdParam.avcParam.avc_fmoEnable << 4);
 //	}
 
+	if (instance->standard == AVC_ENC) {
+		data |= (0 << 2);
+		data |= (1 << 4);
+	}
+
 	VpuWriteReg(CMD_ENC_SEQ_OPTION, data);
+
+	if (instance->standard == AVC_ENC) {
+		data = (1 << 4) |
+		    (0x80 & 0x0f);
+		data |= (FMO_SLICE_SAVE_BUF_SIZE << 7);
+	}
+
+
 
 //	if (pCodecInst->codecMode == AVC_ENC) {
 //		data = (encOP.EncStdParam.avcParam.avc_fmoType << 4) |
@@ -717,10 +753,14 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct v
 	VpuWriteReg(CMD_ENC_PIC_QS, 30);
 
 	VpuWriteReg(CMD_ENC_PIC_SRC_ADDR_Y, dma);
+	/* trace_printk("Y: 0x%08x \n",dma); */
 	u = dma + stridey * ROUND_UP_2(height);
+	/* trace_printk("U: 0x%08x \n",u); */
+	/* u = instance->nullbuf_phys; */
 	VpuWriteReg(CMD_ENC_PIC_SRC_ADDR_CB, u);
 	ustride = ROUND_UP_8(instance->width) / 2;
 	VpuWriteReg(CMD_ENC_PIC_SRC_ADDR_CR, u + ustride * ROUND_UP_2(height) / 2);
+	/* trace_printk("V: 0x%08x \n",u + ustride * ROUND_UP_2(height) / 2 ); */
 	VpuWriteReg(CMD_ENC_PIC_OPTION, (0 << 5) | (0 << 1));
 
 	VpuWriteReg(BIT_BUSY_FLAG, 0x1);
@@ -872,6 +912,8 @@ static void vpu_enc_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 		if (ret < size)
 			BUG();
 	}
+	/* trace_printk("enc interrupt handled \n" ); */
+	/* printk("enc interrupt handled \n" ); */
 
 	list_del_init(&vb->queue);
 	vb->state = VIDEOBUF_DONE;
@@ -891,14 +933,14 @@ static irqreturn_t vpu_irq_handler(int irq, void *dev_id)
 
 	spin_lock_irqsave(&vpu->lock, flags);
 
-	VpuWriteReg(BIT_INT_CLEAR, 1);
-	VpuWriteReg(BIT_INT_REASON, 0);
-
 	if (!vb)
 		goto out;
 
 	vbuf = container_of(vpu->active, struct vpu_buffer, vb);
 	instance = vbuf->instance;
+
+	VpuWriteReg(BIT_INT_CLEAR, 1);
+	VpuWriteReg(BIT_INT_REASON, 0);
 
 	if (instance->mode == VPU_MODE_DECODER)
 		vpu_dec_irq_handler(vpu, instance, vb);
@@ -954,6 +996,7 @@ static int vpu_open(struct file *file)
 
 	file->private_data = instance;
 
+	
 	instance->bitstream_buf = dma_alloc_coherent(NULL, BITSTREAM_BUF_SIZE,
 			&instance->bitstream_buf_phys, GFP_DMA | GFP_KERNEL);
 	if (!instance->bitstream_buf) {
@@ -1050,6 +1093,10 @@ static int vpu_release(struct file *file)
 	struct vpu_instance *instance = file->private_data;
 	int i;
 
+	dma_free_coherent(NULL, ROUND_UP_2(instance->height)*ROUND_UP_4(instance->width), 
+			instance->null_buf, instance->nullbuf_phys);
+
+
 	dma_free_coherent(NULL, PARA_BUF_SIZE, instance->para_buf,
 			instance->para_buf_phys);
 	dma_free_coherent(NULL, SLICE_SAVE_SIZE, instance->slice_mem_buf,
@@ -1072,8 +1119,10 @@ static int vpu_release(struct file *file)
 	if (instance->header)
 		kfree(instance->header);
 
-	if (kfifo_initialized(&instance->fifo)) {
+	if (instance->fifo.buffer) {
+	/* if (kfifo_initialized(&instance->fifo)) { */
 		kfifo_free(&instance->fifo);
+		/* instance->fifo.buffer = NULL; */
 	}
 
 	return 0;
@@ -1250,6 +1299,13 @@ static int vpu_videobuf_setup(struct videobuf_queue *q,
 
 	*size = frame_calc_size(instance->width, instance->height);
 
+
+	instance->null_buf = dma_alloc_coherent(NULL,
+				 	ROUND_UP_2(instance->height)*ROUND_UP_4(instance->width),
+					&instance->nullbuf_phys,
+				 	GFP_DMA | GFP_KERNEL);
+
+
 	return 0;
 }
 
@@ -1424,6 +1480,10 @@ static int vpu_s_fmt_vid_out(struct file *file, void *priv,
 
 	instance->width = fmt->fmt.pix.width;
 	instance->height = fmt->fmt.pix.height;
+	/* instance->framerate = 0x03e87530; */
+	/* instance->gopsize = fmt->fmt.pix.priv; */
+
+	/* printk("set gopsize 0x%08x \n", instance->gopsize); */
 
 	return 0;
 }
