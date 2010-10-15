@@ -58,6 +58,7 @@ typedef struct _MfwGstVPU_Enc
 
 	gboolean	init;		/* initialisation flag */
 	guint8		*start_addr;	/* start addres of the Hardware input buffer */
+	guint64 	encoded_frames;		/* number of the decoded frames */
 	gfloat		frame_rate;	/* Frame rate of display */
 	gboolean	profile;
 	CodStd		codec;		/* codec standard to be selected */
@@ -389,6 +390,15 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 		return GST_FLOW_ERROR;
 	}
 	GST_BUFFER_SIZE(outbuffer) = ret;
+	GST_BUFFER_TIMESTAMP(outbuffer) = gst_util_uint64_scale(vpu_enc->encoded_frames,
+		1 * GST_SECOND,
+		vpu_enc->framerate);
+
+	vpu_enc->encoded_frames++;
+
+	GST_DEBUG_OBJECT(vpu_enc, "frame encoded : %lld ts = %" GST_TIME_FORMAT,
+			vpu_enc->encoded_frames,
+			GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(outbuffer)));
 
 	retval = gst_pad_push(vpu_enc->srcpad, outbuffer);
 	if (retval != GST_FLOW_OK) {
@@ -463,6 +473,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 		GST_DEBUG("VPU State: Playing to Paused");
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
+		vpu_enc->encoded_frames=0;
 		GST_DEBUG("VPU State: Paused to Ready");
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
