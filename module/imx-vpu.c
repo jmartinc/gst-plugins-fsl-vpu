@@ -1,8 +1,7 @@
 /*
+ * Copyright 2011 Sascha Hauer, Pengutronix <s.hauer@pengutronix.de>
  * Copyright 2006-2007 Freescale Semiconductor, Inc. All Rights Reserved.
- */
-
-/*
+ *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
  * Version 2 or later at the following locations:
@@ -1679,7 +1678,7 @@ static void __exit vpu_exit(void)
 	platform_driver_unregister(&mxcvpu_driver);
 }
 
-MODULE_AUTHOR("Freescale Semiconductor, Inc.");
+MODULE_AUTHOR("Sascha Hauer <s.hauer@pengutronix.de>");
 MODULE_DESCRIPTION("Linux VPU driver for Freescale i.MX27");
 MODULE_LICENSE("GPL");
 

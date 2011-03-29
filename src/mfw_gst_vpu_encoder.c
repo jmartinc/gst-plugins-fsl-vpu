@@ -1,11 +1,12 @@
 /*
+ * Copyright 2011 Sascha Hauer, Pengutronix <s.hauer@pengutronix.de>
  * Copyright 2005-2007 Freescale Semiconductor, Inc. All Rights Reserved.
+ *
  * Module Name:            mfw_gst_vpu_encoder.c
  *
- * General Description:    Implementation of Hardware (VPU) Encoder Plugin for Gstreamer.
- */
-
-/*
+ * General Description:    Implementation of Hardware (VPU) Encoder Plugin for
+ *                         Gstreamer.
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
  * License as published by the Free Software Foundation; either
