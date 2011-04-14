@@ -888,7 +888,7 @@ mfw_gst_type_vpu_dec_get_type(void)
 						      &vpu_dec_info, 0);
 	}
 	GST_DEBUG_CATEGORY_INIT(mfw_gst_vpudec_debug,
-				"mfw_vpudecoder", 0,
+				"vpudecoder", 0,
 				"FreeScale's VPU  Decoder's Log");
 	return vpu_dec_type;
 }

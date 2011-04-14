@@ -24,11 +24,11 @@
 static gboolean
 plugin_init(GstPlugin * plugin)
 {
-	if (!gst_element_register(plugin, "mfw_vpuencoder",
+	if (!gst_element_register(plugin, "vpuencoder",
 				    GST_RANK_PRIMARY, MFW_GST_TYPE_VPU_ENC))
 		return FALSE;
 	
-	if (!gst_element_register(plugin, "mfw_vpudecoder",
+	if (!gst_element_register(plugin, "vpudecoder",
 				GST_RANK_PRIMARY, MFW_GST_TYPE_VPU_DEC))
 		return FALSE;
 	
@@ -38,7 +38,7 @@ plugin_init(GstPlugin * plugin)
 
 GST_PLUGIN_DEFINE(GST_VERSION_MAJOR,	/* major version of gstreamer */
 		  GST_VERSION_MINOR,	/* minor version of gstreamer */
-		  "mfw_vpu",	/* name of our  plugin */
+		  "vpu",	/* name of our  plugin */
 		  "Encodes/Decodes Raw YUV Data to/from MPEG4 SP," "or H.264 BP, or H.263 Format" "data to/from Raw YUV Data ",	/* what our plugin actually does */
 		  plugin_init,	/* first function to be called */
 		  VERSION,

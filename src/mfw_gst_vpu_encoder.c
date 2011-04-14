@@ -696,7 +696,7 @@ GType mfw_gst_type_vpu_enc_get_type(void)
 	}
 
 	GST_DEBUG_CATEGORY_INIT(mfw_gst_vpuenc_debug,
-				"mfw_vpuencoder", 0,
+				"vpuencoder", 0,
 				"FreeScale's VPU  Encoder's Log");
 
 	return vpu_enc_type;
