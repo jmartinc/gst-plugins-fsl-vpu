@@ -1107,15 +1107,8 @@ static int vpu_release(struct file *file)
 
 	instance->in_use = 0;
 	instance->width = 0;
-
-	if (instance->header)
-		kfree(instance->header);
-
-	if (instance->fifo.buffer) {
-	/* if (kfifo_initialized(&instance->fifo)) { */
-		kfifo_free(&instance->fifo);
-		/* instance->fifo.buffer = NULL; */
-	}
+	kfree(instance->header);
+	kfifo_free(&instance->fifo);
 
 	return 0;
 }
@@ -1396,7 +1389,9 @@ static int vpu_reqbufs(struct file *file, void *priv,
 					    &vpu->lock,
 					    reqbuf->type,
 					    V4L2_FIELD_NONE,
-					    sizeof(struct vpu_buffer), instance);
+					    sizeof(struct vpu_buffer),
+					    instance,
+					    NULL);
 
 	/* Allocate buffers */
 	ret = videobuf_reqbufs(&instance->vidq, reqbuf);
