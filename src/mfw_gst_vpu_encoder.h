@@ -57,10 +57,10 @@ G_BEGIN_DECLS
 #define MFW_GST_TYPE_VPU_ENC (mfw_gst_type_vpu_enc_get_type())
 
 #define MFW_GST_VPU_ENC(obj)  \
-    (G_TYPE_CHECK_INSTANCE_CAST((obj),MFW_GST_TYPE_VPU_ENC,MfwGstVPU_Enc))
+    (G_TYPE_CHECK_INSTANCE_CAST((obj),MFW_GST_TYPE_VPU_ENC,GstVPU_Enc))
 
 #define MFW_GST_VPU_ENC_CLASS(klass) \
-    G_TYPE_CHECK_CLASS_CAST((klass),MFW_GST_TYPE_VPU_ENC,MfwGstVPU_EncClass))
+    G_TYPE_CHECK_CLASS_CAST((klass),MFW_GST_TYPE_VPU_ENC,GstVPU_EncClass))
 
 #define MFW_GST_IS_VPU_ENC(obj) \
     (G_TYPE_CHECK_INSTANCE_TYPE((obj),MFW_GST_TYPE_VPU_ENC))
@@ -74,11 +74,11 @@ G_BEGIN_DECLS
                                  STRUCTURES AND OTHER TYPEDEFS
 =============================================================================*/
 
-typedef struct _MfwGstVPU_EncClass 
+typedef struct _GstVPU_EncClass 
 {
     GstElementClass parent_class;
 
-}MfwGstVPU_EncClass;
+}GstVPU_EncClass;
 
 
 

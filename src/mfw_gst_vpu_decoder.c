@@ -70,7 +70,7 @@ enum {
 	MFW_GST_VPU_MIRROR,
 };
 
-typedef struct _MfwGstVPU_Dec {
+typedef struct _GstVPU_Dec {
 	/* Plug-in specific members */
 	GstElement element;	/* instance of base class */
 	GstPad *sinkpad;
@@ -109,7 +109,7 @@ typedef struct _MfwGstVPU_Dec {
 	int once;
 
 	GstState state;
-} MfwGstVPU_Dec;
+} GstVPU_Dec;
 
 /* get the element details */
 static GstElementDetails mfw_gst_vpudec_details =
@@ -131,9 +131,9 @@ GST_STATIC_PAD_TEMPLATE("sink",
 
 GST_DEBUG_CATEGORY_STATIC(mfw_gst_vpudec_debug);
 
-static void mfw_gst_vpudec_class_init(MfwGstVPU_DecClass *);
-static void mfw_gst_vpudec_base_init(MfwGstVPU_DecClass *);
-static void mfw_gst_vpudec_init(MfwGstVPU_Dec *, MfwGstVPU_DecClass *);
+static void mfw_gst_vpudec_class_init(GstVPU_DecClass *);
+static void mfw_gst_vpudec_base_init(GstVPU_DecClass *);
+static void mfw_gst_vpudec_init(GstVPU_Dec *, GstVPU_DecClass *);
 static GstFlowReturn mfw_gst_vpudec_chain_stream_mode(GstPad *, GstBuffer *);
 static GstStateChangeReturn mfw_gst_vpudec_change_state(GstElement *,
 							GstStateChange);
@@ -148,7 +148,7 @@ static void
 mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
 			    const GValue * value, GParamSpec * pspec)
 {
-	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(object);
+	GstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(object);
 	switch (prop_id) {
 	case MFW_GST_VPU_CODEC_TYPE:
 		vpu_dec->codec = g_value_get_enum(value);
@@ -200,7 +200,7 @@ mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 			    GValue * value, GParamSpec * pspec)
 {
 
-	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(object);
+	GstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(object);
 	switch (prop_id) {
 	case MFW_GST_VPU_CODEC_TYPE:
 		g_value_set_enum(value, vpu_dec->codec);
@@ -236,7 +236,7 @@ static struct v4l2_requestbuffers reqs = {
 	.memory	= V4L2_MEMORY_MMAP,
 };
 
-static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
+static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 {
 	GstCaps *caps;
 	gint crop_top_len, crop_left_len;
@@ -379,7 +379,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(MfwGstVPU_Dec * vpu_dec)
 	return 0;
 }
 
-static int vpu_dec_loop (MfwGstVPU_Dec *vpu_dec)
+static int vpu_dec_loop (GstVPU_Dec *vpu_dec)
 {
 	GstBuffer *pushbuff;
 	int ret;
@@ -434,7 +434,7 @@ done:
 static GstFlowReturn
 mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 {
-	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
+	GstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	int ret = 0;
 	GstFlowReturn retval = GST_FLOW_OK;
 	int remaining, ofs, handled = 0;
@@ -509,7 +509,7 @@ done:
 static gboolean
 mfw_gst_vpudec_sink_event(GstPad * pad, GstEvent * event)
 {
-	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
+	GstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(GST_PAD_PARENT(pad));
 	gboolean result = TRUE;
 	GstFormat format;
 	gint64 start, stop, position;
@@ -577,7 +577,7 @@ static GstStateChangeReturn
 mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 {
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
-	MfwGstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(element);
+	GstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(element);
 	GstState state, next;
 	int retval, i;
 
@@ -617,7 +617,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	case GST_STATE_CHANGE_READY_TO_NULL:
 		for (i = 0; i < NUM_BUFFERS; ++i){
 			struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
-			munmap(vpu_dec->buf_data[i],buf->length);
+			munmap(vpu_dec->buf_data[i], buf->length);
 			if (retval) {
 				GST_ERROR("VIDIOC_QBUF munmap failed: %s\n", strerror(errno));
 				return -errno;
@@ -673,7 +673,7 @@ static GstPadTemplate *src_templ(void)
 static gboolean
 mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 {
-	MfwGstVPU_Dec *vpu_dec = NULL;
+	GstVPU_Dec *vpu_dec = NULL;
 	const gchar *mime;
 	GstStructure *structure = gst_caps_get_structure(caps, 0);
 	vpu_dec = MFW_GST_VPU_DEC(gst_pad_get_parent(pad));
@@ -729,7 +729,7 @@ mfw_gst_vpudec_setcaps(GstPad * pad, GstCaps * caps)
 }
 
 static void
-mfw_gst_vpudec_base_init(MfwGstVPU_DecClass * klass)
+mfw_gst_vpudec_base_init(GstVPU_DecClass * klass)
 {
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
@@ -757,7 +757,7 @@ mfw_gst_vpudec_codec_get_type(void)
 	};
 	if (!vpudec_codec_type) {
 		vpudec_codec_type =
-		    g_enum_register_static("MfwGstVpuDecCodecs", vpudec_codecs);
+		    g_enum_register_static("GstVpuDecCodecs", vpudec_codecs);
 	}
 	return vpudec_codec_type;
 }
@@ -775,13 +775,13 @@ mfw_gst_vpudec_mirror_get_type(void)
 	};
 	if (!vpudec_mirror_type) {
 		vpudec_mirror_type =
-		    g_enum_register_static("MfwGstVpuDecMirror", vpudec_mirror);
+		    g_enum_register_static("GstVpuDecMirror", vpudec_mirror);
 	}
 	return vpudec_mirror_type;
 }
 
 static void
-mfw_gst_vpudec_class_init(MfwGstVPU_DecClass * klass)
+mfw_gst_vpudec_class_init(GstVPU_DecClass * klass)
 {
 
 	GObjectClass *gobject_class = NULL;
@@ -839,7 +839,7 @@ mfw_gst_vpudec_class_init(MfwGstVPU_DecClass * klass)
 }
 
 static void
-mfw_gst_vpudec_init(MfwGstVPU_Dec * vpu_dec, MfwGstVPU_DecClass * gclass)
+mfw_gst_vpudec_init(GstVPU_Dec * vpu_dec, GstVPU_DecClass * gclass)
 {
 
 	GstElementClass *klass = GST_ELEMENT_GET_CLASS(vpu_dec);
@@ -873,18 +873,18 @@ mfw_gst_type_vpu_dec_get_type(void)
 	static GType vpu_dec_type = 0;
 	if (!vpu_dec_type) {
 		static const GTypeInfo vpu_dec_info = {
-			sizeof (MfwGstVPU_DecClass),
+			sizeof (GstVPU_DecClass),
 			(GBaseInitFunc) mfw_gst_vpudec_base_init,
 			NULL,
 			(GClassInitFunc) mfw_gst_vpudec_class_init,
 			NULL,
 			NULL,
-			sizeof (MfwGstVPU_Dec),
+			sizeof (GstVPU_Dec),
 			0,
 			(GInstanceInitFunc) mfw_gst_vpudec_init,
 		};
 		vpu_dec_type = g_type_register_static(GST_TYPE_ELEMENT,
-						      "MfwGstVPU_Dec",
+						      "GstVPU_Dec",
 						      &vpu_dec_info, 0);
 	}
 	GST_DEBUG_CATEGORY_INIT(mfw_gst_vpudec_debug,

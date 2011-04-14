@@ -50,7 +50,7 @@ typedef struct {
 
 #define NUM_BUFFERS 3
 
-typedef struct _MfwGstVPU_Enc
+typedef struct _GstVPU_Enc
 {
 	GstElement	element;	/* instance of base class */
 	GstPad		*sinkpad;
@@ -81,7 +81,7 @@ typedef struct _MfwGstVPU_Enc
 	unsigned char *buf_data[NUM_BUFFERS];
 	unsigned int buf_size[NUM_BUFFERS];
 	unsigned int queued;
-}MfwGstVPU_Enc;
+}GstVPU_Enc;
 
 #define VPU_DEVICE "/dev/video0"
 
@@ -159,7 +159,7 @@ static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 {
 	GST_DEBUG("mfw_gst_vpuenc_set_property");
 printf("%s\n", __func__);
-	MfwGstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
+	GstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
 	switch (prop_id) {
 	case MFW_GST_VPU_PROF_ENABLE:
 		vpu_enc->profile = g_value_get_boolean(value);
@@ -199,7 +199,7 @@ static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 {
 printf("%s\n", __func__);
 	GST_DEBUG("mfw_gst_vpuenc_get_property");
-	MfwGstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
+	GstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
 	switch (prop_id) {
 	case MFW_GST_VPU_PROF_ENABLE:
 		g_value_set_boolean(value, vpu_enc->profile);
@@ -237,7 +237,7 @@ static struct v4l2_requestbuffers reqs = {
 
 static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 {
-	MfwGstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
+	GstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
 	gchar *mime = "undef";
 	gint ret;
 	GstCaps *caps = NULL;
@@ -324,7 +324,7 @@ printf("%s\n", __func__);
 
 static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 {
-	MfwGstVPU_Enc *vpu_enc = NULL;
+	GstVPU_Enc *vpu_enc = NULL;
 	GstFlowReturn retval = GST_FLOW_OK;
 	GstCaps *src_caps;
 	GstBuffer *outbuffer;
@@ -416,7 +416,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
     (GstElement * element, GstStateChange transition)
 {
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
-	MfwGstVPU_Enc *vpu_enc = NULL;
+	GstVPU_Enc *vpu_enc = NULL;
 	vpu_enc = MFW_GST_VPU_ENC(element);
 //	gint vpu_ret = 0;
 	CodStd mode;
@@ -490,7 +490,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 
 static gboolean mfw_gst_vpuenc_sink_event(GstPad * pad, GstEvent * event)
 {
-	MfwGstVPU_Enc *vpu_enc = NULL;
+	GstVPU_Enc *vpu_enc = NULL;
 	gboolean ret = FALSE;
 	vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
 	GstFormat format;
@@ -529,7 +529,7 @@ printf("%s\n", __func__);
 
 static gboolean mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 {
-	MfwGstVPU_Enc *vpu_enc = NULL;
+	GstVPU_Enc *vpu_enc = NULL;
 	gint32 frame_rate_de = 0;
 	gint32 frame_rate_nu = 0;
 	gint width = 0;
@@ -559,7 +559,7 @@ printf("%s\n", __func__);
 
 }
 
-static void mfw_gst_vpuenc_base_init(MfwGstVPU_EncClass * klass)
+static void mfw_gst_vpuenc_base_init(GstVPU_EncClass * klass)
 {
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
@@ -587,13 +587,13 @@ GType mfw_gst_vpuenc_codec_get_type(void)
 	};
 	if (!vpuenc_codec_type) {
 		vpuenc_codec_type =
-		    g_enum_register_static("MfwGstVpuEncCodecs", vpuenc_codecs);
+		    g_enum_register_static("GstVpuEncCodecs", vpuenc_codecs);
 	}
 	return vpuenc_codec_type;
 }
 
 static void
-mfw_gst_vpuenc_class_init(MfwGstVPU_EncClass * klass)
+mfw_gst_vpuenc_class_init(GstVPU_EncClass * klass)
 {
 
 	GObjectClass *gobject_class = NULL;
@@ -643,7 +643,7 @@ mfw_gst_vpuenc_class_init(MfwGstVPU_EncClass * klass)
 }
 
 static void
-mfw_gst_vpuenc_init(MfwGstVPU_Enc * vpu_enc, MfwGstVPU_EncClass * gclass)
+mfw_gst_vpuenc_init(GstVPU_Enc * vpu_enc, GstVPU_EncClass * gclass)
 {
 
 	GST_DEBUG("mfw_gst_vpuenc_init");
@@ -680,18 +680,18 @@ GType mfw_gst_type_vpu_enc_get_type(void)
 
 	if (!vpu_enc_type) {
 		static const GTypeInfo vpu_enc_info = {
-			sizeof (MfwGstVPU_EncClass),
+			sizeof (GstVPU_EncClass),
 			(GBaseInitFunc) mfw_gst_vpuenc_base_init,
 			NULL,
 			(GClassInitFunc) mfw_gst_vpuenc_class_init,
 			NULL,
 			NULL,
-			sizeof (MfwGstVPU_Enc),
+			sizeof (GstVPU_Enc),
 			0,
 			(GInstanceInitFunc) mfw_gst_vpuenc_init,
 		};
 		vpu_enc_type = g_type_register_static(GST_TYPE_ELEMENT,
-						      "MfwGstVPU_Enc",
+						      "GstVPU_Enc",
 						      &vpu_enc_info, 0);
 	}
 

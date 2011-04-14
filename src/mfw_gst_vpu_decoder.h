@@ -40,9 +40,9 @@
 G_BEGIN_DECLS
 #define MFW_GST_TYPE_VPU_DEC (mfw_gst_type_vpu_dec_get_type())
 #define MFW_GST_VPU_DEC(obj)  \
-    (G_TYPE_CHECK_INSTANCE_CAST((obj),MFW_GST_TYPE_VPU_DEC,MfwGstVPU_Dec))
+    (G_TYPE_CHECK_INSTANCE_CAST((obj),MFW_GST_TYPE_VPU_DEC,GstVPU_Dec))
 #define MFW_GST_VPU_DEC_CLASS(klass) \
-    G_TYPE_CHECK_CLASS_CAST((klass),MFW_GST_TYPE_VPU_DEC,MfwGstVPU_DecClass))
+    G_TYPE_CHECK_CLASS_CAST((klass),MFW_GST_TYPE_VPU_DEC,GstVPU_DecClass))
 #define MFW_GST_IS_VPU_DEC(obj) \
     (G_TYPE_CHECK_INSTANCE_TYPE((obj),MFW_GST_TYPE_VPU_DEC))
 #define MFW_GST_IS_VPU_DEC_CLASS(klass) \
@@ -50,10 +50,10 @@ G_BEGIN_DECLS
 #define MFW_GST_TYPE_VPU_DEC_CODEC (mfw_gst_vpudec_codec_get_type())
 #define MFW_GST_TYPE_VPU_DEC_MIRROR (mfw_gst_vpudec_mirror_get_type())
 
-typedef struct _MfwGstVPU_DecClass {
+typedef struct _GstVPU_DecClass {
 	GstElementClass parent_class;
 
-} MfwGstVPU_DecClass;
+} GstVPU_DecClass;
 
 GType mfw_gst_type_vpu_dec_get_type(void);
 GType mfw_gst_vpudec_codec_get_type(void);
