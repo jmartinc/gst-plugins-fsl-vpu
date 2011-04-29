@@ -621,14 +621,14 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	case GST_STATE_CHANGE_READY_TO_NULL:
 		for (i = 0; i < NUM_BUFFERS; ++i){
 			struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
-			munmap(vpu_dec->buf_data[i], buf->length);
+			retval = munmap(vpu_dec->buf_data[i], buf->length);
 			if (retval) {
 				GST_ERROR("VIDIOC_QBUF munmap failed: %s\n", strerror(errno));
 				return -errno;
 			}
 		}
 		retval = close(vpu_dec->vpu_fd);
-		if(!retval)
+		if(retval)
 			GST_ERROR("closing filedesriptor error: %d\n", errno);
 		break;
 	default:
