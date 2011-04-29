@@ -305,6 +305,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 		buf->memory = V4L2_MEMORY_MMAP;
 		buf->index = i;
 
+		vpu_dec->buf_data[i] = NULL;
 		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, buf);
 		if (retval) {
 			GST_ERROR("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
@@ -314,6 +315,9 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 		vpu_dec->buf_data[i] = mmap(NULL, buf->length,
 				   PROT_READ | PROT_WRITE, MAP_SHARED,
 				   vpu_dec->vpu_fd, vpu_dec->buf_v4l2[i].m.offset);
+
+		if(!vpu_dec->buf_data[i])
+			GST_ERROR("MMAP failed: %s\n", strerror(errno));
 	}
 
 	for (i = 0; i < NUM_BUFFERS; ++i){
