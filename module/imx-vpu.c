@@ -30,17 +30,16 @@
 #include <linux/io.h>
 #include <linux/mm.h>
 
+#include <linux/firmware.h>
+
 #include <media/videobuf-dma-contig.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
 #include <mach/hardware.h>
 
-#include "vpu_codetable_mx27.h"
-
 #include "imx-vpu.h"
 
 #define VPU_IOC_MAGIC  'V'
-
 #define	BIT_INT_STATUS		0x010
 
 #define	VPU_IOC_SET_ENCODER	_IO(VPU_IOC_MAGIC, 5)
@@ -1213,11 +1212,38 @@ static int vpu_version_info(struct vpu *vpu)
 
 #define IMAGE_ENDIAN                    0
 #define STREAM_ENDIAN                   0
+#define MAX_FW_BINARY_LEN		102400
+
+struct headerInfo {
+	u8 platform[12];
+	u32 size;
+};
 
 static int vpu_program_firmware(struct vpu *vpu)
 {
-	int i, data;
+	int i, data, ret;
+	unsigned short *dp;
 	u32 *buf;
+	const char *fwname;
+
+	struct headerInfo info;
+	const struct firmware *fw = NULL;
+
+	if (cpu_is_mx27())
+		fwname = "vpu_fw_imx27.bin";
+	else if (cpu_is_mx51())
+		fwname = "vpu_fw_imx51.bin";
+	else if (cpu_is_mx51())
+		fwname = "vpu_fw_imx53.bin";
+	else
+		return -EINVAL;
+
+	ret = request_firmware(&fw, fwname, vpu->dev);
+
+	if (ret) {
+		printk("%i unable to load the firmware\n", ret);
+		return -ENOMEM;
+	}
 
 	vpu->vpu_code_table = dma_alloc_coherent(NULL, CODE_BUF_SIZE,
 			&vpu->vpu_code_table_phys, GFP_DMA | GFP_KERNEL);
@@ -1226,17 +1252,36 @@ static int vpu_program_firmware(struct vpu *vpu)
 
 	buf = vpu->vpu_code_table;
 
-	for (i = 0; i < sizeof (bit_code2) / sizeof (bit_code2[0]); i += 2) {
-		data = (bit_code2[i] << 16) | bit_code2[i + 1];
-		buf[i / 2] = data;
+	memcpy(&info, fw->data, sizeof(struct headerInfo));
+	dp = (unsigned short *)(fw->data + sizeof(struct headerInfo));
+
+	printk("size: %d\n", info.size);
+
+	if (info.size > MAX_FW_BINARY_LEN) {
+		printk("Size in VPU header is too large.Size: %d\n", info.size);
+		return -ENOMEM;
+	}
+
+	if (cpu_is_mx51() || cpu_is_mx53()) {
+		for (i = 0; i < info.size; i += 4) {
+			data = (dp[i + 0] << 16) | dp[i + 1];
+			buf[i / 2 + 1] = data;
+			data = (dp[i + 2] << 16) | dp[i + 3];
+			buf[i / 2] = data;
+		}
+	} else {
+		for (i = 0; i < info.size; i += 2) {
+			data = (dp[i] << 16) | dp[i + 1];
+			buf[i / 2] = data;
+		}
 	}
 
 	VpuWriteReg(BIT_CODE_BUF_ADDR, vpu->vpu_code_table_phys);
 	VpuWriteReg(BIT_CODE_RUN, 0);
 
 	/* Download BIT Microcode to Program Memory */
-	for (i = 0; i < 2048; ++i) {
-		data = bit_code2[i];
+	for (i = 0; i < 2048 ; ++i) {
+		data = dp[i];
 		VpuWriteReg(BIT_CODE_DOWN, (i << 16) | data);
 	}
 
