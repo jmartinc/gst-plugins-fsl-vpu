@@ -19,7 +19,9 @@
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
 #include <linux/delay.h>
+#include <linux/sched.h>
 #include <linux/kfifo.h>
+#include <linux/slab.h>
 #include <linux/list.h>
 #include <linux/stat.h>
 #include <linux/wait.h>
