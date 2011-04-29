@@ -121,9 +121,6 @@ struct vpu_instance {
 	struct videobuf_queue vidq;
 	int in_use;
 
-	dma_addr_t	nullbuf_phys;
-	void __iomem	*null_buf;
-
 	dma_addr_t	bitstream_buf_phys;
 	void __iomem	*bitstream_buf;
 
@@ -1092,10 +1089,6 @@ static int vpu_release(struct file *file)
 	struct vpu_instance *instance = file->private_data;
 	int i;
 
-	dma_free_coherent(NULL, ROUND_UP_2(instance->height)*ROUND_UP_4(instance->width), 
-			instance->null_buf, instance->nullbuf_phys);
-
-
 	dma_free_coherent(NULL, PARA_BUF_SIZE, instance->para_buf,
 			instance->para_buf_phys);
 	dma_free_coherent(NULL, SLICE_SAVE_SIZE, instance->slice_mem_buf,
@@ -1297,13 +1290,6 @@ static int vpu_videobuf_setup(struct videobuf_queue *q,
 	struct vpu_instance *instance = q->priv_data;
 
 	*size = frame_calc_size(instance->width, instance->height);
-
-
-	instance->null_buf = dma_alloc_coherent(NULL,
-				 	ROUND_UP_2(instance->height)*ROUND_UP_4(instance->width),
-					&instance->nullbuf_phys,
-				 	GFP_DMA | GFP_KERNEL);
-
 
 	return 0;
 }
