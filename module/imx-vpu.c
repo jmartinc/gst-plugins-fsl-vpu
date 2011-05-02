@@ -180,9 +180,6 @@ struct vpu {
 #define ROUND_UP_8(num)	(((num) + 7) & ~7)
 #define ROUND_UP_16(num)	(((num) + 15) & ~15)
 
-static void *dummybuf;
-static dma_addr_t dummydma;
-
 static unsigned int vpu_fifo_len(struct vpu_instance *instance)
 {
 	return instance->fifo_in - instance->fifo_out;
@@ -1633,10 +1630,6 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, vpu_data);
-
-	dummybuf = dma_alloc_coherent(NULL, 400*300,
-		&dummydma, GFP_DMA | GFP_KERNEL);
-	memset(dummybuf, 0, 320*240);
 
 	dev_info(&pdev->dev, "registered\n");
 	return 0;
