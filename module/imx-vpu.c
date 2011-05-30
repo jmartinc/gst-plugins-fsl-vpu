@@ -1005,10 +1005,6 @@ out:
 	return ret;
 }
 
-#define STD_MPEG4	0
-#define STD_H263	1
-#define STD_AVC		2
-
 static long vpu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct vpu_instance *instance = file->private_data;
