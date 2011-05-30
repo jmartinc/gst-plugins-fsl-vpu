@@ -56,6 +56,8 @@
 #define VPU_MODE_DECODER	0
 #define VPU_MODE_ENCODER	1
 
+#define RET_DEC_SEQ_ERR_REASON          0x1E0
+
 #define BITSTREAM_BUF_SIZE	(512 * 1024)
 #define PS_SAVE_SIZE            0x028000
 #define SLICE_SAVE_SIZE         0x02D800
@@ -576,6 +578,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	struct vpu_regs *regs = vpu->regs;
 	int ret;
 	u32 data;
+	u32 val;
 	u32 sliceSizeMode = 1;
 	u32 sliceMode = 1;
 	u32 bitrate = 0; /* auto bitrate */
@@ -703,7 +706,8 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		return -EINVAL;
 
 	if (vpu_read(vpu, RET_ENC_SEQ_SUCCESS) == 0) {
-		printk("%s failed\n", __func__);
+		val = vpu_read(vpu, RET_DEC_SEQ_ERR_REASON);
+		dev_dbg(vpu->dev, "%s failed Errorcode: %d\n", __func__, val);
 		return -EINVAL;
 	}
 
@@ -799,6 +803,8 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, CMD_DEC_SEQ_INIT_ESCAPE, 0);
 
 	if (vpu_read(vpu, RET_DEC_SEQ_SUCCESS) == 0) {
+		val = vpu_read(vpu, RET_DEC_SEQ_ERR_REASON);
+		dev_dbg(vpu->dev, "%s failed Errorcode: %d\n", __func__, val);
 		ret = -EAGAIN;
 		goto out;
 	}
