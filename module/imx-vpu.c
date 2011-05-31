@@ -32,7 +32,7 @@
 
 #include <linux/firmware.h>
 
-#include <media/videobuf-dma-contig.h>
+#include <media/videobuf2-dma-contig.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
 #include <mach/hardware.h>
@@ -225,8 +225,8 @@ static struct vpu_driver_data drvdata_imx53 = {
 /* buffer for one video frame */
 struct vpu_buffer {
 	/* common v4l buffer stuff -- must be first */
-	struct videobuf_buffer		vb;
-	struct vpu_instance		*instance;
+	struct vb2_buffer		vb;
+	struct list_head		list;
 };
 
 struct vpu;
@@ -245,7 +245,7 @@ struct vpu_instance {
 	int width, height;
 	int num_fb;
 	int format;
-	struct videobuf_queue vidq;
+	struct vb2_queue vidq;
 	int in_use;
 	int videobuf_init;
 
@@ -291,18 +291,26 @@ struct vpu {
 	void __iomem		*base;
 	struct vpu_instance	instance[VPU_NUM_INSTANCE];
 	spinlock_t		lock;
-	struct videobuf_buffer	*active;
+	struct vpu_buffer	*active;
+	struct vb2_alloc_ctx	*alloc_ctx;
+	enum v4l2_field		field;
 	struct list_head	queued;
 	struct clk		*clk;
 	int			irq;
 	struct vpu_regs		*regs;
 	struct vpu_driver_data	*drvdata;
+	int			sequence;
 
 	dma_addr_t	vpu_code_table_phys;
 	void __iomem	*vpu_code_table;
 	dma_addr_t	vpu_work_buf_phys;
 	void __iomem	*vpu_work_buf;
 };
+
+static struct vpu_buffer *to_vpu_vb(struct vb2_buffer *vb)
+{
+	return container_of(vb, struct vpu_buffer, vb);
+}
 
 #define ROUND_UP_2(num)	(((num) + 1) & ~1)
 #define ROUND_UP_4(num)	(((num) + 3) & ~3)
@@ -357,19 +365,16 @@ static ssize_t show_info(struct device *dev,
 			    struct device_attribute *attr, char *buf)
 {
 	struct vpu *vpu = dev_get_drvdata(dev);
-	struct vpu_buffer *vbuf;
-	struct videobuf_buffer *vb;
 	int i, len = 0;
+	struct vpu_buffer *vbuf, *tmp;
 
 	spin_lock_irq(&vpu->lock);
 
-	vb = vpu->active;
 	len += sprintf(buf + len, "VPU Info\n"
 		"--------\n"
 		"active: %p", vpu->active);
-	if (vb) {
-		vbuf = container_of(vb, struct vpu_buffer, vb);
-		len += sprintf(buf + len, " (instance %d)\n", vbuf->instance->idx);
+	if (vpu->active) {
+		len += sprintf(buf + len, " (instance %d)\n", vpu->instance->idx);
 	} else
 		len += sprintf(buf + len, "\n");
 
@@ -406,9 +411,10 @@ static ssize_t show_info(struct device *dev,
 	len += sprintf(buf + len, "queued buffers\n"
 			          "--------------\n");
 
-	list_for_each_entry(vb, &vpu->queued, queue) {
-		vbuf = container_of(vb, struct vpu_buffer, vb);
-		len += sprintf(buf + len, "%p (instance %d, state %d)\n", vb, vbuf->instance->idx, vb->state);
+	list_for_each_entry_safe(vbuf, tmp, &vpu->queued, list) {
+		struct vb2_queue *q = vbuf->vb.vb2_queue;
+		struct vpu_instance *q_instance = vb2_get_drv_priv(q);
+		len += sprintf(buf + len, "%p (instance %d, streaming %d)\n", vbuf, q_instance->idx, vb2_is_streaming(q));
 	}
 
 	spin_unlock_irq(&vpu->lock);
@@ -895,16 +901,14 @@ out:
 	return ret;
 }
 
-static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct videobuf_buffer *vb)
+static void noinline vpu_enc_start_frame(struct vpu_instance *instance)
 {
 	struct vpu *vpu = instance->vpu;
-	dma_addr_t dma = videobuf_to_dma_contig(vb);
+	dma_addr_t dma = vb2_dma_contig_plane_paddr(&vpu->active->vb, 0);
 	int height = instance->height;
 	int stridey = ROUND_UP_4(instance->width);
 	int ustride;
 	unsigned long u;
-
-	vpu->active = vb;
 
 	vpu_write(vpu, CMD_ENC_PIC_ROT_MODE, 0x10);
 
@@ -921,7 +925,7 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct v
 	vpu_bit_issue_command(instance, PIC_RUN);
 }
 
-static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_buffer *vb)
+static void vpu_dec_start_frame(struct vpu_instance *instance)
 {
 	struct vpu *vpu = instance->vpu;
 	struct vpu_regs *regs = vpu->regs;
@@ -946,7 +950,7 @@ static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_b
 		height = instance->height;
 	}
 
-	dma = videobuf_to_dma_contig(vb);
+	dma = vb2_dma_contig_plane_paddr(&vpu->active->vb, 0);
 
 	/* Set rotator output */
 	vpu_write(vpu, CMD_DEC_PIC_ROT_ADDR_Y, dma);
@@ -971,8 +975,7 @@ static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_b
  */
 static int vpu_start_frame(struct vpu *vpu)
 {
-	struct videobuf_buffer *vb;
-	struct vpu_buffer *vbuf;
+	struct vpu_buffer *vbuf, *tmp;
 	struct vpu_instance *instance;
 	int i, ret;
 
@@ -990,11 +993,11 @@ static int vpu_start_frame(struct vpu *vpu)
 		}
 	}
 
-	list_for_each_entry(vb, &vpu->queued, queue) {
-		vbuf = container_of(vb, struct vpu_buffer, vb);
-		instance = vbuf->instance;
+	list_for_each_entry_safe(vbuf, tmp, &vpu->queued, list) {
+		struct vb2_queue *q = vbuf->vb.vb2_queue;
+		instance = vb2_get_drv_priv(q);
 		if (!instance->hold) {
-			vpu->active = vb;
+			vpu->active = vbuf;
 			break;
 		}
 	}
@@ -1008,52 +1011,51 @@ static int vpu_start_frame(struct vpu *vpu)
 			instance->hold = 1;
 	}
 
-	vb = vpu->active;
-
-	vb->state = VIDEOBUF_ACTIVE;
-
 	if (instance->mode == VPU_MODE_ENCODER)
-		vpu_enc_start_frame(instance, vb);
+		vpu_enc_start_frame(instance);
 	else
-		vpu_dec_start_frame(instance, vb);
+		vpu_dec_start_frame(instance);
 
 	return 0;
 }
 
 static void vpu_dec_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
-		struct videobuf_buffer *vb)
+		struct vb2_buffer *vb)
 {
 	struct vpu_regs *regs = vpu->regs;
 
+	struct vpu_buffer *buf = to_vpu_vb(vb);
+
 	if (!vpu_read(vpu, regs->ret_dec_pic_option)) {
 		if (instance->flushing) {
-			vb->state = VIDEOBUF_ERROR;
+			vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		} else {
-			vb->state = VIDEOBUF_QUEUED;
+			vb2_buffer_done(vb, VB2_BUF_STATE_QUEUED);
 			instance->hold = 1;
 			return;
 		}
 	} else
-		vb->state = VIDEOBUF_DONE;
+		vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
 
 	vpu_write(vpu, BIT_FRM_DIS_FLG(instance->idx), 0);
+	list_del_init(&buf->list);
 
-	list_del_init(&vb->queue);
-
-	vb->ts = ktime_to_timeval(instance->frametime);
+	vb->v4l2_buf.timestamp = ktime_to_timeval(instance->frametime);
 	instance->frametime = ktime_add(instance->frame_duration,
 			instance->frametime);
 
-	vb->field_count++;
-	wake_up(&vb->done);
+	vb->v4l2_buf.field = vpu->field;
+	vb->v4l2_buf.sequence = vpu->sequence++;
+
 	wake_up_interruptible(&instance->waitq);
 }
 
 static void vpu_enc_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
-		struct videobuf_buffer *vb)
+		struct vb2_buffer *vb)
 {
 	int size;
 	int ret;
+	struct vpu_buffer *buf = to_vpu_vb(vb);
 
 	size = vpu_read(vpu, BIT_WR_PTR(instance->idx)) - vpu_read(vpu, BIT_RD_PTR(instance->idx));
 
@@ -1071,11 +1073,12 @@ static void vpu_enc_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 			BUG();
 	}
 
-	list_del_init(&vb->queue);
-	vb->state = VIDEOBUF_DONE;
+	list_del_init(&buf->list);
+	vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
 
-	vb->field_count++;
-	wake_up(&vb->done);
+	vb->v4l2_buf.field = vpu->field;
+	vb->v4l2_buf.sequence = vpu->sequence++;
+
 	wake_up_interruptible(&instance->waitq);
 }
 
@@ -1083,8 +1086,8 @@ static irqreturn_t vpu_irq_handler(int irq, void *dev_id)
 {
 	struct vpu *vpu = dev_id;
 	struct vpu_instance *instance;
-	struct videobuf_buffer *vb = vpu->active;
-	struct vpu_buffer *vbuf;
+	struct vpu_buffer *vbuf = vpu->active;
+	struct vb2_queue *q = vbuf->vb.vb2_queue;
 	unsigned long flags;
 
 	spin_lock_irqsave(&vpu->lock, flags);
@@ -1092,16 +1095,14 @@ static irqreturn_t vpu_irq_handler(int irq, void *dev_id)
 	vpu_write(vpu, BIT_INT_CLEAR, 1);
 	vpu_write(vpu, BIT_INT_REASON, 0);
 
-	if (!vb)
+	if (!&vbuf->vb)
 		goto out;
-
-	vbuf = container_of(vpu->active, struct vpu_buffer, vb);
-	instance = vbuf->instance;
+	instance = vb2_get_drv_priv(q);
 
 	if (instance->mode == VPU_MODE_DECODER)
-		vpu_dec_irq_handler(vpu, instance, vb);
+		vpu_dec_irq_handler(vpu, instance, &vbuf->vb);
 	else
-		vpu_enc_irq_handler(vpu, instance, vb);
+		vpu_enc_irq_handler(vpu, instance, &vbuf->vb);
 
 	vpu_start_frame(vpu);
 
@@ -1244,7 +1245,7 @@ static int vpu_release(struct file *file)
 	int i;
 
 	if (instance->videobuf_init) {
-		videobuf_stop(&instance->vidq);
+		vb2_queue_release(&instance->vidq);
 		instance->videobuf_init = 0;
 	}
 
@@ -1276,7 +1277,7 @@ static int vpu_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct vpu_instance *instance = file->private_data;
 
-	return videobuf_mmap_mapper(&instance->vidq, vma);
+	return vb2_mmap(&instance->vidq, vma);
 }
 
 static ssize_t vpu_write_stream(struct file *file, const char __user *ubuf, size_t len,
@@ -1467,65 +1468,65 @@ static int frame_calc_size(int width, int height)
 	return (width * height * 3) / 2;
 }
 
-static int vpu_videobuf_setup(struct videobuf_queue *q,
-		unsigned int *count, unsigned int *size)
+static int vpu_vb2_setup(struct vb2_queue *q,
+		unsigned int *count, unsigned int *num_planes,
+		unsigned long sizes[], void *alloc_ctxs[])
 {
-	struct vpu_instance *instance = q->priv_data;
+	struct vpu_instance *instance = vb2_get_drv_priv(q);
+	struct vpu *vpu = instance->vpu;
 
-	*size = frame_calc_size(instance->width, instance->height);
+	*num_planes = 1;
+	vpu->sequence = 0;
+	alloc_ctxs[0] = vpu->alloc_ctx;
+	sizes[0] = frame_calc_size(instance->width, instance->height);
 
 	return 0;
 }
 
-static int vpu_videobuf_prepare(struct videobuf_queue *q,
-		struct videobuf_buffer *vb,
-		enum v4l2_field field)
+static int vpu_vb2_prepare(struct vb2_buffer *vb)
 {
-	struct vpu_instance *instance = q->priv_data;
-	struct vpu_buffer *vbuf = container_of(vb, struct vpu_buffer, vb);
-	int ret = 0;
+	struct vb2_queue *q = vb->vb2_queue;
+	struct vpu_instance *instance = vb2_get_drv_priv(q);
 
-	vbuf->instance = instance;
-	vb->width = instance->width;
-	vb->height = instance->height;
-	vb->size = frame_calc_size(vb->width, vb->height);
+	size_t new_size = frame_calc_size(instance->width, instance->height);
 
-	if (vb->state == VIDEOBUF_NEEDS_INIT) {
-		ret = videobuf_iolock(&instance->vidq, vb, NULL);
-		if (ret)
-			goto fail;
-
-		vb->state = VIDEOBUF_PREPARED;
+	if (vb2_plane_size(vb, 0) < new_size) {
+		dev_err(instance->vpu->vdev->dev.parent, "Buffer too small (%lu < %zu)\n",
+			vb2_plane_size(vb, 0), new_size);
+		return -ENOBUFS;
 	}
 
-fail:
-	return ret;
+	vb2_set_plane_payload(vb, 0, new_size);
+	return 0;
 }
 
-static void vpu_videobuf_queue(struct videobuf_queue *q,
-		struct videobuf_buffer *vb)
+static void vpu_vb2_queue(struct vb2_buffer *vb)
 {
-	struct vpu_instance *instance = q->priv_data;
+	struct vb2_queue *q = vb->vb2_queue;
+	struct vpu_buffer *buf = to_vpu_vb(vb);
+	struct vpu_instance *instance = q->drv_priv;
 	struct vpu *vpu = instance->vpu;
+	unsigned long flags;
 
-	list_add_tail(&vb->queue, &vpu->queued);
-
-	vb->state = VIDEOBUF_QUEUED;
+	spin_lock_irqsave(&vpu->lock, flags);
+	list_add_tail(&buf->list, &vpu->queued);
+	spin_unlock_irqrestore(&vpu->lock, flags);
 
 	if (!vpu->active)
 		vpu_start_frame(vpu);
 }
 
-static void vpu_videobuf_release(struct videobuf_queue *q,
-		struct videobuf_buffer *vb)
+static void vpu_vb2_release(struct vb2_buffer *vb)
 {
-	struct vpu_instance *instance = q->priv_data;
+	struct vpu_buffer *buf = to_vpu_vb(vb);
+	struct vb2_queue *q = vb->vb2_queue;
+	struct vpu_instance *instance = q->drv_priv;
 	struct vpu *vpu = instance->vpu;
-	struct videobuf_buffer *vbtmp;
+	struct vpu_buffer *vbuf, *tmp;
 
 	spin_lock_irq(&vpu->lock);
 
-	if (vb->state == VIDEOBUF_ACTIVE) {
+	if (vpu->active == buf) {
 		u32 rdptr;
 
 		/*
@@ -1540,27 +1541,33 @@ static void vpu_videobuf_release(struct videobuf_queue *q,
 		vpu->active = NULL;
 	}
 
-	list_for_each_entry(vbtmp, &vpu->queued, queue) {
-		if (vbtmp == vb) {
-			dev_dbg(vpu->dev, "%s: buffer %p still queued. This should not happen\n",
+	list_for_each_entry_safe(vbuf, tmp, &vpu->queued, list) {
+		if (vbuf == buf) {
+			printk("%s: buffer %p still queued. This should not happen\n",
 					__func__, vb);
-			list_del(&vb->queue);
+			list_del(&buf->list);
 			break;
 		}
 	}
 
 	spin_unlock_irq(&vpu->lock);
-
-	videobuf_dma_contig_free(q, vb);
-
-	vb->state = VIDEOBUF_NEEDS_INIT;
 }
 
-static struct videobuf_queue_ops vpu_videobuf_ops = {
-	.buf_setup	= vpu_videobuf_setup,
-	.buf_prepare	= vpu_videobuf_prepare,
-	.buf_queue	= vpu_videobuf_queue,
-	.buf_release	= vpu_videobuf_release,
+static int vpu_vb2_init(struct vb2_buffer *vb)
+{
+
+	struct vpu_buffer *buf = to_vpu_vb(vb);
+	INIT_LIST_HEAD(&buf->list);
+
+	return 0;
+}
+
+static struct vb2_ops vpu_videobuf_ops = {
+	.queue_setup	= vpu_vb2_setup,
+	.buf_prepare	= vpu_vb2_prepare,
+	.buf_queue	= vpu_vb2_queue,
+	.buf_cleanup	= vpu_vb2_release,
+	.buf_init	= vpu_vb2_init,
 };
 
 static int vpu_reqbufs(struct file *file, void *priv,
@@ -1568,25 +1575,24 @@ static int vpu_reqbufs(struct file *file, void *priv,
 {
 	struct vpu_instance *instance = file->private_data;
 	struct vpu *vpu = instance->vpu;
+	struct vb2_queue *q = &instance->vidq;
 
 	int ret = 0;
 
 	vpu->vdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 
 	/* Initialize videobuf queue as per the buffer type */
-	videobuf_queue_dma_contig_init(&instance->vidq,
-					    &vpu_videobuf_ops, &vpu->vdev->dev,
-					    &vpu->lock,
-					    reqbuf->type,
-					    V4L2_FIELD_NONE,
-					    sizeof(struct vpu_buffer),
-					    instance,
-					    NULL);
+	q->type = reqbuf->type;
+	q->io_modes = VB2_MMAP | VB2_USERPTR;
+	q->drv_priv = instance;
+	q->ops = &vpu_videobuf_ops;
+	q->mem_ops = &vb2_dma_contig_memops;
 
+	ret = vb2_queue_init(q);
 	instance->videobuf_init = 1;
 
 	/* Allocate buffers */
-	ret = videobuf_reqbufs(&instance->vidq, reqbuf);
+	ret |= vb2_reqbufs(&instance->vidq, reqbuf);
 
 	return ret;
 }
@@ -1594,22 +1600,21 @@ static int vpu_reqbufs(struct file *file, void *priv,
 static int vpu_querybuf (struct file *file, void *priv, struct v4l2_buffer *p)
 {
 	struct vpu_instance *instance = file->private_data;
-
-	return videobuf_querybuf(&instance->vidq, p);
+	return vb2_querybuf(&instance->vidq, p);
 }
 
 static int vpu_qbuf (struct file *file, void *priv, struct v4l2_buffer *p)
 {
 	struct vpu_instance *instance = file->private_data;
 
-	return videobuf_qbuf(&instance->vidq, p);
+	return vb2_qbuf(&instance->vidq, p);
 }
 
 static int vpu_dqbuf (struct file *file, void *priv, struct v4l2_buffer *p)
 {
 	struct vpu_instance *instance = file->private_data;
 
-	return videobuf_dqbuf(&instance->vidq, p, file->f_flags & O_NONBLOCK);
+	return vb2_dqbuf(&instance->vidq, p, file->f_flags & O_NONBLOCK);
 }
 
 static int vpu_g_fmt_vid_cap(struct file *file, void *priv,
@@ -1667,14 +1672,14 @@ static int vpu_streamon(struct file *file, void *priv, enum v4l2_buf_type i)
 	if (instance->mode == VPU_MODE_ENCODER)
 		instance->hold = 0;
 
-	return videobuf_streamon(&instance->vidq);
+	return vb2_streamon(&instance->vidq, i);
 }
 
 static int vpu_streamoff(struct file *file, void *priv, enum v4l2_buf_type i)
 {
 	struct vpu_instance *instance = file->private_data;
 
-	return videobuf_streamoff(&instance->vidq);
+	return vb2_streamoff(&instance->vidq, i);
 }
 
 static unsigned int vpu_poll(struct file *file, struct poll_table_struct *wait)
@@ -1688,10 +1693,10 @@ static unsigned int vpu_poll(struct file *file, struct poll_table_struct *wait)
 			ret |= POLLOUT | POLLWRNORM;
 
 		if (instance->vidq.streaming)
-			ret |= videobuf_poll_stream(file, &instance->vidq, wait);
+			ret |= vb2_poll(&instance->vidq, file, wait);
 	} else {
 		if (instance->vidq.streaming)
-			ret |= videobuf_poll_stream(file, &instance->vidq, wait);
+			ret |= vb2_poll(&instance->vidq, file, wait);
 	}
 
 	return ret;
@@ -1785,6 +1790,13 @@ static int vpu_dev_probe(struct platform_device *pdev)
 		goto err_out_ioremap;
 	}
 
+	vpu->alloc_ctx = vb2_dma_contig_init_ctx(&pdev->dev);
+	if (IS_ERR(vpu->alloc_ctx)) {
+		err = PTR_ERR(vpu->alloc_ctx);
+		goto err_alloc_ctx;
+	}
+
+	pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 	vpu->irq = platform_get_irq(pdev, 0);
 	err = request_irq(vpu->irq, vpu_irq_handler, 0,
 			dev_name(&pdev->dev), vpu);
@@ -1814,6 +1826,8 @@ static int vpu_dev_probe(struct platform_device *pdev)
 err_out_register:
 	free_irq(vpu->irq, vpu);
 err_out_irq:
+	vb2_dma_contig_cleanup_ctx(vpu->alloc_ctx);
+err_alloc_ctx:
 	iounmap(vpu->base);
 err_out_ioremap:
 	clk_disable(vpu->clk);
@@ -1847,6 +1861,7 @@ static int vpu_dev_remove(struct platform_device *pdev)
 	dma_free_coherent(NULL, regs->code_buf_size, vpu->vpu_code_table,
 			vpu->vpu_code_table_phys);
 
+	vb2_dma_contig_cleanup_ctx(vpu->alloc_ctx);
 	video_unregister_device(vpu->vdev);
 
 	device_remove_file(&pdev->dev, &dev_attr_info);
