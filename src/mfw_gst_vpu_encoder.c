@@ -90,8 +90,8 @@ typedef struct _GstVPU_Enc
 #define BUFF_FILL_SIZE (200 * 1024)
 
 /* Maximum width and height - D1*/
-#define MAX_WIDTH		720
-#define MAX_HEIGHT		576
+#define MAX_WIDTH		4096
+#define MAX_HEIGHT		4096
 
 /* Default frame rate */
 #define DEFAULT_FRAME_RATE	30
@@ -101,16 +101,16 @@ to be chnaged for other platforms */
 
 #define MFW_GST_VPUENC_VIDEO_CAPS \
     "video/mpeg, " \
-    "width = (int) [16,  720], " \
-    "height = (int) [16, 576]; " \
+    "width = (int) [16, " STR(MAX_WIDTH)"], " \
+    "height = (int) [16," STR(MAX_HEIGHT)"]; " \
     \
     "video/x-h263, " \
-    "width = (int) [16, 720], " \
-    "height = (int)[16, 576]; " \
+    "width = (int) [16, " STR(MAX_WIDTH)"], " \
+    "height = (int)[16, " STR(MAX_HEIGHT)"]; " \
     \
     "video/x-h264, " \
-    "width = (int) [16, 720], " \
-    "height = (int)[16, 576] "
+    "width = (int) [16," STR(MAX_WIDTH)"], " \
+    "height = (int)[16," STR(MAX_HEIGHT)"] "
 
 /* 	Chroma Subsampling ratio - assuming 4:2:0. */
 /*	Not providing ability to set this on the command line because I'm not sure if VPU supports 4:2:2 - r58604 */
@@ -136,8 +136,8 @@ GST_STATIC_PAD_TEMPLATE("sink",
 			GST_PAD_ALWAYS,
 			GST_STATIC_CAPS("video/x-raw-yuv, "
 					"format = (fourcc) {I420}, "
-					"width = (int) [ 16, 720 ], "
-					"height = (int) [ 16, 576 ], "
+					"width = (int) [ 16, " STR(MAX_WIDTH)"], "
+					"height = (int) [ 16, " STR(MAX_HEIGHT)"], "
 					"framerate = (fraction) [ 0/1, 60/1 ]")
     );
 

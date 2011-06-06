@@ -39,24 +39,27 @@
 #include "mfw_gst_vpu.h"
 #include "mfw_gst_vpu_decoder.h"
 
+#define MAX_WIDTH		4096
+#define MAX_HEIGHT		4096
+
 #define MFW_GST_VPUDEC_VIDEO_CAPS \
     "video/mpeg, " \
-    "width = (int) [16, 720], " \
-    "height = (int) [16, 576], " \
+    "width = (int) [16, " STR(MAX_WIDTH)"], " \
+    "height = (int) [16," STR(MAX_HEIGHT)"], " \
     "mpegversion = (int) 4; " \
     \
     "video/x-divx, " \
-    "width = (int) [16, 720], " \
-    "height = (int) [16, 576], " \
+    "width = (int) [16, " STR(MAX_WIDTH)"], " \
+    "height = (int) [16, " STR(MAX_HEIGHT)"], " \
     "divxversion = (int) [4, 5]; " \
     \
     "video/x-h263, " \
-    "width = (int) [16, 720], " \
-    "height = (int)[16, 576]; " \
+    "width = (int) [16, " STR(MAX_WIDTH)"], " \
+    "height = (int)[16, " STR(MAX_HEIGHT)"]; " \
     \
     "video/x-h264, " \
-    "width = (int) [16, 720], " \
-    "height = (int)[16, 576]"
+    "width = (int) [16, " STR(MAX_WIDTH)"], " \
+    "height = (int)[16, " STR(MAX_HEIGHT)"]"
 
 #define DEFAULT_DBK_OFFSET_VALUE    5
 
