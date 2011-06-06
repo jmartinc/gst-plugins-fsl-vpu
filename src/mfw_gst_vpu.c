@@ -18,8 +18,43 @@
  * Boston, MA 02111-1307, USA.
  */
 #include <gst/gst.h>
+#include "mfw_gst_vpu.h"
 #include "mfw_gst_vpu_encoder.h"
 #include "mfw_gst_vpu_decoder.h"
+
+GType
+mfw_gst_vpu_codec_get_type(void)
+{
+	static GType vpu_codec_type = 0;
+
+	static GEnumValue vpu_codecs[] = {
+		{STD_MPEG4, "0", "std_mpeg4"},
+		{STD_H263, "1", "std_h263"},
+		{STD_AVC, "2", "std_avc"},
+		{0, NULL, NULL},
+	};
+	if (!vpu_codec_type) {
+		vpu_codec_type =
+		    g_enum_register_static("GstVpuCodecs", vpu_codecs);
+	}
+	return vpu_codec_type;
+}
+
+void mfw_gst_vpu_class_init_common(GObjectClass *gobject_class)
+{
+	g_object_class_install_property(gobject_class, MFW_GST_VPU_CODEC_TYPE,
+					g_param_spec_enum("codec-type",
+							  "codec_type",
+							  "selects the codec type",
+							  mfw_gst_vpu_codec_get_type(),
+							  STD_AVC,
+							  G_PARAM_READWRITE));
+
+	g_object_class_install_property (gobject_class, MFW_GST_VPU_DEVICE,
+			g_param_spec_string ("device", "vpu device location",
+				"i.MX vpu encoder/decoder device location",
+				VPU_DEVICE, G_PARAM_READWRITE));
+}
 
 static gboolean
 plugin_init(GstPlugin * plugin)

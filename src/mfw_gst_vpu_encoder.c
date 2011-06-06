@@ -31,7 +31,9 @@
 #include <sys/ioctl.h>
 #include <linux/videodev2.h>
 #include <unistd.h>
+#include <stdio.h>
 
+#include "mfw_gst_vpu.h"
 #include "mfw_gst_vpu_encoder.h"
 #include "mfw_gst_utils.h"
 
@@ -81,9 +83,8 @@ typedef struct _GstVPU_Enc
 	unsigned char *buf_data[NUM_BUFFERS];
 	unsigned int buf_size[NUM_BUFFERS];
 	unsigned int queued;
+	const char *device;
 }GstVPU_Enc;
-
-#define VPU_DEVICE "/dev/video0"
 
 /*maximum limit of the output buffer */
 #define BUFF_FILL_SIZE (200 * 1024)
@@ -114,16 +115,6 @@ to be chnaged for other platforms */
 /* 	Chroma Subsampling ratio - assuming 4:2:0. */
 /*	Not providing ability to set this on the command line because I'm not sure if VPU supports 4:2:2 - r58604 */
 #define CHROMA_SAMPLING_MULTIPLE	1.5
-
-/* properties set on the encoder */
-enum {
-	MFW_GST_VPU_PROP_0,
-	MFW_GST_VPU_CODEC_TYPE,
-	MFW_GST_VPU_PROF_ENABLE,
-	MFW_GST_VPUENC_FRAME_RATE,
-	MFW_GST_VPUENC_BITRATE,
-	MFW_GST_VPUENC_GOP
-};
 
 /* get the element details */
 static GstElementDetails mfw_gst_vpuenc_details =
@@ -166,6 +157,12 @@ printf("%s\n", __func__);
 		GST_DEBUG("profile=%d", vpu_enc->profile);
 		break;
 
+	case MFW_GST_VPU_DEVICE:
+		g_free(vpu_enc->device);
+		vpu_enc->device = g_strdup(g_value_get_string(value));
+		GST_DEBUG("device=%s", vpu_enc->device);
+		break;
+
 	case MFW_GST_VPU_CODEC_TYPE:
 		vpu_enc->codec = g_value_get_enum(value);
 		GST_DEBUG("codec=%d", vpu_enc->codec);
@@ -203,6 +200,10 @@ printf("%s\n", __func__);
 	switch (prop_id) {
 	case MFW_GST_VPU_PROF_ENABLE:
 		g_value_set_boolean(value, vpu_enc->profile);
+		break;
+
+	case MFW_GST_VPU_DEVICE:
+		g_value_set_string (value, vpu_enc->device);
 		break;
 
 	case MFW_GST_VPU_CODEC_TYPE:
@@ -424,9 +425,9 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 		GST_DEBUG("VPU State: Null to Ready");
-		vpu_enc->vpu_fd = open(VPU_DEVICE, O_RDWR); // | O_NONBLOCK);
+		vpu_enc->vpu_fd = open(vpu_enc->device, O_RDWR); // | O_NONBLOCK);
 		if (vpu_enc->vpu_fd < 0) {
-			GST_ERROR("opening %s failed", VPU_DEVICE);
+			GST_ERROR("opening %s failed", vpu_enc->device);
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
@@ -576,22 +577,6 @@ static void mfw_gst_vpuenc_base_init(GstVPU_EncClass * klass)
 
 }
 
-GType mfw_gst_vpuenc_codec_get_type(void)
-{
-	static GType vpuenc_codec_type = 0;
-	static GEnumValue vpuenc_codecs[] = {
-		{STD_MPEG4, "0", "std_mpeg4"},
-		{STD_H263, "1", "std_h263"},
-		{STD_AVC, "2", "std_avc"},
-		{0, NULL, NULL},
-	};
-	if (!vpuenc_codec_type) {
-		vpuenc_codec_type =
-		    g_enum_register_static("GstVpuEncCodecs", vpuenc_codecs);
-	}
-	return vpuenc_codec_type;
-}
-
 static void
 mfw_gst_vpuenc_class_init(GstVPU_EncClass * klass)
 {
@@ -605,20 +590,14 @@ mfw_gst_vpuenc_class_init(GstVPU_EncClass * klass)
 	gobject_class->set_property = mfw_gst_vpuenc_set_property;
 	gobject_class->get_property = mfw_gst_vpuenc_get_property;
 
+	mfw_gst_vpu_class_init_common(gobject_class);
+
 	g_object_class_install_property(gobject_class, MFW_GST_VPU_PROF_ENABLE,
 					g_param_spec_boolean("profile",
 							     "Profile",
 							     "enable time profile of the vpu encoder plug-in",
 							     FALSE,
 							     G_PARAM_READWRITE));
-
-	g_object_class_install_property(gobject_class, MFW_GST_VPU_CODEC_TYPE,
-					g_param_spec_enum("codec-type",
-							  "codec_type",
-							  "selects the codec type for encoding",
-							  MFW_GST_TYPE_VPU_ENC_CODEC,
-							  STD_AVC,
-							  G_PARAM_READWRITE));
 
 	g_object_class_install_property(gobject_class,
 					MFW_GST_VPUENC_FRAME_RATE,
@@ -668,6 +647,7 @@ mfw_gst_vpuenc_init(GstVPU_Enc * vpu_enc, GstVPU_EncClass * gclass)
 	gst_pad_set_setcaps_function(vpu_enc->sinkpad, mfw_gst_vpuenc_setcaps);
 
 	vpu_enc->codec = STD_AVC;
+	vpu_enc->device = g_strdup(VPU_DEVICE);
 	vpu_enc->framerate = DEFAULT_FRAME_RATE;
 	vpu_enc->bitrate = 0;
 	vpu_enc->gopsize = 0;

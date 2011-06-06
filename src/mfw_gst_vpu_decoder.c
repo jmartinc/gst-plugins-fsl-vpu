@@ -36,6 +36,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <linux/videodev2.h>
+#include "mfw_gst_vpu.h"
 #include "mfw_gst_vpu_decoder.h"
 
 #define MFW_GST_VPUDEC_VIDEO_CAPS \
@@ -58,17 +59,6 @@
     "height = (int)[16, 576]"
 
 #define DEFAULT_DBK_OFFSET_VALUE    5
-
-enum {
-	MFW_GST_VPU_PROP_0,
-	MFW_GST_VPU_CODEC_TYPE,
-	MFW_GST_VPU_PROF_ENABLE,
-	MFW_GST_VPU_DBK_ENABLE,
-	MFW_GST_VPU_DBK_OFFSETA,
-	MFW_GST_VPU_DBK_OFFSETB,
-	MFW_GST_VPU_ROTATION,
-	MFW_GST_VPU_MIRROR,
-};
 
 typedef struct _GstVPU_Dec {
 	/* Plug-in specific members */
@@ -101,6 +91,7 @@ typedef struct _GstVPU_Dec {
 	gint dbk_offset_a;
 	gint dbk_offset_b;
 
+	const char *device;
 	struct v4l2_buffer buf_v4l2[NUM_BUFFERS];
 	unsigned char *buf_data[NUM_BUFFERS];
 	unsigned int buf_size[NUM_BUFFERS];
@@ -155,6 +146,12 @@ mfw_gst_vpudec_set_property(GObject * object, guint prop_id,
 		GST_DEBUG("codec=%d", vpu_dec->codec);
 		break;
 
+	case MFW_GST_VPU_DEVICE:
+		g_free(vpu_dec->device);
+		vpu_dec->device = g_strdup(g_value_get_string(value));
+		GST_DEBUG("device=%s", vpu_dec->device);
+		break;
+
 	case MFW_GST_VPU_DBK_ENABLE:
 		vpu_dec->dbk_enabled = g_value_get_boolean(value);
 		break;
@@ -205,6 +202,9 @@ mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 	case MFW_GST_VPU_CODEC_TYPE:
 		g_value_set_enum(value, vpu_dec->codec);
 		break;
+	case MFW_GST_VPU_DEVICE:
+		g_value_set_string (value, vpu_dec->device);
+		break;
 	case MFW_GST_VPU_DBK_ENABLE:
 		g_value_set_boolean(value, vpu_dec->dbk_enabled);
 		break;
@@ -227,8 +227,6 @@ mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 	}
 	return;
 }
-
-#define VPU_DEVICE "/dev/video0"
 
 static struct v4l2_requestbuffers reqs = {
 	.count	= NUM_BUFFERS,
@@ -594,9 +592,9 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
-		vpu_dec->vpu_fd = open(VPU_DEVICE, O_RDWR | O_NONBLOCK);
+		vpu_dec->vpu_fd = open(vpu_dec->device, O_RDWR | O_NONBLOCK);
 		if (vpu_dec->vpu_fd < 0) {
-			GST_ERROR("opening %s failed", VPU_DEVICE);
+			GST_ERROR("opening %s failed", vpu_dec->device);
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
@@ -749,24 +747,6 @@ mfw_gst_vpudec_base_init(GstVPU_DecClass * klass)
 }
 
 GType
-mfw_gst_vpudec_codec_get_type(void)
-{
-	static GType vpudec_codec_type = 0;
-
-	static GEnumValue vpudec_codecs[] = {
-		{STD_MPEG4, "0", "std_mpeg4"},
-		{STD_H263, "1", "std_h263"},
-		{STD_AVC, "2", "std_avc"},
-		{0, NULL, NULL},
-	};
-	if (!vpudec_codec_type) {
-		vpudec_codec_type =
-		    g_enum_register_static("GstVpuDecCodecs", vpudec_codecs);
-	}
-	return vpudec_codec_type;
-}
-
-GType
 mfw_gst_vpudec_mirror_get_type(void)
 {
 	static GType vpudec_mirror_type = 0;
@@ -796,13 +776,7 @@ mfw_gst_vpudec_class_init(GstVPU_DecClass * klass)
 	gobject_class->set_property = mfw_gst_vpudec_set_property;
 	gobject_class->get_property = mfw_gst_vpudec_get_property;
 
-	g_object_class_install_property(gobject_class, MFW_GST_VPU_CODEC_TYPE,
-					g_param_spec_enum("codec-type",
-							  "codec_type",
-							  "selects the codec type for decoding",
-							  MFW_GST_TYPE_VPU_DEC_CODEC,
-							  STD_AVC,
-							  G_PARAM_READWRITE));
+	mfw_gst_vpu_class_init_common(gobject_class);
 
 	g_object_class_install_property(gobject_class, MFW_GST_VPU_ROTATION,
 					g_param_spec_uint("rotation",
@@ -866,6 +840,7 @@ mfw_gst_vpudec_init(GstVPU_Dec * vpu_dec, GstVPU_DecClass * gclass)
 	vpu_dec->rotation_angle = 0;
 	vpu_dec->mirror_dir = MIRDIR_NONE;
 	vpu_dec->codec = STD_AVC;
+	vpu_dec->device = g_strdup(VPU_DEVICE);
 
 	vpu_dec->dbk_enabled = FALSE;
 	vpu_dec->dbk_offset_a = vpu_dec->dbk_offset_b = DEFAULT_DBK_OFFSET_VALUE;
