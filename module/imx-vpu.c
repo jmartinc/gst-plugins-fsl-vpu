@@ -40,7 +40,6 @@
 #include "imx-vpu.h"
 
 #define VPU_IOC_MAGIC  'V'
-#define	BIT_INT_STATUS		0x010
 
 #define	VPU_IOC_SET_ENCODER	_IO(VPU_IOC_MAGIC, 5)
 #define VPU_IOC_SET_DECODER	_IO(VPU_IOC_MAGIC, 6)
@@ -90,6 +89,76 @@ enum {
 	DEC_BUF_FLUSH = 8,
 	RC_CHANGE_PARAMETER = 9,
 	FIRMWARE_GET = 0xf,
+};
+
+struct vpu_regs {
+	u32 bitstream_buf_size;
+	u32 bit_axi_sram_use;
+	u32 bits_streamctrl_mask;
+	u32 bit_buf_check_dis;
+	u32 bit_enc_dyn_bufalloc_en;
+	u32 bit_buf_pic_reset;
+	u32 bit_buf_pic_flush;
+	u32 bit_pic_width_offset;
+	u32 cmd_enc_seq_intra_qp;
+	u32 fmo_slice_save_buf_size;
+	u32 bit_pic_width_mask;
+	u32 ret_dec_pic_option;
+	u32 para_buf_size;
+	u32 code_buf_size;
+	u32 work_buf_size;
+};
+
+static struct vpu_regs regs_v1 = {
+	.bitstream_buf_size = (512 * 1024),
+	.bit_axi_sram_use = 0x178,
+	.bits_streamctrl_mask = 0x01f,
+	.bit_buf_check_dis = 1,
+	.bit_enc_dyn_bufalloc_en = 4,
+	.bit_buf_pic_reset = 3,
+	.bit_buf_pic_flush = 2,
+	.bit_pic_width_offset = 10,
+	.cmd_enc_seq_intra_qp = 0x1bc,
+	.fmo_slice_save_buf_size = 32,
+	.bit_pic_width_mask = 0x3ff,
+	.ret_dec_pic_option = 0x1d0,
+	.para_buf_size = 10 * 1024,
+	.code_buf_size = 64 * 1024,
+	.work_buf_size = (288 * 1024) + (32 * 1024 * 8),
+};
+
+static struct vpu_regs regs_v2 = {
+	.bitstream_buf_size = 1024 * 1024,
+	.bit_axi_sram_use = 0x140,
+	.bits_streamctrl_mask = 0x03f,
+	.bit_buf_check_dis = 2,
+	.bit_enc_dyn_bufalloc_en = 5,
+	.bit_buf_pic_reset = 4,
+	.bit_buf_pic_flush = 3,
+	.bit_pic_width_offset = 16,
+	.cmd_enc_seq_intra_qp = 0x1c4,
+	.fmo_slice_save_buf_size = 32,
+	.bit_pic_width_mask = 0xffff,
+	.ret_dec_pic_option = 0x1d4,
+	.para_buf_size = 10 * 1024,
+	.code_buf_size = 200 * 1024,
+	.work_buf_size = (512 * 1024) + (32 * 1024 * 8),
+};
+
+struct vpu_driver_data {
+	struct vpu_regs *regs;
+};
+
+static struct vpu_driver_data drvdata_imx27 = {
+	.regs = &regs_v1,
+};
+
+static struct vpu_driver_data drvdata_imx51 = {
+	.regs = &regs_v2,
+};
+
+static struct vpu_driver_data drvdata_imx53 = {
+	.regs = &regs_v2,
 };
 
 #define STD_MPEG4	0
@@ -168,6 +237,8 @@ struct vpu {
 	struct list_head	queued;
 	struct clk		*clk;
 	int			irq;
+	struct vpu_regs		*regs;
+	struct vpu_driver_data	*drvdata;
 
 	dma_addr_t	vpu_code_table_phys;
 	void __iomem	*vpu_code_table;
@@ -187,7 +258,10 @@ static unsigned int vpu_fifo_len(struct vpu_instance *instance)
 
 static unsigned int vpu_fifo_avail(struct vpu_instance *instance)
 {
-	return BITSTREAM_BUF_SIZE - vpu_fifo_len(instance);
+	struct vpu *vpu = instance->vpu;
+	struct vpu_regs *regs = vpu->regs;
+
+	return regs->bitstream_buf_size - vpu_fifo_len(instance);
 }
 
 static int vpu_fifo_out(struct vpu_instance *instance, int len)
@@ -198,14 +272,16 @@ static int vpu_fifo_out(struct vpu_instance *instance, int len)
 
 static int vpu_fifo_in(struct vpu_instance *instance, const char __user *ubuf, size_t len)
 {
+	struct vpu *vpu = instance->vpu;
+	struct vpu_regs *regs = vpu->regs;
 	unsigned int off, l;
 	int ret;
 
 	len = min(vpu_fifo_avail(instance), len);
 
-	off = instance->fifo_in & (BITSTREAM_BUF_SIZE - 1);
+	off = instance->fifo_in & (regs->bitstream_buf_size - 1);
 
-	l = min(len, BITSTREAM_BUF_SIZE - off);
+	l = min(len, regs->bitstream_buf_size - off);
 
 	ret = copy_from_user(instance->bitstream_buf + off, ubuf, l);
 	if (ret)
@@ -395,6 +471,7 @@ static int encode_header(struct vpu_instance *instance, int headertype)
 static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 {
 	struct vpu *vpu = instance->vpu;
+	struct vpu_regs *regs = vpu->regs;
 	int ret;
 	u32 data;
 	u32 sliceSizeMode = 1;
@@ -424,7 +501,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, BIT_WR_PTR(instance->idx), instance->bitstream_buf_phys);
 	vpu_write(vpu, BIT_RD_PTR(instance->idx), instance->bitstream_buf_phys);
 
-	data = (instance->width << 10) | instance->height;
+	data = (instance->width << regs->bit_pic_width_offset) | instance->height;
 	vpu_write(vpu, CMD_ENC_SEQ_SRC_SIZE, data);
 	vpu_write(vpu, CMD_ENC_SEQ_SRC_F_RATE, 0x03e87530); /* 0x03e87530 */
 
@@ -503,7 +580,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, CMD_ENC_SEQ_INTRA_REFRESH, 0);
 
 	vpu_write(vpu, CMD_ENC_SEQ_BB_START, instance->bitstream_buf_phys);
-	vpu_write(vpu, CMD_ENC_SEQ_BB_SIZE, BITSTREAM_BUF_SIZE / 1024);
+	vpu_write(vpu, CMD_ENC_SEQ_BB_SIZE, regs->bitstream_buf_size / 1024);
 
 	data = (sliceReport << 1) | mbReport;
 
@@ -512,7 +589,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	if (rcIntraQp >= 0)
 		data |= (1 << 5);
 
-	vpu_write(vpu, CMD_ENC_SEQ_INTRA_QP, rcIntraQp);
+	vpu_write(vpu, regs->cmd_enc_seq_intra_qp, rcIntraQp);
 
 	if (instance->standard == AVC_ENC) {
 		data |= (0 << 2);
@@ -524,7 +601,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	if (instance->standard == AVC_ENC) {
 		data = (1 << 4) |
 		    (0x80 & 0x0f);
-		data |= (FMO_SLICE_SAVE_BUF_SIZE << 7);
+		data |= (regs->fmo_slice_save_buf_size << 7);
 	}
 
 	vpu_write(vpu, CMD_ENC_SEQ_FMO, data);	/* FIXME */
@@ -588,6 +665,7 @@ out:
 static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 {
 	struct vpu *vpu = instance->vpu;
+	struct vpu_regs *regs = vpu->regs;
 	u32 val, val2;
 	u64 f;
 	int ret;
@@ -614,7 +692,7 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 
 	vpu_write(vpu, CMD_DEC_SEQ_BB_START, instance->bitstream_buf_phys);
 	vpu_write(vpu, CMD_DEC_SEQ_START_BYTE, instance->bitstream_buf_phys);
-	vpu_write(vpu, CMD_DEC_SEQ_BB_SIZE, BITSTREAM_BUF_SIZE / 1024);
+	vpu_write(vpu, CMD_DEC_SEQ_BB_SIZE, regs->bitstream_buf_size / 1024);
 	vpu_write(vpu, CMD_DEC_SEQ_OPTION, 0);
 	vpu_write(vpu, CMD_DEC_SEQ_PS_BB_START, instance->ps_mem_buf_phys);
 	vpu_write(vpu, CMD_DEC_SEQ_PS_BB_SIZE, (PS_SAVE_SIZE / 1024));
@@ -636,8 +714,8 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	}
 
 	val = vpu_read(vpu, RET_DEC_SEQ_SRC_SIZE);
-	instance->width = ((val >> 10) & 0x3ff);
-	instance->height = (val & 0x3ff);
+	instance->width = ((val >> regs->bit_pic_width_offset) & regs->bit_pic_width_mask);
+	instance->height = (val & regs->bit_pic_width_mask);
 
 	instance->width = ROUND_UP_16(instance->width);
 	instance->height = ROUND_UP_16(instance->height);
@@ -733,6 +811,7 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct v
 static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_buffer *vb)
 {
 	struct vpu *vpu = instance->vpu;
+	struct vpu_regs *regs = vpu->regs;
 	dma_addr_t dma;
 	int height, stridey;
 	unsigned int readofs;
@@ -740,11 +819,11 @@ static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_b
 	readofs = vpu_read(vpu, BIT_RD_PTR(instance->idx)) -
 			instance->bitstream_buf_phys;
 
-	vpu_fifo_out(instance, (readofs - instance->readofs) % BITSTREAM_BUF_SIZE);
+	vpu_fifo_out(instance, (readofs - instance->readofs) % regs->bitstream_buf_size);
 	instance->readofs = readofs;
 
 	vpu_write(vpu, BIT_WR_PTR(instance->idx),
-			instance->bitstream_buf_phys + (instance->fifo_in % BITSTREAM_BUF_SIZE));
+			instance->bitstream_buf_phys + (instance->fifo_in % regs->bitstream_buf_size));
 
 	if (instance->rotmir & 0x1) {
 		stridey = instance->height;
@@ -831,7 +910,9 @@ static int vpu_start_frame(struct vpu *vpu)
 static void vpu_dec_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 		struct videobuf_buffer *vb)
 {
-	if (!vpu_read(vpu, RET_DEC_PIC_OPTION)) {
+	struct vpu_regs *regs = vpu->regs;
+
+	if (!vpu_read(vpu, regs->ret_dec_pic_option)) {
 		if (instance->flushing) {
 			vb->state = VIDEOBUF_ERROR;
 		} else {
@@ -922,6 +1003,7 @@ static int vpu_open(struct file *file)
 	struct video_device *dev = video_devdata(file);
 	struct vpu *vpu = video_get_drvdata(dev);
 	struct vpu_instance *instance;
+	struct vpu_regs *regs = vpu->regs;
 	int ret = 0, i;
 
 	spin_lock_irq(&vpu->lock);
@@ -960,7 +1042,7 @@ static int vpu_open(struct file *file)
 	file->private_data = instance;
 
 	
-	instance->bitstream_buf = dma_alloc_coherent(NULL, BITSTREAM_BUF_SIZE,
+	instance->bitstream_buf = dma_alloc_coherent(NULL, regs->bitstream_buf_size,
 			&instance->bitstream_buf_phys, GFP_DMA | GFP_KERNEL);
 	if (!instance->bitstream_buf) {
 		ret = -ENOMEM;
@@ -981,7 +1063,7 @@ static int vpu_open(struct file *file)
 		goto err_alloc3;
 	}
 
-	instance->para_buf = dma_alloc_coherent(NULL, PARA_BUF_SIZE,
+	instance->para_buf = dma_alloc_coherent(NULL, regs->para_buf_size,
 			&instance->para_buf_phys, GFP_DMA | GFP_KERNEL);
 	if (!instance->para_buf) {
 		ret = -ENOMEM;
@@ -991,13 +1073,13 @@ static int vpu_open(struct file *file)
 	goto out;
 
 err_alloc4:
-	dma_free_coherent(NULL, PARA_BUF_SIZE, instance->para_buf,
+	dma_free_coherent(NULL, regs->para_buf_size, instance->para_buf,
 			instance->para_buf_phys);
 err_alloc3:
 	dma_free_coherent(NULL, SLICE_SAVE_SIZE, instance->slice_mem_buf,
 			instance->slice_mem_buf_phys);
 err_alloc2:
-	dma_free_coherent(NULL, BITSTREAM_BUF_SIZE, instance->bitstream_buf,
+	dma_free_coherent(NULL, regs->bitstream_buf_size, instance->bitstream_buf,
 			instance->bitstream_buf_phys);
 err_alloc1:
 	instance->in_use = 0;
@@ -1050,13 +1132,15 @@ static long vpu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static int vpu_release(struct file *file)
 {
 	struct vpu_instance *instance = file->private_data;
+	struct vpu *vpu = instance->vpu;
+	struct vpu_regs *regs = vpu->regs;
 	int i;
 
-	dma_free_coherent(NULL, PARA_BUF_SIZE, instance->para_buf,
+	dma_free_coherent(NULL, regs->para_buf_size, instance->para_buf,
 			instance->para_buf_phys);
 	dma_free_coherent(NULL, SLICE_SAVE_SIZE, instance->slice_mem_buf,
 			instance->slice_mem_buf_phys);
-	dma_free_coherent(NULL, BITSTREAM_BUF_SIZE, instance->bitstream_buf,
+	dma_free_coherent(NULL, regs->bitstream_buf_size, instance->bitstream_buf,
 			instance->bitstream_buf_phys);
 	dma_free_coherent(NULL, PS_SAVE_SIZE, instance->ps_mem_buf,
 			instance->ps_mem_buf_phys);
@@ -1183,6 +1267,7 @@ struct headerInfo {
 
 static int vpu_program_firmware(struct vpu *vpu)
 {
+	struct vpu_regs *regs = vpu->regs;
 	int i, data, ret;
 	unsigned short *dp;
 	u32 *buf;
@@ -1201,13 +1286,12 @@ static int vpu_program_firmware(struct vpu *vpu)
 		return -EINVAL;
 
 	ret = request_firmware(&fw, fwname, vpu->dev);
-
 	if (ret) {
 		printk("%i unable to load the firmware\n", ret);
 		return -ENOMEM;
 	}
 
-	vpu->vpu_code_table = dma_alloc_coherent(NULL, CODE_BUF_SIZE,
+	vpu->vpu_code_table = dma_alloc_coherent(NULL, regs->code_buf_size,
 			&vpu->vpu_code_table_phys, GFP_DMA | GFP_KERNEL);
 	if (!vpu->vpu_code_table)
 		return -ENOMEM;
@@ -1247,7 +1331,7 @@ static int vpu_program_firmware(struct vpu *vpu)
 		vpu_write(vpu, BIT_CODE_DOWN, (i << 16) | data);
 	}
 
-	vpu->vpu_work_buf = dma_alloc_coherent(NULL, WORK_BUF_SIZE,
+	vpu->vpu_work_buf = dma_alloc_coherent(NULL, regs->work_buf_size,
 			&vpu->vpu_work_buf_phys, GFP_DMA | GFP_KERNEL);
 	if (!vpu->vpu_work_buf)
 		return -ENOMEM;
@@ -1533,11 +1617,26 @@ static const struct v4l2_file_operations vpu_fops = {
 	.poll		= vpu_poll,
 };
 
+static struct platform_device_id vpu_devtype[] = {
+	{
+		.name = "imx27-vpu",
+		.driver_data = (kernel_ulong_t)&drvdata_imx27,
+	}, {
+		.name = "imx51-vpu",
+		.driver_data = (kernel_ulong_t)&drvdata_imx51,
+	}, {
+		.name = "imx53-vpu",
+		.driver_data = (kernel_ulong_t)&drvdata_imx53,
+	},
+};
+
 static int vpu_dev_probe(struct platform_device *pdev)
 {
 	struct vpu *vpu;
 	int err = 0, i;
 	struct resource *res;
+	struct vpu_driver_data *drvdata;
+	struct vpu_regs *regs;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
@@ -1560,6 +1659,12 @@ static int vpu_dev_probe(struct platform_device *pdev)
 
 	for (i = 0; i < VPU_NUM_INSTANCE; i++)
 		vpu->instance[i].vpu = vpu;
+
+	drvdata = (void *)pdev->id_entry->driver_data;
+
+	regs = drvdata->regs;
+	vpu->regs = regs;
+	vpu->drvdata = drvdata;
 
 	vpu->clk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(vpu->clk)) {
@@ -1614,10 +1719,10 @@ err_out_clk:
 	kfree(vpu->vdev);
 
 	if (vpu->vpu_work_buf)
-		dma_free_coherent(NULL, WORK_BUF_SIZE, vpu->vpu_work_buf,
+		dma_free_coherent(NULL, regs->work_buf_size, vpu->vpu_work_buf,
 				vpu->vpu_work_buf_phys);
 	if (vpu->vpu_code_table)
-		dma_free_coherent(NULL, CODE_BUF_SIZE, vpu->vpu_code_table,
+		dma_free_coherent(NULL, regs->code_buf_size, vpu->vpu_code_table,
 				vpu->vpu_code_table_phys);
 
 	return err;
@@ -1626,6 +1731,7 @@ err_out_clk:
 static int vpu_dev_remove(struct platform_device *pdev)
 {
 	struct vpu *vpu = platform_get_drvdata(pdev);
+	struct vpu_regs *regs = vpu->regs;
 
 	free_irq(vpu->irq, vpu);
 
@@ -1633,9 +1739,9 @@ static int vpu_dev_remove(struct platform_device *pdev)
 	clk_put(vpu->clk);
 	iounmap(vpu->base);
 
-	dma_free_coherent(NULL, WORK_BUF_SIZE, vpu->vpu_work_buf,
+	dma_free_coherent(NULL, regs->work_buf_size, vpu->vpu_work_buf,
 			vpu->vpu_work_buf_phys);
-	dma_free_coherent(NULL, CODE_BUF_SIZE, vpu->vpu_code_table,
+	dma_free_coherent(NULL, regs->code_buf_size, vpu->vpu_code_table,
 			vpu->vpu_code_table_phys);
 
 	video_unregister_device(vpu->vdev);
@@ -1652,6 +1758,7 @@ static struct platform_driver mxcvpu_driver = {
 	.driver = {
 		   .name = "mxc_vpu",
 		   },
+	.id_table = vpu_devtype,
 	.probe = vpu_dev_probe,
 	.remove = vpu_dev_remove,
 };
