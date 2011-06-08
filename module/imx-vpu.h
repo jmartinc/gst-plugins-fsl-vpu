@@ -60,11 +60,6 @@
 #define BIT_SEARCH_RAM_SIZE		0x144
 #define BIT_MX37_IRAM_BASE_ADDR		0x144
 
-#define BIT_FRM_DIS_FLG_0               0x150
-#define BIT_FRM_DIS_FLG_1               0x154
-#define BIT_FRM_DIS_FLG_2               0x158
-#define BIT_FRM_DIS_FLG_3               0x15C
-
 #define BIT_BIT_USE_SRAM_BASE		0x150
 #define BIT_IP_USE_SRAM_BASE		0x154
 #define	BIT_DBK_USE_SRAM_BASE		0x158
