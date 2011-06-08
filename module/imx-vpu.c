@@ -191,28 +191,37 @@ static struct vpu_regs regs_v2 = {
 	.work_buf_size = (512 * 1024) + (32 * 1024 * 8),
 };
 
+struct vpu_instance;
+
 struct vpu_driver_data {
 	struct vpu_regs *regs;
 	const char *fw_name;
 	const int *codecs;
+	int (*alloc_fb)(struct vpu_instance *instance);
 };
+
+static int vpu_alloc_fb_v1(struct vpu_instance *instance);
+static int vpu_alloc_fb_v2(struct vpu_instance *instance);
 
 static struct vpu_driver_data drvdata_imx27 = {
 	.regs = &regs_v1,
 	.codecs = vpu_v1_codecs,
 	.fw_name = "vpu_fw_imx27.bin",
+	.alloc_fb = vpu_alloc_fb_v1,
 };
 
 static struct vpu_driver_data drvdata_imx51 = {
 	.regs = &regs_v2,
 	.codecs = vpu_v2_codecs,
 	.fw_name = "vpu_fw_imx51.bin",
+	.alloc_fb = vpu_alloc_fb_v2,
 };
 
 static struct vpu_driver_data drvdata_imx53 = {
 	.regs = &regs_v2,
 	.codecs = vpu_v2_codecs,
 	.fw_name = "vpu_fw_imx53.bin",
+	.alloc_fb = vpu_alloc_fb_v2,
 };
 
 /* buffer for one video frame */
@@ -461,13 +470,13 @@ static void vpu_bit_issue_command(struct vpu_instance *instance, int cmd)
 	vpu_write(vpu, BIT_RUN_COMMAND, cmd);
 }
 
-static int alloc_fb(struct vpu_instance *instance)
+static int vpu_alloc_fb_v1(struct vpu_instance *instance)
 {
 	int i, ret = 0;
 	int size = (instance->width * instance->height * 3) / 2;
 	unsigned long *para_buf = instance->para_buf;
 
-	for (i = 0; i < instance->num_fb; i++ ) {
+	for (i = 0; i < instance->num_fb; i++) {
 		struct memalloc_record *rec = &instance->rec[i];
 
 		rec->cpu_addr = dma_alloc_coherent(NULL, size, &rec->dma_addr,
@@ -483,6 +492,47 @@ static int alloc_fb(struct vpu_instance *instance)
 		para_buf[i * 3 + 1] = rec->dma_addr + instance->width * instance->height;
 		para_buf[i * 3 + 2] = para_buf[i * 3 + 1] +
 			(instance->width / 2) * (instance->height / 2);
+	}
+out:
+	if (ret)
+		printk("%s failed with %d\n", __func__, ret);
+	return ret;
+}
+
+static int vpu_alloc_fb_v2(struct vpu_instance *instance)
+{
+	int i, ret = 0;
+	int size = (instance->width * instance->height * 3) / 2;
+	unsigned long *para_buf = instance->para_buf;
+
+	for (i = 0; i < instance->num_fb; i++) {
+		struct memalloc_record *rec = &instance->rec[i];
+
+		rec->cpu_addr = dma_alloc_coherent(NULL, size, &rec->dma_addr,
+						       GFP_DMA | GFP_KERNEL);
+		if (!rec->cpu_addr) {
+			ret = -ENOMEM;
+			goto out;
+		}
+		rec->size = size;
+	}
+
+	for (i = 0; i < instance->num_fb; i+=2) {
+		struct memalloc_record *rec = &instance->rec[i];
+
+		para_buf[i * 3] = rec->dma_addr + instance->width * instance->height; /* Cb */
+		para_buf[i * 3 + 1] = rec->dma_addr; /* Y */
+		para_buf[i * 3 + 3] = para_buf[i * 3] + (instance->width / 2) * (instance->height / 2); /* Cr */
+		if (instance->standard == STD_AVC)
+			para_buf[96 + i + 1] = para_buf[i * 3 + 3] + (instance->width / 2) * (instance->height / 2);
+
+		if (i + 1 < instance->num_fb) {
+			para_buf[i * 3 + 2] = instance->rec[i + 1].dma_addr; /* Y */
+			para_buf[i * 3 + 5] = instance->rec[i + 1].dma_addr + instance->width * instance->height ; /* Cb */
+			para_buf[i * 3 + 4] = para_buf[i * 3 + 5] + (instance->width / 2) * (instance->height / 2); /* Cr */
+		}
+		if (instance->standard == STD_AVC)
+			para_buf[96 + i] = para_buf[i * 3 + 4] + (instance->width / 2) * (instance->height / 2);
 	}
 out:
 	if (ret)
@@ -658,7 +708,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	}
 
 	instance->num_fb = 3; /* FIXME */
-	ret = alloc_fb(instance);
+	ret = vpu->drvdata->alloc_fb(instance);
 	if (ret) {
 		printk("alloc fb failed\n");
 		goto out;
@@ -794,7 +844,7 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	/* access normal registers */
 	vpu_write(vpu, CMD_DEC_SEQ_INIT_ESCAPE, 0);
 
-	ret = alloc_fb(instance);
+	ret = vpu->drvdata->alloc_fb(instance);
 	if (ret)
 		goto out;
 
