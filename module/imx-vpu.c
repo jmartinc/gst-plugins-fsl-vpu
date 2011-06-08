@@ -889,7 +889,7 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct v
 	int ustride;
 	unsigned long u;
 
-	instance->vpu->active = vb;
+	vpu->active = vb;
 
 	vpu_write(vpu, CMD_ENC_PIC_ROT_MODE, 0x10);
 
