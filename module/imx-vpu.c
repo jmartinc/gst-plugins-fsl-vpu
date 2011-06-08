@@ -401,15 +401,12 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	u32 data;
 	u32 sliceSizeMode = 1;
 	u32 sliceMode = 1;
-	/* u32 bitrate = 32767; [> auto bitrate <] */
-	/* u32 bitrate = 1024; [> auto bitrate <] */
 	u32 bitrate = 0; /* auto bitrate */
 	u32 enableAutoSkip = 0;
 	u32 initialDelay = 1;
 	u32 sliceReport = 0;
 	u32 mbReport = 0;
 	u32 rcIntraQp = 0;
-	/* u32 rcIntraQp = 1024; */
 
 	switch (instance->standard) {
 	case STD_MPEG4:
@@ -423,15 +420,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		return -EINVAL;
 	};
 
-	/* data = VpuReadReg(BIT_BIT_STREAM_CTRL); */
-	/* data &= 0xFFE7; */
-		/* data |= (1 << 4); */
-		/* data |= 1 << 3; */
-	/* printk("setting stream ctrl: 0x%08x", data); */
-	/* VpuWriteReg(BIT_BIT_STREAM_CTRL, data); */
-
 	VpuWriteReg(BIT_BIT_STREAM_CTRL, 0xc);
-	/* VpuWriteReg(BIT_FRAME_MEM_CTRL, 0xff); */
 	VpuWriteReg(BIT_PARA_BUF_ADDR, instance->para_buf_phys);
 
 	VpuWriteReg(BIT_WR_PTR(instance->idx), instance->bitstream_buf_phys);
@@ -440,7 +429,6 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	data = (instance->width << 10) | instance->height;
 	VpuWriteReg(CMD_ENC_SEQ_SRC_SIZE, data);
 	VpuWriteReg(CMD_ENC_SEQ_SRC_F_RATE, 0x03e87530); /* 0x03e87530 */
-	/* VpuWriteReg(CMD_ENC_SEQ_SRC_F_RATE, 0x0000001e); [> 0x03e87530 <] */
 
 	if (instance->standard == STD_MPEG4) {
 		u32 mp4_intraDcVlcThr = 7;
@@ -514,9 +502,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	}
 
 	VpuWriteReg(CMD_ENC_SEQ_RC_BUF_SIZE, 0); /* vbv buffer size */
-	/* VpuWriteReg(CMD_ENC_SEQ_INTRA_QP, -1); [> let the vpu decide <] */
 	VpuWriteReg(CMD_ENC_SEQ_INTRA_REFRESH, 0);
-	/* VpuWriteReg(CMD_ENC_SEQ_INTRA_QP, 128); */
 
 	VpuWriteReg(CMD_ENC_SEQ_BB_START, instance->bitstream_buf_phys);
 	VpuWriteReg(CMD_ENC_SEQ_BB_SIZE, BITSTREAM_BUF_SIZE / 1024);
@@ -530,11 +516,6 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 
 	VpuWriteReg(CMD_ENC_SEQ_INTRA_QP, rcIntraQp);
 
-//	if (instance->format == AVC_ENC) {
-//		data |= (encOP.EncStdParam.avcParam.avc_audEnable << 2);
-//		data |= (encOP.EncStdParam.avcParam.avc_fmoEnable << 4);
-//	}
-
 	if (instance->standard == AVC_ENC) {
 		data |= (0 << 2);
 		data |= (1 << 4);
@@ -547,14 +528,6 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		    (0x80 & 0x0f);
 		data |= (FMO_SLICE_SAVE_BUF_SIZE << 7);
 	}
-
-
-
-//	if (pCodecInst->codecMode == AVC_ENC) {
-//		data = (encOP.EncStdParam.avcParam.avc_fmoType << 4) |
-//		    (encOP.EncStdParam.avcParam.avc_fmoSliceNum & 0x0f);
-//		data |= (FMO_SLICE_SAVE_BUF_SIZE << 7);
-//	}
 
 	VpuWriteReg(CMD_ENC_SEQ_FMO, data);	/* FIXME */
 
@@ -747,14 +720,10 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct v
 	VpuWriteReg(CMD_ENC_PIC_QS, 30);
 
 	VpuWriteReg(CMD_ENC_PIC_SRC_ADDR_Y, dma);
-	/* trace_printk("Y: 0x%08x \n",dma); */
 	u = dma + stridey * ROUND_UP_2(height);
-	/* trace_printk("U: 0x%08x \n",u); */
-	/* u = instance->nullbuf_phys; */
 	VpuWriteReg(CMD_ENC_PIC_SRC_ADDR_CB, u);
 	ustride = ROUND_UP_8(instance->width) / 2;
 	VpuWriteReg(CMD_ENC_PIC_SRC_ADDR_CR, u + ustride * ROUND_UP_2(height) / 2);
-	/* trace_printk("V: 0x%08x \n",u + ustride * ROUND_UP_2(height) / 2 ); */
 	VpuWriteReg(CMD_ENC_PIC_OPTION, (0 << 5) | (0 << 1));
 
 	VpuWriteReg(BIT_BUSY_FLAG, 0x1);
@@ -815,7 +784,7 @@ static int vpu_start_frame(struct vpu *vpu)
 	int i, ret;
 
 	vpu->active = NULL;
-//vpu_reset();
+
 	for (i = 0; i < VPU_NUM_INSTANCE; i++) {
 		instance = &vpu->instance[i];
 		if (instance->in_use &&
@@ -906,8 +875,6 @@ static void vpu_enc_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 		if (ret < size)
 			BUG();
 	}
-	/* trace_printk("enc interrupt handled \n" ); */
-	/* printk("enc interrupt handled \n" ); */
 
 	list_del_init(&vb->queue);
 	vb->state = VIDEOBUF_DONE;
@@ -1504,10 +1471,6 @@ static int vpu_s_fmt_vid_out(struct file *file, void *priv,
 
 	instance->width = fmt->fmt.pix.width;
 	instance->height = fmt->fmt.pix.height;
-	/* instance->framerate = 0x03e87530; */
-	/* instance->gopsize = fmt->fmt.pix.priv; */
-
-	/* printk("set gopsize 0x%08x \n", instance->gopsize); */
 
 	return 0;
 }
