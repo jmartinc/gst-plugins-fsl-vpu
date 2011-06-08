@@ -1,0 +1,6 @@
+.gitignore
+*.in
+config/
+configure
+autom4te.cache/
+aclocal.m4
