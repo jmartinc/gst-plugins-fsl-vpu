@@ -454,7 +454,7 @@ static int vpu_wait(struct vpu *vpu)
 		if (!vpu_is_busy(vpu))
 			return 0;
 		if (!to--) {
-			printk("%s timed out\n", __func__);
+			dev_dbg(vpu->dev, "%s timed out\n", __func__);
 			vpu_write(vpu, BIT_BUSY_FLAG, 0x0);
 			dump_stack();
 			return -ETIMEDOUT;
@@ -474,6 +474,7 @@ static void vpu_bit_issue_command(struct vpu_instance *instance, int cmd)
 
 static int vpu_alloc_fb_v1(struct vpu_instance *instance)
 {
+	struct vpu *vpu = instance->vpu;
 	int i, ret = 0;
 	int size = (instance->width * instance->height * 3) / 2;
 	unsigned long *para_buf = instance->para_buf;
@@ -497,12 +498,13 @@ static int vpu_alloc_fb_v1(struct vpu_instance *instance)
 	}
 out:
 	if (ret)
-		printk("%s failed with %d\n", __func__, ret);
+		dev_dbg(vpu->dev, "%s failed with %d\n", __func__, ret);
 	return ret;
 }
 
 static int vpu_alloc_fb_v2(struct vpu_instance *instance)
 {
+	struct vpu *vpu = instance->vpu;
 	int i, ret = 0;
 	int size = (instance->width * instance->height * 3) / 2;
 	unsigned long *para_buf = instance->para_buf;
@@ -538,7 +540,7 @@ static int vpu_alloc_fb_v2(struct vpu_instance *instance)
 	}
 out:
 	if (ret)
-		printk("%s failed with %d\n", __func__, ret);
+		dev_dbg(vpu->dev, "%s failed with %d\n", __func__, ret);
 	return ret;
 }
 
@@ -637,7 +639,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		    !(w == 176 && h == 144) &&
 		    !(w == 352 && h == 288) &&
 		    !(w == 704 && h == 576)) {
-			printk("VPU: unsupported size\n");
+			dev_dbg(vpu->dev, "VPU: unsupported size\n");
 			return -EINVAL;
 		}
 
@@ -714,7 +716,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	instance->num_fb = 3; /* FIXME */
 	ret = vpu->drvdata->alloc_fb(instance);
 	if (ret) {
-		printk("alloc fb failed\n");
+		dev_dbg(vpu->dev, "alloc fb failed\n");
 		goto out;
 	}
 
@@ -815,12 +817,12 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 
 	instance->width = ROUND_UP_16(instance->width);
 	instance->height = ROUND_UP_16(instance->height);
-	printk("%s instance %d now: %dx%d\n", __func__, instance->idx,
+	dev_dbg(vpu->dev, "%s instance %d now: %dx%d\n", __func__, instance->idx,
 			instance->width, instance->height);
 
 	val = vpu_read(vpu, RET_DEC_SEQ_SRC_F_RATE);
-	printk("%s: Framerate: 0x%08x\n", __func__, val);
-	printk("%s: frame delay: %d\n", __func__,
+	dev_dbg(vpu->dev, "%s: Framerate: 0x%08x\n", __func__, val);
+	dev_dbg(vpu->dev, "%s: frame delay: %d\n", __func__,
 			vpu_read(vpu, RET_DEC_SEQ_FRAME_DELAY));
 	f = val & 0xffff;
 	f *= 1000;
@@ -833,8 +835,8 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 		val = vpu_read(vpu, RET_DEC_SEQ_CROP_LEFT_RIGHT);
 		val2 = vpu_read(vpu, RET_DEC_SEQ_CROP_TOP_BOTTOM);
 
-		printk("crop left:  %d\n", ((val >> 10) & 0x3FF) * 2);
-		printk("crop top:   %d\n", ((val2 >> 10) & 0x3FF) * 2);
+		dev_dbg(vpu->dev, "crop left:  %d\n", ((val >> 10) & 0x3FF) * 2);
+		dev_dbg(vpu->dev, "crop top:   %d\n", ((val2 >> 10) & 0x3FF) * 2);
 
 		if (val == 0 && val2 == 0) {
 			right = 0;
@@ -843,8 +845,8 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 			right = instance->width - ((val & 0x3FF) * 2);
 			top = instance->height - ((val2 & 0x3FF) * 2);
 		}
-		printk("crop right: %d\n", right);
-		printk("crop top:   %d\n", top);
+		dev_dbg(vpu->dev, "crop right: %d\n", right);
+		dev_dbg(vpu->dev, "crop top:   %d\n", top);
 	}
 
 	/* access normal registers */
@@ -873,7 +875,7 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 
 out:
 	if (ret)
-		printk("%s failed with %d\n", __func__, ret);
+		dev_dbg(vpu->dev, "%s failed with %d\n", __func__, ret);
 
 	return ret;
 }
@@ -1041,7 +1043,7 @@ static void vpu_enc_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 	size = vpu_read(vpu, BIT_WR_PTR(instance->idx)) - vpu_read(vpu, BIT_RD_PTR(instance->idx));
 
 	if (kfifo_avail(&instance->fifo) < instance->headersize + size) {
-		printk("not enough space in fifo\n");
+		dev_dbg(vpu->dev, "not enough space in fifo\n");
 		instance->hold = 1;
 		instance->buffered_size = size;
 	} else {
@@ -1347,7 +1349,7 @@ static int vpu_version_info(struct vpu *vpu)
 
 	version = (u16) ver;
 
-	printk("VPU firmware version %d.%d.%d\n",
+	dev_info(vpu->dev, "VPU firmware version %d.%d.%d\n",
 			(version >> 12) & 0x0f,
 			(version >> 8) & 0x0f,
 			version & 0xff);
@@ -1367,7 +1369,7 @@ static int vpu_program_firmware(struct vpu *vpu)
 
 	ret = request_firmware(&fw, vpu->drvdata->fw_name, vpu->dev);
 	if (ret) {
-		printk("%i unable to load the firmware\n", ret);
+		dev_err(vpu->dev, "loading firmware failed with %d\n", ret);
 		return -ENOMEM;
 	}
 
@@ -1381,10 +1383,8 @@ static int vpu_program_firmware(struct vpu *vpu)
 	memcpy(&info, fw->data, sizeof(struct fw_header_info));
 	dp = (unsigned short *)(fw->data + sizeof(struct fw_header_info));
 
-	printk("size: %d\n", info.size);
-
 	if (info.size > MAX_FW_BINARY_LEN) {
-		printk("Size in VPU header is too large.Size: %d\n", info.size);
+		dev_err(vpu->dev, "Size %d in VPU header is too large\n", info.size);
 		return -ENOMEM;
 	}
 
@@ -1525,7 +1525,7 @@ static void vpu_videobuf_release(struct videobuf_queue *q,
 
 	list_for_each_entry(vbtmp, &vpu->queued, queue) {
 		if (vbtmp == vb) {
-			printk("%s: buffer %p still queued. This should not happen\n",
+			dev_dbg(vpu->dev, "%s: buffer %p still queued. This should not happen\n",
 					__func__, vb);
 			list_del(&vb->queue);
 			break;
