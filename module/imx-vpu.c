@@ -72,10 +72,47 @@ enum {
 };
 
 enum {
-	MP4_DEC = 0,
-	MP4_ENC = 1,
-	AVC_DEC = 2,
-	AVC_ENC = 3
+	VPU_CODEC_AVC_DEC,
+	VPU_CODEC_VC1_DEC,
+	VPU_CODEC_MP2_DEC,
+	VPU_CODEC_MP4_DEC,
+	VPU_CODEC_DV3_DEC,
+	VPU_CODEC_RV_DEC,
+	VPU_CODEC_MJPG_DEC,
+	VPU_CODEC_AVC_ENC,
+	VPU_CODEC_MP4_ENC,
+	VPU_CODEC_MJPG_ENC,
+	VPU_CODEC_MAX,
+};
+
+#define STD_MPEG4	0
+#define STD_H263	1
+#define STD_AVC		2
+
+static int vpu_v1_codecs[VPU_CODEC_MAX] = {
+	[VPU_CODEC_AVC_DEC] = 2,
+	[VPU_CODEC_VC1_DEC] = -1,
+	[VPU_CODEC_MP2_DEC] = -1,
+	[VPU_CODEC_MP4_DEC] = 0,
+	[VPU_CODEC_DV3_DEC] = -1,
+	[VPU_CODEC_RV_DEC] = -1,
+	[VPU_CODEC_MJPG_DEC] = -1,
+	[VPU_CODEC_AVC_ENC] = 3,
+	[VPU_CODEC_MP4_ENC] = 1,
+	[VPU_CODEC_MJPG_ENC] = -1,
+};
+
+static int vpu_v2_codecs[VPU_CODEC_MAX] = {
+	[VPU_CODEC_AVC_DEC] = 0,
+	[VPU_CODEC_VC1_DEC] = 1,
+	[VPU_CODEC_MP2_DEC] = 2,
+	[VPU_CODEC_MP4_DEC] = 3,
+	[VPU_CODEC_DV3_DEC] = 3,
+	[VPU_CODEC_RV_DEC] = 4,
+	[VPU_CODEC_MJPG_DEC] = 5,
+	[VPU_CODEC_AVC_ENC] = 8,
+	[VPU_CODEC_MP4_ENC] = 11,
+	[VPU_CODEC_MJPG_ENC] = 13,
 };
 
 enum {
@@ -148,26 +185,26 @@ static struct vpu_regs regs_v2 = {
 struct vpu_driver_data {
 	struct vpu_regs *regs;
 	const char *fw_name;
+	const int *codecs;
 };
 
 static struct vpu_driver_data drvdata_imx27 = {
 	.regs = &regs_v1,
-	.fw_name = "vpu_fw_imx27.bin"
+	.codecs = vpu_v1_codecs,
+	.fw_name = "vpu_fw_imx27.bin",
 };
 
 static struct vpu_driver_data drvdata_imx51 = {
 	.regs = &regs_v2,
-	.fw_name = "vpu_fw_imx51.bin"
+	.codecs = vpu_v2_codecs,
+	.fw_name = "vpu_fw_imx51.bin",
 };
 
 static struct vpu_driver_data drvdata_imx53 = {
 	.regs = &regs_v2,
-	.fw_name = "vpu_fw_imx53.bin"
+	.codecs = vpu_v2_codecs,
+	.fw_name = "vpu_fw_imx53.bin",
 };
-
-#define STD_MPEG4	0
-#define STD_H263	1
-#define STD_AVC		2
 
 /* buffer for one video frame */
 struct vpu_buffer {
@@ -411,7 +448,7 @@ static void vpu_bit_issue_command(struct vpu_instance *instance, int cmd)
 	struct vpu *vpu = instance->vpu;
 
 	vpu_write(vpu, BIT_RUN_INDEX, instance->idx);
-	vpu_write(vpu, BIT_RUN_COD_STD, instance->format);
+	vpu_write(vpu, BIT_RUN_COD_STD, vpu->drvdata->codecs[instance->format]);
 	vpu_write(vpu, BIT_RUN_COMMAND, cmd);
 }
 
@@ -492,10 +529,10 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	switch (instance->standard) {
 	case STD_MPEG4:
 	case STD_H263:
-		instance->format = MP4_ENC;
+		instance->format = VPU_CODEC_MP4_ENC;
 		break;
 	case STD_AVC:
-		instance->format = AVC_ENC;
+		instance->format = VPU_CODEC_AVC_ENC;
 		break;
 	default:
 		return -EINVAL;
@@ -667,10 +704,10 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	switch (instance->standard) {
 	case STD_MPEG4:
 	case STD_H263:
-		instance->format = MP4_DEC;
+		instance->format = VPU_CODEC_MP4_DEC;
 		break;
 	case STD_AVC:
-		instance->format = AVC_DEC;
+		instance->format = VPU_CODEC_AVC_DEC;
 		break;
 	default:
 		return -EINVAL;
@@ -726,7 +763,7 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	instance->frame_duration = ktime_set(0, (u32)f);
 	instance->num_fb = vpu_read(vpu, RET_DEC_SEQ_FRAME_NEED);
 
-	if (instance->format == AVC_DEC) {
+	if (instance->format == VPU_CODEC_AVC_DEC) {
 		int top, right;
 		val = vpu_read(vpu, RET_DEC_SEQ_CROP_LEFT_RIGHT);
 		val2 = vpu_read(vpu, RET_DEC_SEQ_CROP_TOP_BOTTOM);
@@ -1020,7 +1057,7 @@ static int vpu_open(struct file *file)
 	instance->header = NULL;
 	instance->mode = VPU_MODE_DECODER;
 	instance->standard = STD_MPEG4;
-	instance->format = AVC_DEC;
+	instance->format = VPU_CODEC_AVC_DEC;
 	instance->hold = 1;
 	instance->flushing = 0;
 	instance->readofs = 0;
