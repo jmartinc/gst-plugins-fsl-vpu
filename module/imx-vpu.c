@@ -147,18 +147,22 @@ static struct vpu_regs regs_v2 = {
 
 struct vpu_driver_data {
 	struct vpu_regs *regs;
+	const char *fw_name;
 };
 
 static struct vpu_driver_data drvdata_imx27 = {
 	.regs = &regs_v1,
+	.fw_name = "vpu_fw_imx27.bin"
 };
 
 static struct vpu_driver_data drvdata_imx51 = {
 	.regs = &regs_v2,
+	.fw_name = "vpu_fw_imx51.bin"
 };
 
 static struct vpu_driver_data drvdata_imx53 = {
 	.regs = &regs_v2,
+	.fw_name = "vpu_fw_imx53.bin"
 };
 
 #define STD_MPEG4	0
@@ -1271,21 +1275,11 @@ static int vpu_program_firmware(struct vpu *vpu)
 	int i, data, ret;
 	unsigned short *dp;
 	u32 *buf;
-	const char *fwname;
 
 	struct headerInfo info;
 	const struct firmware *fw = NULL;
 
-	if (cpu_is_mx27())
-		fwname = "vpu_fw_imx27.bin";
-	else if (cpu_is_mx51())
-		fwname = "vpu_fw_imx51.bin";
-	else if (cpu_is_mx51())
-		fwname = "vpu_fw_imx53.bin";
-	else
-		return -EINVAL;
-
-	ret = request_firmware(&fw, fwname, vpu->dev);
+	ret = request_firmware(&fw, vpu->drvdata->fw_name, vpu->dev);
 	if (ret) {
 		printk("%i unable to load the firmware\n", ret);
 		return -ENOMEM;
