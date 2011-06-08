@@ -83,7 +83,7 @@ typedef struct _GstVPU_Enc
 	unsigned char *buf_data[NUM_BUFFERS];
 	unsigned int buf_size[NUM_BUFFERS];
 	unsigned int queued;
-	const char *device;
+	char *device;
 }GstVPU_Enc;
 
 /*maximum limit of the output buffer */

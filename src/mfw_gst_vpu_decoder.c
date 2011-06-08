@@ -91,7 +91,7 @@ typedef struct _GstVPU_Dec {
 	gint dbk_offset_a;
 	gint dbk_offset_b;
 
-	const char *device;
+	char *device;
 	struct v4l2_buffer buf_v4l2[NUM_BUFFERS];
 	unsigned char *buf_data[NUM_BUFFERS];
 	unsigned int buf_size[NUM_BUFFERS];
