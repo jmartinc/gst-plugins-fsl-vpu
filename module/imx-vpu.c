@@ -1081,7 +1081,7 @@ static int vpu_mmap(struct file *file, struct vm_area_struct *vma)
 	return videobuf_mmap_mapper(&instance->vidq, vma);
 }
 
-static ssize_t vpu_write(struct file *file, const char __user *ubuf, size_t len,
+static ssize_t vpu_write_stream(struct file *file, const char __user *ubuf, size_t len,
 		loff_t *off)
 {
 	struct vpu_instance *instance = file->private_data;
@@ -1107,7 +1107,7 @@ static ssize_t vpu_write(struct file *file, const char __user *ubuf, size_t len,
 	return ret;
 }
 
-static ssize_t vpu_read(struct file *file, char __user *ubuf, size_t len, loff_t *off)
+static ssize_t vpu_read_stream(struct file *file, char __user *ubuf, size_t len, loff_t *off)
 {
 	struct vpu_instance *instance = file->private_data;
 	int retlen, ret;
@@ -1526,8 +1526,8 @@ static const struct v4l2_file_operations vpu_fops = {
 	.release	= vpu_release,
 	.ioctl		= vpu_ioctl,
 	.mmap		= vpu_mmap,
-	.write		= vpu_write,
-	.read		= vpu_read,
+	.write		= vpu_write_stream,
+	.read		= vpu_read_stream,
 	.poll		= vpu_poll,
 };
 
