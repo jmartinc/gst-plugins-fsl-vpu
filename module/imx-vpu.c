@@ -1830,7 +1830,7 @@ static int vpu_dev_remove(struct platform_device *pdev)
 
 static struct platform_driver mxcvpu_driver = {
 	.driver = {
-		   .name = "mxc_vpu",
+		   .name = "imx-vpu",
 		   },
 	.id_table = vpu_devtype,
 	.probe = vpu_dev_probe,
