@@ -55,16 +55,6 @@
 #define BIT_WR_PTR_2			0x134
 #define BIT_RD_PTR_3			0x138
 #define BIT_WR_PTR_3			0x13C
-#define BIT_AXI_SRAM_USE		0x140 /* MX37 */
-#define BIT_SEARCH_RAM_BASE_ADDR	0x140
-#define BIT_SEARCH_RAM_SIZE		0x144
-#define BIT_MX37_IRAM_BASE_ADDR		0x144
-
-#define BIT_BIT_USE_SRAM_BASE		0x150
-#define BIT_IP_USE_SRAM_BASE		0x154
-#define	BIT_DBK_USE_SRAM_BASE		0x158
-#define	BIT_OVL_USE_SRAM_BASE		0x15C
-
 
 #define BIT_BUSY_FLAG			0x160
 #define BIT_RUN_COMMAND			0x164
@@ -72,6 +62,8 @@
 #define BIT_RUN_COD_STD			0x16C
 #define BIT_INT_ENABLE			0x170
 #define BIT_INT_REASON			0x174
+#define V2_BIT_RUN_AUX_STD		0x178
+
 
 #define BIT_CMD_0			0x1E0
 #define BIT_CMD_1			0x1E4
@@ -89,8 +81,9 @@
 #define CMD_DEC_SEQ_OPTION		0x188
 #define CMD_DEC_SEQ_SRC_SIZE		0x18C
 #define CMD_DEC_SEQ_START_BYTE		0x190
-#define CMD_DEC_SEQ_PS_BB_START     	0x194
-#define CMD_DEC_SEQ_PS_BB_SIZE      	0x198
+#define CMD_DEC_SEQ_PS_BB_START		0x194
+#define CMD_DEC_SEQ_PS_BB_SIZE		0x198
+
 #define CMD_DEC_SEQ_INIT_ESCAPE		0x114
 
 #define RET_DEC_SEQ_SUCCESS		0x1C0
@@ -123,7 +116,6 @@
 #define CMD_ENC_SEQ_RC_BUF_SIZE		0x1B0
 #define CMD_ENC_SEQ_INTRA_REFRESH	0x1B4
 #define CMD_ENC_SEQ_FMO			0x1B8
-#define CMD_ENC_SEQ_INTRA_QP		0x1BC
 #define CMD_ENC_SEQ_RC_QP_MAX		0x1C8
 #define RET_ENC_SEQ_SUCCESS		0x1C0
 
@@ -197,6 +189,7 @@
 #define V2_CMD_SET_FRAME_AXI_DBKY_ADDR	0x198
 #define V2_CMD_SET_FRAME_AXI_DBKC_ADDR	0x19C
 #define V2_CMD_SET_FRAME_AXI_OVL_ADDR	0x1A0
+#define CMD_SET_FRAME_SOURCE_BUF_STRIDE	0x1A8
 
 /*---------------------------------------------------------------------------
  * [ENC HEADER] COMMAND
@@ -225,4 +218,3 @@
 #define RET_VER_NUM			0x1c0
 
 #endif
-
