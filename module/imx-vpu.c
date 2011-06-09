@@ -601,8 +601,8 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		return -EINVAL;
 	};
 
-	vpu_write(vpu, BIT_BIT_STREAM_CTRL, 1 << bit_buf_pic_reset |
-			1 << bit_buf_pic_flush);
+	vpu_write(vpu, BIT_BIT_STREAM_CTRL, 1 << regs->bit_buf_pic_reset |
+			1 << regs->bit_buf_pic_flush);
 	vpu_write(vpu, BIT_PARA_BUF_ADDR, instance->para_buf_phys);
 
 	vpu_write(vpu, BIT_WR_PTR(instance->idx), instance->bitstream_buf_phys);
