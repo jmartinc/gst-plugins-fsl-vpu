@@ -595,20 +595,8 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 
 	vpu_write(vpu, regs->cmd_enc_seq_intra_qp, rcIntraQp);
 
-	if (instance->standard == AVC_ENC) {
-		data |= (0 << 2);
-		data |= (1 << 4);
-	}
-
-	vpu_write(vpu, CMD_ENC_SEQ_OPTION, data);
-
-	if (instance->standard == AVC_ENC) {
-		data = (1 << 4) |
-		    (0x80 & 0x0f);
-		data |= (regs->fmo_slice_save_buf_size << 7);
-	}
-
-	vpu_write(vpu, CMD_ENC_SEQ_FMO, data);	/* FIXME */
+	vpu_write(vpu, CMD_ENC_SEQ_OPTION, 0);
+	vpu_write(vpu, CMD_ENC_SEQ_FMO, 0);
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 
