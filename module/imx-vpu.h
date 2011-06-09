@@ -249,21 +249,5 @@
  *-------------------------------------------------------------------------*/
 #define RET_VER_NUM			0x1c0
 
-#if defined(CONFIG_MACH_MX27)
-	#define CODE_BUF_SIZE			(64 * 1024)
-	#define FMO_SLICE_SAVE_BUF_SIZE		(32)
-	#define WORK_BUF_SIZE			(288 * 1024) + (FMO_SLICE_SAVE_BUF_SIZE * 1024 * 8)
-	#define PARA_BUF2_SIZE			(1728)
-	#define PARA_BUF_SIZE			(10 * 1024)
-#elif defined(CONFIG_ARCH_MX31)
-	#define CODE_BUF_SIZE			(80 * 1024)
-	#define FMO_SLICE_SAVE_BUF_SIZE		(32) /* Not used */
-	#define WORK_BUF_SIZE			(190 * 1024)
-	#define PARA_BUF2_SIZE			(1728)
-	#define PARA_BUF_SIZE			(10 * 1024)
-#else
-#error  you must define PLATFORM properly
-#endif
-
 #endif
 
