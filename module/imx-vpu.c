@@ -283,17 +283,14 @@ static ssize_t show_info(struct device *dev,
 }
 static DEVICE_ATTR(info, S_IRUGO, show_info, NULL);
 
-static struct vpu _vpu_data;
-static struct vpu *vpu_data = &_vpu_data;
-
 static void vpu_write(struct vpu *vpu, u32 reg, u32 data)
 {
-	writel(data, vpu_data->base + reg);
+	writel(data, vpu->base + reg);
 }
 
 static u32 vpu_read(struct vpu *vpu, u32 reg)
 {
-	return readl(vpu_data->base + reg);
+	return readl(vpu->base + reg);
 }
 
 static void vpu_reset(struct vpu *vpu)
@@ -367,7 +364,7 @@ out:
 
 static int encode_header(struct vpu_instance *instance, int headertype)
 {
-	struct vpu *vpu = vpu_data;
+	struct vpu *vpu = instance->vpu;
 	void *header;
 	int headersize;
 
@@ -397,7 +394,7 @@ static int encode_header(struct vpu_instance *instance, int headertype)
 
 static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 {
-	struct vpu *vpu = vpu_data;
+	struct vpu *vpu = instance->vpu;
 	int ret;
 	u32 data;
 	u32 sliceSizeMode = 1;
@@ -590,7 +587,7 @@ out:
 
 static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 {
-	struct vpu *vpu = vpu_data;
+	struct vpu *vpu = instance->vpu;
 	u32 val, val2;
 	u64 f;
 	int ret;
@@ -709,7 +706,7 @@ out:
 
 static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct videobuf_buffer *vb)
 {
-	struct vpu *vpu = vpu_data;
+	struct vpu *vpu = instance->vpu;
 	dma_addr_t dma = videobuf_to_dma_contig(vb);
 	int height = instance->height;
 	int stridey = ROUND_UP_4(instance->width);
@@ -735,7 +732,7 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct v
 
 static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_buffer *vb)
 {
-	struct vpu *vpu = vpu_data;
+	struct vpu *vpu = instance->vpu;
 	dma_addr_t dma;
 	int height, stridey;
 	unsigned int readofs;
@@ -922,13 +919,15 @@ out:
 
 static int vpu_open(struct file *file)
 {
+	struct video_device *dev = video_devdata(file);
+	struct vpu *vpu = video_get_drvdata(dev);
 	struct vpu_instance *instance;
 	int ret = 0, i;
 
-	spin_lock_irq(&vpu_data->lock);
+	spin_lock_irq(&vpu->lock);
 
 	for (i = 0; i < VPU_NUM_INSTANCE; i++)
-		if (!vpu_data->instance[i].in_use)
+		if (!vpu->instance[i].in_use)
 			break;
 
 	if (i == VPU_NUM_INSTANCE) {
@@ -936,10 +935,9 @@ static int vpu_open(struct file *file)
 		goto out;
 	}
 
-	instance = &vpu_data->instance[i];
+	instance = &vpu->instance[i];
 
 	instance->in_use = 1;
-	instance->vpu = vpu_data;
 	instance->idx = i;
 	instance->needs_init = 1;
 	instance->headersize = 0;
@@ -1004,7 +1002,7 @@ err_alloc2:
 err_alloc1:
 	instance->in_use = 0;
 out:
-	spin_unlock_irq(&vpu_data->lock);
+	spin_unlock_irq(&vpu->lock);
 
 	return ret;
 }
@@ -1537,47 +1535,55 @@ static const struct v4l2_file_operations vpu_fops = {
 
 static int vpu_dev_probe(struct platform_device *pdev)
 {
-	int err = 0;
+	struct vpu *vpu;
+	int err = 0, i;
 	struct resource *res;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
 		return -ENODEV;
 
-	vpu_data->vdev = video_device_alloc();
-	if (!vpu_data->vdev)
+	vpu = devm_kzalloc(&pdev->dev, sizeof(*vpu), GFP_KERNEL);
+	if (!vpu)
 		return -ENOMEM;
 
-	strcpy(vpu_data->vdev->name, "vpu");
-	vpu_data->vdev->fops = &vpu_fops;
-	vpu_data->vdev->ioctl_ops = &vpu_ioctl_ops;
-	vpu_data->vdev->release = video_device_release;
-	video_set_drvdata(vpu_data->vdev, vpu_data);
-	vpu_data->dev = &pdev->dev;
+	vpu->vdev = video_device_alloc();
+	if (!vpu->vdev)
+		return -ENOMEM;
 
-	vpu_data->clk = clk_get(&pdev->dev, NULL);
-	if (IS_ERR(vpu_data->clk)) {
+	strcpy(vpu->vdev->name, "vpu");
+	vpu->vdev->fops = &vpu_fops;
+	vpu->vdev->ioctl_ops = &vpu_ioctl_ops;
+	vpu->vdev->release = video_device_release;
+	video_set_drvdata(vpu->vdev, vpu);
+	vpu->dev = &pdev->dev;
+
+	for (i = 0; i < VPU_NUM_INSTANCE; i++)
+		vpu->instance[i].vpu = vpu;
+
+	vpu->clk = clk_get(&pdev->dev, NULL);
+	if (IS_ERR(vpu->clk)) {
 		err = -ENOENT;
 		goto err_out_clk;
 	}
 
-	clk_enable(vpu_data->clk);
-	spin_lock_init(&vpu_data->lock);
-	INIT_LIST_HEAD(&vpu_data->queued);
+	clk_enable(vpu->clk);
+	spin_lock_init(&vpu->lock);
+	INIT_LIST_HEAD(&vpu->queued);
 
-	vpu_data->base = ioremap(res->start, resource_size(res));
-	if (!vpu_data->base) {
+	vpu->base = ioremap(res->start, resource_size(res));
+	if (!vpu->base) {
 		err = -ENOMEM;
 		goto err_out_ioremap;
 	}
 
-	vpu_data->irq = platform_get_irq(pdev, 0);
-	err = request_irq(vpu_data->irq, vpu_irq_handler, 0,
-			dev_name(&pdev->dev), vpu_data);
+	vpu->irq = platform_get_irq(pdev, 0);
+	err = request_irq(vpu->irq, vpu_irq_handler, 0,
+			dev_name(&pdev->dev), vpu);
 	if (err)
 		goto err_out_irq;
 
-	err = vpu_program_firmware(vpu_data);
+	err = vpu_program_firmware(vpu);
 	if (err)
 		goto err_out_irq;
 
@@ -1585,34 +1591,34 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	if (err)
 		goto err_out_irq;
 
-	err = video_register_device(vpu_data->vdev,
+	err = video_register_device(vpu->vdev,
 				    VFL_TYPE_GRABBER, -1);
 	if (err) {
 		dev_err(&pdev->dev, "failed to register: %d\n", err);
 		goto err_out_register;
 	}
 
-	platform_set_drvdata(pdev, vpu_data);
+	platform_set_drvdata(pdev, vpu);
 
 	dev_info(&pdev->dev, "registered\n");
 	return 0;
 
 err_out_register:
-	free_irq(vpu_data->irq, vpu_data);
+	free_irq(vpu->irq, vpu);
 err_out_irq:
-	iounmap(vpu_data->base);
+	iounmap(vpu->base);
 err_out_ioremap:
-	clk_disable(vpu_data->clk);
-	clk_put(vpu_data->clk);
+	clk_disable(vpu->clk);
+	clk_put(vpu->clk);
 err_out_clk:
-	kfree(vpu_data->vdev);
+	kfree(vpu->vdev);
 
-	if (vpu_data->vpu_work_buf)
-		dma_free_coherent(NULL, WORK_BUF_SIZE, vpu_data->vpu_work_buf,
-				vpu_data->vpu_work_buf_phys);
-	if (vpu_data->vpu_code_table)
-		dma_free_coherent(NULL, CODE_BUF_SIZE, vpu_data->vpu_code_table,
-				vpu_data->vpu_code_table_phys);
+	if (vpu->vpu_work_buf)
+		dma_free_coherent(NULL, WORK_BUF_SIZE, vpu->vpu_work_buf,
+				vpu->vpu_work_buf_phys);
+	if (vpu->vpu_code_table)
+		dma_free_coherent(NULL, CODE_BUF_SIZE, vpu->vpu_code_table,
+				vpu->vpu_code_table_phys);
 
 	return err;
 }
@@ -1621,9 +1627,9 @@ static int vpu_dev_remove(struct platform_device *pdev)
 {
 	struct vpu *vpu = platform_get_drvdata(pdev);
 
-	free_irq(vpu_data->irq, vpu);
+	free_irq(vpu->irq, vpu);
 
-	clk_disable(vpu_data->clk);
+	clk_disable(vpu->clk);
 	clk_put(vpu->clk);
 	iounmap(vpu->base);
 
@@ -1632,7 +1638,7 @@ static int vpu_dev_remove(struct platform_device *pdev)
 	dma_free_coherent(NULL, CODE_BUF_SIZE, vpu->vpu_code_table,
 			vpu->vpu_code_table_phys);
 
-	video_unregister_device(vpu_data->vdev);
+	video_unregister_device(vpu->vdev);
 
 	device_remove_file(&pdev->dev, &dev_attr_info);
 	platform_set_drvdata(pdev, NULL);
