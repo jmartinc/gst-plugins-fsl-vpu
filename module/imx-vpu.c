@@ -199,6 +199,7 @@ struct vpu_driver_data {
 	const char *fw_name;
 	const int *codecs;
 	int (*alloc_fb)(struct vpu_instance *instance);
+	int version;
 };
 
 static int vpu_alloc_fb_v1(struct vpu_instance *instance);
@@ -209,6 +210,7 @@ static struct vpu_driver_data drvdata_imx27 = {
 	.codecs = vpu_v1_codecs,
 	.fw_name = "vpu_fw_imx27.bin",
 	.alloc_fb = vpu_alloc_fb_v1,
+	.version = 1,
 };
 
 static struct vpu_driver_data drvdata_imx51 = {
@@ -216,6 +218,7 @@ static struct vpu_driver_data drvdata_imx51 = {
 	.codecs = vpu_v2_codecs,
 	.fw_name = "vpu_fw_imx51.bin",
 	.alloc_fb = vpu_alloc_fb_v2,
+	.version = 2,
 };
 
 static struct vpu_driver_data drvdata_imx53 = {
@@ -223,6 +226,7 @@ static struct vpu_driver_data drvdata_imx53 = {
 	.codecs = vpu_v2_codecs,
 	.fw_name = "vpu_fw_imx53.bin",
 	.alloc_fb = vpu_alloc_fb_v2,
+	.version = 2,
 };
 
 /* buffer for one video frame */
@@ -1388,7 +1392,7 @@ static int vpu_program_firmware(struct vpu *vpu)
 		return -ENOMEM;
 	}
 
-	if (cpu_is_mx51() || cpu_is_mx53()) {
+	if (vpu->drvdata->version == 2) {
 		for (i = 0; i < info.size; i += 4) {
 			data = (dp[i + 0] << 16) | dp[i + 1];
 			buf[i / 2 + 1] = data;
