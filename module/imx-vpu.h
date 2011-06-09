@@ -102,11 +102,7 @@
 #define RET_DEC_SEQ_INFO		0x1D4
 #define RET_DEC_SEQ_CROP_LEFT_RIGHT	0x1D8
 #define RET_DEC_SEQ_CROP_TOP_BOTTOM	0x1DC
-#ifdef	IMX37_3STACK
-#define RET_DEC_SEQ_NEXT_FRAME_NUM	0x1BC
-#else
 #define RET_DEC_SEQ_NEXT_FRAME_NUM	0x1E0
-#endif
 
 /*--------------------------------------------------------------------------
  * [ENC SEQ INIT] COMMAND
@@ -157,23 +153,12 @@
 #define CMD_DEC_PIC_DBK_ADDR_CB		0x194
 #define CMD_DEC_PIC_DBK_ADDR_CR		0x198
 
-#if defined(CONFIG_ARCH_MX31)
-#define CMD_DEC_PIC_ROT_STRIDE		0x19C
-#define CMD_DEC_PIC_OPTION		0x1A0
-#define CMD_DEC_PIC_SKIP_NUM		0x1A4
-#define CMD_DEC_PIC_CHUNK_SIZE		0x1A8
-#define CMD_DEC_PIC_BB_START		0x1AC
-#define CMD_DEC_PIC_START_BYTE		0x1B0
-#elif defined(CONFIG_MACH_MX27)
 #define CMD_DEC_PIC_ROT_STRIDE		0x190
 #define CMD_DEC_PIC_OPTION		0x194
 #define CMD_DEC_PIC_SKIP_NUM		0x198
 #define CMD_DEC_PIC_CHUNK_SIZE		0x19C
 #define CMD_DEC_PIC_BB_START		0x1A0
 #define CMD_DEC_PIC_START_BYTE		0x1A4
-#else
-#error
-#endif
 
 #define RET_DEC_PIC_FRAME_NUM		0x1C0
 #define RET_DEC_PIC_FRAME_IDX		0x1C4
@@ -181,21 +166,6 @@
 #define RET_DEC_PIC_TYPE		0x1CC
 
 #define RET_DEC_PIC_POST		0x1D0
-
-#if defined(CONFIG_ARCH_MX31)
-#define RET_DEC_PIC_OPTION		0x1D4
-#define RET_DEC_PIC_SUCCESS		0x1D8
-#elif defined(CONFIG_MACH_MX27)
-#define RET_DEC_PIC_OPTION		0x1D0
-#define RET_DEC_PIC_SUCCESS		0x1D4
-#endif
-
-#define RET_DEC_PIC_CUR_IDX		0x1DC
-#ifdef	IMX37_3STACK
-#define RET_DEC_PIC_NEXT_IDX		0x1BC
-#else
-#define RET_DEC_PIC_NEXT_IDX		0x1E0
-#endif
 
 /*---------------------------------------------------------------------------
  * [ENC PIC RUN] COMMAND
