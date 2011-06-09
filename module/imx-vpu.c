@@ -406,10 +406,12 @@ static int vpu_wait(struct vpu *vpu)
 	}
 }
 
-static void BitIssueCommand(struct vpu *vpu, int instIdx, int cdcMode, int cmd)
+static void vpu_bit_issue_command(struct vpu_instance *instance, int cmd)
 {
-	vpu_write(vpu, BIT_RUN_INDEX, instIdx);
-	vpu_write(vpu, BIT_RUN_COD_STD, cdcMode);
+	struct vpu *vpu = instance->vpu;
+
+	vpu_write(vpu, BIT_RUN_INDEX, instance->idx);
+	vpu_write(vpu, BIT_RUN_COD_STD, instance->format);
 	vpu_write(vpu, BIT_RUN_COMMAND, cmd);
 }
 
@@ -450,7 +452,7 @@ static int encode_header(struct vpu_instance *instance, int headertype)
 
 	vpu_write(vpu, CMD_ENC_HEADER_CODE, headertype);
 
-	BitIssueCommand(vpu, instance->idx, instance->format, ENCODE_HEADER);
+	vpu_bit_issue_command(instance, ENCODE_HEADER);
 
 	if (vpu_wait(vpu))
 		return -EINVAL;
@@ -600,7 +602,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 
-	BitIssueCommand(vpu, instance->idx, instance->format, SEQ_INIT);
+	vpu_bit_issue_command(instance, SEQ_INIT);
 	if (vpu_wait(vpu))
 		return -EINVAL;
 
@@ -622,7 +624,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 
-	BitIssueCommand(vpu, instance->idx, instance->format, SET_FRAME_BUF);
+	vpu_bit_issue_command(instance, SET_FRAME_BUF);
 	if (vpu_wait(vpu))
 		return -EINVAL;
 
@@ -690,7 +692,7 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, CMD_DEC_SEQ_PS_BB_SIZE, (PS_SAVE_SIZE / 1024));
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(vpu, instance->idx, instance->format, SEQ_INIT);
+	vpu_bit_issue_command(instance, SEQ_INIT);
 
 	if (vpu_wait(vpu)) {
 		ret = -EINVAL;
@@ -758,7 +760,7 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, CMD_SET_FRAME_SLICE_BB_SIZE, SLICE_SAVE_SIZE / 1024);
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(vpu, instance->idx, instance->format, SET_FRAME_BUF);
+	vpu_bit_issue_command(instance, SET_FRAME_BUF);
 
 	if (vpu_wait(vpu)) {
 		ret = -EINVAL;
@@ -797,7 +799,7 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct v
 	vpu_write(vpu, CMD_ENC_PIC_OPTION, (0 << 5) | (0 << 1));
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(vpu, instance->idx, instance->format, PIC_RUN);
+	vpu_bit_issue_command(instance, PIC_RUN);
 }
 
 static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_buffer *vb)
@@ -839,7 +841,7 @@ static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_b
 	vpu_write(vpu, CMD_DEC_PIC_SKIP_NUM, 0);
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(vpu, instance->idx, instance->format, PIC_RUN);
+	vpu_bit_issue_command(instance, PIC_RUN);
 }
 
 /*
@@ -1229,7 +1231,10 @@ static int vpu_version_info(struct vpu *vpu)
 	vpu_write(vpu, RET_VER_NUM, 0);
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(vpu, 0, 0, FIRMWARE_GET);
+
+	vpu_write(vpu, BIT_RUN_INDEX, 0);
+	vpu_write(vpu, BIT_RUN_COD_STD, 0);
+	vpu_write(vpu, BIT_RUN_COMMAND, FIRMWARE_GET);
 
 	if (vpu_wait(vpu))
 		return -ENODEV;
