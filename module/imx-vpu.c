@@ -286,43 +286,42 @@ static DEVICE_ATTR(info, S_IRUGO, show_info, NULL);
 static struct vpu _vpu_data;
 static struct vpu *vpu_data = &_vpu_data;
 
-static void VpuWriteReg(unsigned long addr, unsigned int data)
+static void vpu_write(struct vpu *vpu, u32 reg, u32 data)
 {
-	__raw_writel(data, vpu_data->base + addr);
+	writel(data, vpu_data->base + reg);
 }
 
-static unsigned long VpuReadReg(unsigned long addr)
+static u32 vpu_read(struct vpu *vpu, u32 reg)
 {
-	unsigned long data = __raw_readl(vpu_data->base + addr);
-	return data;
+	return readl(vpu_data->base + reg);
 }
 
-static void vpu_reset(void)
+static void vpu_reset(struct vpu *vpu)
 {
 	unsigned long val;
 
-	VpuWriteReg(BIT_CODE_RUN, 0);
-	val = VpuReadReg(BIT_CODE_RESET);
-	VpuWriteReg(BIT_CODE_RESET, val | 1);
+	vpu_write(vpu, BIT_CODE_RUN, 0);
+	val = vpu_read(vpu, BIT_CODE_RESET);
+	vpu_write(vpu, BIT_CODE_RESET, val | 1);
 	udelay(100);
-	VpuWriteReg(BIT_CODE_RESET, val & ~1);
-	VpuWriteReg(BIT_CODE_RUN, 1);
+	vpu_write(vpu, BIT_CODE_RESET, val & ~1);
+	vpu_write(vpu, BIT_CODE_RUN, 1);
 }
 
-static int vpu_is_busy(void)
+static int vpu_is_busy(struct vpu *vpu)
 {
-	return VpuReadReg(BIT_BUSY_FLAG) != 0;
+	return vpu_read(vpu, BIT_BUSY_FLAG) != 0;
 }
 
-static int vpu_wait(void)
+static int vpu_wait(struct vpu *vpu)
 {
 	int to = 100000;
 	while (1) {
-		if (!vpu_is_busy())
+		if (!vpu_is_busy(vpu))
 			return 0;
 		if (!to--) {
 			printk("%s timed out\n", __func__);
-			VpuWriteReg(BIT_BUSY_FLAG, 0x0);
+			vpu_write(vpu, BIT_BUSY_FLAG, 0x0);
 			dump_stack();
 			return -ETIMEDOUT;
 		}
@@ -330,11 +329,11 @@ static int vpu_wait(void)
 	}
 }
 
-static void BitIssueCommand(int instIdx, int cdcMode, int cmd)
+static void BitIssueCommand(struct vpu *vpu, int instIdx, int cdcMode, int cmd)
 {
-	VpuWriteReg(BIT_RUN_INDEX, instIdx);
-	VpuWriteReg(BIT_RUN_COD_STD, cdcMode);
-	VpuWriteReg(BIT_RUN_COMMAND, cmd);
+	vpu_write(vpu, BIT_RUN_INDEX, instIdx);
+	vpu_write(vpu, BIT_RUN_COD_STD, cdcMode);
+	vpu_write(vpu, BIT_RUN_COMMAND, cmd);
 }
 
 static int alloc_fb(struct vpu_instance *instance)
@@ -368,18 +367,19 @@ out:
 
 static int encode_header(struct vpu_instance *instance, int headertype)
 {
+	struct vpu *vpu = vpu_data;
 	void *header;
 	int headersize;
 
-	VpuWriteReg(CMD_ENC_HEADER_CODE, headertype);
+	vpu_write(vpu, CMD_ENC_HEADER_CODE, headertype);
 
-	BitIssueCommand(instance->idx, instance->format, ENCODE_HEADER);
+	BitIssueCommand(vpu, instance->idx, instance->format, ENCODE_HEADER);
 
-	if (vpu_wait())
+	if (vpu_wait(vpu))
 		return -EINVAL;
 
-	headersize = VpuReadReg(BIT_WR_PTR(instance->idx)) -
-			VpuReadReg(BIT_RD_PTR(instance->idx));
+	headersize = vpu_read(vpu, BIT_WR_PTR(instance->idx)) -
+			vpu_read(vpu, BIT_RD_PTR(instance->idx));
 
 	header = krealloc(instance->header, headersize + instance->headersize, GFP_KERNEL);
 	if (!header)
@@ -397,6 +397,7 @@ static int encode_header(struct vpu_instance *instance, int headertype)
 
 static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 {
+	struct vpu *vpu = vpu_data;
 	int ret;
 	u32 data;
 	u32 sliceSizeMode = 1;
@@ -420,15 +421,15 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		return -EINVAL;
 	};
 
-	VpuWriteReg(BIT_BIT_STREAM_CTRL, 0xc);
-	VpuWriteReg(BIT_PARA_BUF_ADDR, instance->para_buf_phys);
+	vpu_write(vpu, BIT_BIT_STREAM_CTRL, 0xc);
+	vpu_write(vpu, BIT_PARA_BUF_ADDR, instance->para_buf_phys);
 
-	VpuWriteReg(BIT_WR_PTR(instance->idx), instance->bitstream_buf_phys);
-	VpuWriteReg(BIT_RD_PTR(instance->idx), instance->bitstream_buf_phys);
+	vpu_write(vpu, BIT_WR_PTR(instance->idx), instance->bitstream_buf_phys);
+	vpu_write(vpu, BIT_RD_PTR(instance->idx), instance->bitstream_buf_phys);
 
 	data = (instance->width << 10) | instance->height;
-	VpuWriteReg(CMD_ENC_SEQ_SRC_SIZE, data);
-	VpuWriteReg(CMD_ENC_SEQ_SRC_F_RATE, 0x03e87530); /* 0x03e87530 */
+	vpu_write(vpu, CMD_ENC_SEQ_SRC_SIZE, data);
+	vpu_write(vpu, CMD_ENC_SEQ_SRC_F_RATE, 0x03e87530); /* 0x03e87530 */
 
 	if (instance->standard == STD_MPEG4) {
 		u32 mp4_intraDcVlcThr = 7;
@@ -437,7 +438,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		u32 mp4_hecEnable = 0;
 		u32 mp4_verid = 1;
 
-		VpuWriteReg(CMD_ENC_SEQ_COD_STD, STD_MPEG4);
+		vpu_write(vpu, CMD_ENC_SEQ_COD_STD, STD_MPEG4);
 
 		data = mp4_intraDcVlcThr << 2 |
 			mp4_reversibleVlcEnable << 1 |
@@ -445,7 +446,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 			mp4_hecEnable << 5 |
 			mp4_verid << 6;
 
-		VpuWriteReg(CMD_ENC_SEQ_MP4_PARA, data);
+		vpu_write(vpu, CMD_ENC_SEQ_MP4_PARA, data);
 	} else if (instance->standard == STD_H263) {
 		u32 h263_annexJEnable = 0;
 		u32 h263_annexKEnable = 0;
@@ -461,13 +462,13 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 			return -EINVAL;
 		}
 
-		VpuWriteReg(CMD_ENC_SEQ_COD_STD, STD_H263);
+		vpu_write(vpu, CMD_ENC_SEQ_COD_STD, STD_H263);
 
 		data = h263_annexJEnable << 2 |
 			h263_annexKEnable << 1 |
 			h263_annexTEnable;
 
-		VpuWriteReg(CMD_ENC_SEQ_263_PARA, data);
+		vpu_write(vpu, CMD_ENC_SEQ_263_PARA, data);
 	} else if (instance->standard == STD_AVC) {
 		u32 avc_deblkFilterOffsetBeta = 0;
 		u32 avc_deblkFilterOffsetAlpha = 0;
@@ -475,53 +476,53 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		u32 avc_constrainedIntraPredFlag = 0;
 		u32 avc_chromaQpOffset = 0;
 
-		VpuWriteReg(CMD_ENC_SEQ_COD_STD, STD_AVC);
+		vpu_write(vpu, CMD_ENC_SEQ_COD_STD, STD_AVC);
 
 		data = (avc_deblkFilterOffsetBeta & 15) << 12 |
 			(avc_deblkFilterOffsetAlpha & 15) << 8 |
 			avc_disableDeblk << 6 |
 			avc_constrainedIntraPredFlag << 5 |
 			(avc_chromaQpOffset & 31);
-		VpuWriteReg(CMD_ENC_SEQ_264_PARA, data);
+		vpu_write(vpu, CMD_ENC_SEQ_264_PARA, data);
 	}
 
 	data = 8000 << 2 | /* slice size */
 		sliceSizeMode << 1 | sliceMode;
 
-	VpuWriteReg(CMD_ENC_SEQ_SLICE_MODE, data);
-	VpuWriteReg(CMD_ENC_SEQ_GOP_NUM, 1); /* gop size */
+	vpu_write(vpu, CMD_ENC_SEQ_SLICE_MODE, data);
+	vpu_write(vpu, CMD_ENC_SEQ_GOP_NUM, 1); /* gop size */
 
 	if (bitrate) {	/* rate control enabled */
 		data = (!enableAutoSkip) << 31 |
 			initialDelay << 16 |
 			bitrate << 1 |
 			0;
-		VpuWriteReg(CMD_ENC_SEQ_RC_PARA, data);
+		vpu_write(vpu, CMD_ENC_SEQ_RC_PARA, data);
 	} else {
-		VpuWriteReg(CMD_ENC_SEQ_RC_PARA, 0);
+		vpu_write(vpu, CMD_ENC_SEQ_RC_PARA, 0);
 	}
 
-	VpuWriteReg(CMD_ENC_SEQ_RC_BUF_SIZE, 0); /* vbv buffer size */
-	VpuWriteReg(CMD_ENC_SEQ_INTRA_REFRESH, 0);
+	vpu_write(vpu, CMD_ENC_SEQ_RC_BUF_SIZE, 0); /* vbv buffer size */
+	vpu_write(vpu, CMD_ENC_SEQ_INTRA_REFRESH, 0);
 
-	VpuWriteReg(CMD_ENC_SEQ_BB_START, instance->bitstream_buf_phys);
-	VpuWriteReg(CMD_ENC_SEQ_BB_SIZE, BITSTREAM_BUF_SIZE / 1024);
+	vpu_write(vpu, CMD_ENC_SEQ_BB_START, instance->bitstream_buf_phys);
+	vpu_write(vpu, CMD_ENC_SEQ_BB_SIZE, BITSTREAM_BUF_SIZE / 1024);
 
 	data = (sliceReport << 1) | mbReport;
 
-	VpuWriteReg(CMD_ENC_SEQ_RC_QP_MAX, 4096);
+	vpu_write(vpu, CMD_ENC_SEQ_RC_QP_MAX, 4096);
 
 	if (rcIntraQp >= 0)
 		data |= (1 << 5);
 
-	VpuWriteReg(CMD_ENC_SEQ_INTRA_QP, rcIntraQp);
+	vpu_write(vpu, CMD_ENC_SEQ_INTRA_QP, rcIntraQp);
 
 	if (instance->standard == AVC_ENC) {
 		data |= (0 << 2);
 		data |= (1 << 4);
 	}
 
-	VpuWriteReg(CMD_ENC_SEQ_OPTION, data);
+	vpu_write(vpu, CMD_ENC_SEQ_OPTION, data);
 
 	if (instance->standard == AVC_ENC) {
 		data = (1 << 4) |
@@ -529,15 +530,15 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		data |= (FMO_SLICE_SAVE_BUF_SIZE << 7);
 	}
 
-	VpuWriteReg(CMD_ENC_SEQ_FMO, data);	/* FIXME */
+	vpu_write(vpu, CMD_ENC_SEQ_FMO, data);	/* FIXME */
 
-	VpuWriteReg(BIT_BUSY_FLAG, 0x1);
+	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 
-	BitIssueCommand(instance->idx, instance->format, SEQ_INIT);
-	if (vpu_wait())
+	BitIssueCommand(vpu, instance->idx, instance->format, SEQ_INIT);
+	if (vpu_wait(vpu))
 		return -EINVAL;
 
-	if (VpuReadReg(RET_ENC_SEQ_SUCCESS) == 0) {
+	if (vpu_read(vpu, RET_ENC_SEQ_SUCCESS) == 0) {
 		printk("%s failed\n", __func__);
 		return -EINVAL;
 	}
@@ -550,13 +551,13 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	}
 
 	/* Tell the codec how much frame buffers we allocated. */
-	VpuWriteReg(CMD_SET_FRAME_BUF_NUM, instance->num_fb);
-	VpuWriteReg(CMD_SET_FRAME_BUF_STRIDE, ROUND_UP_8(instance->width));
+	vpu_write(vpu, CMD_SET_FRAME_BUF_NUM, instance->num_fb);
+	vpu_write(vpu, CMD_SET_FRAME_BUF_STRIDE, ROUND_UP_8(instance->width));
 
-	VpuWriteReg(BIT_BUSY_FLAG, 0x1);
+	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 
-	BitIssueCommand(instance->idx, instance->format, SET_FRAME_BUF);
-	if (vpu_wait())
+	BitIssueCommand(vpu, instance->idx, instance->format, SET_FRAME_BUF);
+	if (vpu_wait(vpu))
 		return -EINVAL;
 
 	if (instance->standard == STD_MPEG4) {
@@ -589,6 +590,7 @@ out:
 
 static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 {
+	struct vpu *vpu = vpu_data;
 	u32 val, val2;
 	u64 f;
 	int ret;
@@ -605,38 +607,38 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 		return -EINVAL;
 	};
 
-	VpuWriteReg(BIT_PARA_BUF_ADDR, instance->para_buf_phys);
+	vpu_write(vpu, BIT_PARA_BUF_ADDR, instance->para_buf_phys);
 
-	VpuWriteReg(BIT_WR_PTR(instance->idx), instance->bitstream_buf_phys +
+	vpu_write(vpu, BIT_WR_PTR(instance->idx), instance->bitstream_buf_phys +
 			instance->fifo_in);
-	VpuWriteReg(BIT_RD_PTR(instance->idx), instance->bitstream_buf_phys);
+	vpu_write(vpu, BIT_RD_PTR(instance->idx), instance->bitstream_buf_phys);
 
-	VpuWriteReg(CMD_DEC_SEQ_INIT_ESCAPE, 1);
+	vpu_write(vpu, CMD_DEC_SEQ_INIT_ESCAPE, 1);
 
-	VpuWriteReg(CMD_DEC_SEQ_BB_START, instance->bitstream_buf_phys);
-	VpuWriteReg(CMD_DEC_SEQ_START_BYTE, instance->bitstream_buf_phys);
-	VpuWriteReg(CMD_DEC_SEQ_BB_SIZE, BITSTREAM_BUF_SIZE / 1024);
-	VpuWriteReg(CMD_DEC_SEQ_OPTION, 0);
-	VpuWriteReg(CMD_DEC_SEQ_PS_BB_START, instance->ps_mem_buf_phys);
-	VpuWriteReg(CMD_DEC_SEQ_PS_BB_SIZE, (PS_SAVE_SIZE / 1024));
+	vpu_write(vpu, CMD_DEC_SEQ_BB_START, instance->bitstream_buf_phys);
+	vpu_write(vpu, CMD_DEC_SEQ_START_BYTE, instance->bitstream_buf_phys);
+	vpu_write(vpu, CMD_DEC_SEQ_BB_SIZE, BITSTREAM_BUF_SIZE / 1024);
+	vpu_write(vpu, CMD_DEC_SEQ_OPTION, 0);
+	vpu_write(vpu, CMD_DEC_SEQ_PS_BB_START, instance->ps_mem_buf_phys);
+	vpu_write(vpu, CMD_DEC_SEQ_PS_BB_SIZE, (PS_SAVE_SIZE / 1024));
 
-	VpuWriteReg(BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(instance->idx, instance->format, SEQ_INIT);
+	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
+	BitIssueCommand(vpu, instance->idx, instance->format, SEQ_INIT);
 
-	if (vpu_wait()) {
+	if (vpu_wait(vpu)) {
 		ret = -EINVAL;
-		VpuWriteReg(CMD_DEC_SEQ_INIT_ESCAPE, 0);
+		vpu_write(vpu, CMD_DEC_SEQ_INIT_ESCAPE, 0);
 		goto out;
 	}
 
-	VpuWriteReg(CMD_DEC_SEQ_INIT_ESCAPE, 0);
+	vpu_write(vpu, CMD_DEC_SEQ_INIT_ESCAPE, 0);
 
-	if (VpuReadReg(RET_DEC_SEQ_SUCCESS) == 0) {
+	if (vpu_read(vpu, RET_DEC_SEQ_SUCCESS) == 0) {
 		ret = -EAGAIN;
 		goto out;
 	}
 
-	val = VpuReadReg(RET_DEC_SEQ_SRC_SIZE);
+	val = vpu_read(vpu, RET_DEC_SEQ_SRC_SIZE);
 	instance->width = ((val >> 10) & 0x3ff);
 	instance->height = (val & 0x3ff);
 
@@ -645,20 +647,20 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	printk("%s instance %d now: %dx%d\n", __func__, instance->idx,
 			instance->width, instance->height);
 
-	val = VpuReadReg(RET_DEC_SEQ_SRC_F_RATE);
+	val = vpu_read(vpu, RET_DEC_SEQ_SRC_F_RATE);
 	printk("%s: Framerate: 0x%08x\n", __func__, val);
-	printk("%s: frame delay: %ld\n", __func__,
-			VpuReadReg(RET_DEC_SEQ_FRAME_DELAY));
+	printk("%s: frame delay: %d\n", __func__,
+			vpu_read(vpu, RET_DEC_SEQ_FRAME_DELAY));
 	f = val & 0xffff;
 	f *= 1000;
 	do_div(f, (val >> 16) + 1);
 	instance->frame_duration = ktime_set(0, (u32)f);
-	instance->num_fb = VpuReadReg(RET_DEC_SEQ_FRAME_NEED);
+	instance->num_fb = vpu_read(vpu, RET_DEC_SEQ_FRAME_NEED);
 
 	if (instance->format == AVC_DEC) {
 		int top, right;
-		val = VpuReadReg(RET_DEC_SEQ_CROP_LEFT_RIGHT);
-		val2 = VpuReadReg(RET_DEC_SEQ_CROP_TOP_BOTTOM);
+		val = vpu_read(vpu, RET_DEC_SEQ_CROP_LEFT_RIGHT);
+		val2 = vpu_read(vpu, RET_DEC_SEQ_CROP_TOP_BOTTOM);
 
 		printk("crop left:  %d\n", ((val >> 10) & 0x3FF) * 2);
 		printk("crop top:   %d\n", ((val2 >> 10) & 0x3FF) * 2);
@@ -675,23 +677,23 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	}
 
 	/* access normal registers */
-	VpuWriteReg(CMD_DEC_SEQ_INIT_ESCAPE, 0);
+	vpu_write(vpu, CMD_DEC_SEQ_INIT_ESCAPE, 0);
 
 	ret = alloc_fb(instance);
 	if (ret)
 		goto out;
 
 	/* Tell the decoder how many frame buffers we allocated. */
-	VpuWriteReg(CMD_SET_FRAME_BUF_NUM, instance->num_fb);
-	VpuWriteReg(CMD_SET_FRAME_BUF_STRIDE, instance->width);
+	vpu_write(vpu, CMD_SET_FRAME_BUF_NUM, instance->num_fb);
+	vpu_write(vpu, CMD_SET_FRAME_BUF_STRIDE, instance->width);
 
-	VpuWriteReg(CMD_SET_FRAME_SLICE_BB_START, instance->slice_mem_buf_phys);
-	VpuWriteReg(CMD_SET_FRAME_SLICE_BB_SIZE, SLICE_SAVE_SIZE / 1024);
+	vpu_write(vpu, CMD_SET_FRAME_SLICE_BB_START, instance->slice_mem_buf_phys);
+	vpu_write(vpu, CMD_SET_FRAME_SLICE_BB_SIZE, SLICE_SAVE_SIZE / 1024);
 
-	VpuWriteReg(BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(instance->idx, instance->format, SET_FRAME_BUF);
+	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
+	BitIssueCommand(vpu, instance->idx, instance->format, SET_FRAME_BUF);
 
-	if (vpu_wait()) {
+	if (vpu_wait(vpu)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -707,6 +709,7 @@ out:
 
 static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct videobuf_buffer *vb)
 {
+	struct vpu *vpu = vpu_data;
 	dma_addr_t dma = videobuf_to_dma_contig(vb);
 	int height = instance->height;
 	int stridey = ROUND_UP_4(instance->width);
@@ -715,34 +718,35 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance, struct v
 
 	instance->vpu->active = vb;
 
-	VpuWriteReg(CMD_ENC_PIC_ROT_MODE, 0x10);
+	vpu_write(vpu, CMD_ENC_PIC_ROT_MODE, 0x10);
 
-	VpuWriteReg(CMD_ENC_PIC_QS, 30);
+	vpu_write(vpu, CMD_ENC_PIC_QS, 30);
 
-	VpuWriteReg(CMD_ENC_PIC_SRC_ADDR_Y, dma);
+	vpu_write(vpu, CMD_ENC_PIC_SRC_ADDR_Y, dma);
 	u = dma + stridey * ROUND_UP_2(height);
-	VpuWriteReg(CMD_ENC_PIC_SRC_ADDR_CB, u);
+	vpu_write(vpu, CMD_ENC_PIC_SRC_ADDR_CB, u);
 	ustride = ROUND_UP_8(instance->width) / 2;
-	VpuWriteReg(CMD_ENC_PIC_SRC_ADDR_CR, u + ustride * ROUND_UP_2(height) / 2);
-	VpuWriteReg(CMD_ENC_PIC_OPTION, (0 << 5) | (0 << 1));
+	vpu_write(vpu, CMD_ENC_PIC_SRC_ADDR_CR, u + ustride * ROUND_UP_2(height) / 2);
+	vpu_write(vpu, CMD_ENC_PIC_OPTION, (0 << 5) | (0 << 1));
 
-	VpuWriteReg(BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(instance->idx, instance->format, PIC_RUN);
+	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
+	BitIssueCommand(vpu, instance->idx, instance->format, PIC_RUN);
 }
 
 static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_buffer *vb)
 {
+	struct vpu *vpu = vpu_data;
 	dma_addr_t dma;
 	int height, stridey;
 	unsigned int readofs;
 
-	readofs = VpuReadReg(BIT_RD_PTR(instance->idx)) -
+	readofs = vpu_read(vpu, BIT_RD_PTR(instance->idx)) -
 			instance->bitstream_buf_phys;
 
 	vpu_fifo_out(instance, (readofs - instance->readofs) % BITSTREAM_BUF_SIZE);
 	instance->readofs = readofs;
 
-	VpuWriteReg(BIT_WR_PTR(instance->idx),
+	vpu_write(vpu, BIT_WR_PTR(instance->idx),
 			instance->bitstream_buf_phys + (instance->fifo_in % BITSTREAM_BUF_SIZE));
 
 	if (instance->rotmir & 0x1) {
@@ -756,18 +760,18 @@ static void vpu_dec_start_frame(struct vpu_instance *instance, struct videobuf_b
 	dma = videobuf_to_dma_contig(vb);
 
 	/* Set rotator output */
-	VpuWriteReg(CMD_DEC_PIC_ROT_ADDR_Y, dma);
-	VpuWriteReg(CMD_DEC_PIC_ROT_ADDR_CB, dma + stridey * height);
-	VpuWriteReg(CMD_DEC_PIC_ROT_ADDR_CR,
+	vpu_write(vpu, CMD_DEC_PIC_ROT_ADDR_Y, dma);
+	vpu_write(vpu, CMD_DEC_PIC_ROT_ADDR_CB, dma + stridey * height);
+	vpu_write(vpu, CMD_DEC_PIC_ROT_ADDR_CR,
 		dma + stridey * height + (stridey / 2) * (height / 2));
-	VpuWriteReg(CMD_DEC_PIC_ROT_STRIDE, stridey);
-	VpuWriteReg(CMD_DEC_PIC_ROT_MODE, instance->rotmir);
+	vpu_write(vpu, CMD_DEC_PIC_ROT_STRIDE, stridey);
+	vpu_write(vpu, CMD_DEC_PIC_ROT_MODE, instance->rotmir);
 
-	VpuWriteReg(CMD_DEC_PIC_OPTION, 1); /* Enable prescan */
-	VpuWriteReg(CMD_DEC_PIC_SKIP_NUM, 0);
+	vpu_write(vpu, CMD_DEC_PIC_OPTION, 1); /* Enable prescan */
+	vpu_write(vpu, CMD_DEC_PIC_SKIP_NUM, 0);
 
-	VpuWriteReg(BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(instance->idx, instance->format, PIC_RUN);
+	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
+	BitIssueCommand(vpu, instance->idx, instance->format, PIC_RUN);
 }
 
 /*
@@ -830,7 +834,7 @@ static int vpu_start_frame(struct vpu *vpu)
 static void vpu_dec_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 		struct videobuf_buffer *vb)
 {
-	if (!VpuReadReg(RET_DEC_PIC_OPTION)) {
+	if (!vpu_read(vpu, RET_DEC_PIC_OPTION)) {
 		if (instance->flushing) {
 			vb->state = VIDEOBUF_ERROR;
 		} else {
@@ -841,7 +845,7 @@ static void vpu_dec_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 	} else
 		vb->state = VIDEOBUF_DONE;
 
-	VpuWriteReg(BIT_FRM_DIS_FLG(instance->idx), 0);
+	vpu_write(vpu, BIT_FRM_DIS_FLG(instance->idx), 0);
 
 	list_del_init(&vb->queue);
 
@@ -860,7 +864,7 @@ static void vpu_enc_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 	int size;
 	int ret;
 
-	size = VpuReadReg(BIT_WR_PTR(instance->idx)) - VpuReadReg(BIT_RD_PTR(instance->idx));
+	size = vpu_read(vpu, BIT_WR_PTR(instance->idx)) - vpu_read(vpu, BIT_RD_PTR(instance->idx));
 
 	if (kfifo_avail(&instance->fifo) < instance->headersize + size) {
 		printk("not enough space in fifo\n");
@@ -900,8 +904,8 @@ static irqreturn_t vpu_irq_handler(int irq, void *dev_id)
 	vbuf = container_of(vpu->active, struct vpu_buffer, vb);
 	instance = vbuf->instance;
 
-	VpuWriteReg(BIT_INT_CLEAR, 1);
-	VpuWriteReg(BIT_INT_REASON, 0);
+	vpu_write(vpu, BIT_INT_CLEAR, 1);
+	vpu_write(vpu, BIT_INT_REASON, 0);
 
 	if (instance->mode == VPU_MODE_DECODER)
 		vpu_dec_irq_handler(vpu, instance, vb);
@@ -1148,15 +1152,15 @@ static int vpu_version_info(struct vpu *vpu)
 	u32 ver;
 	u16 version;
 
-	VpuWriteReg(RET_VER_NUM, 0);
+	vpu_write(vpu, RET_VER_NUM, 0);
 
-	VpuWriteReg(BIT_BUSY_FLAG, 0x1);
-	BitIssueCommand(0, 0, FIRMWARE_GET);
+	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
+	BitIssueCommand(vpu, 0, 0, FIRMWARE_GET);
 
-	if (vpu_wait())
+	if (vpu_wait(vpu))
 		return -ENODEV;
 
-	ver = VpuReadReg(RET_VER_NUM);
+	ver = vpu_read(vpu, RET_VER_NUM);
 	if (!ver)
 		return -ENODEV;
 
@@ -1236,13 +1240,13 @@ static int vpu_program_firmware(struct vpu *vpu)
 		}
 	}
 
-	VpuWriteReg(BIT_CODE_BUF_ADDR, vpu->vpu_code_table_phys);
-	VpuWriteReg(BIT_CODE_RUN, 0);
+	vpu_write(vpu, BIT_CODE_BUF_ADDR, vpu->vpu_code_table_phys);
+	vpu_write(vpu, BIT_CODE_RUN, 0);
 
 	/* Download BIT Microcode to Program Memory */
 	for (i = 0; i < 2048 ; ++i) {
 		data = dp[i];
-		VpuWriteReg(BIT_CODE_DOWN, (i << 16) | data);
+		vpu_write(vpu, BIT_CODE_DOWN, (i << 16) | data);
 	}
 
 	vpu->vpu_work_buf = dma_alloc_coherent(NULL, WORK_BUF_SIZE,
@@ -1250,16 +1254,16 @@ static int vpu_program_firmware(struct vpu *vpu)
 	if (!vpu->vpu_work_buf)
 		return -ENOMEM;
 
-	VpuWriteReg(BIT_WORK_BUF_ADDR, vpu->vpu_work_buf_phys);
+	vpu_write(vpu, BIT_WORK_BUF_ADDR, vpu->vpu_work_buf_phys);
 
 	data = STREAM_ENDIAN | (1 << 2);
-	VpuWriteReg(BIT_BIT_STREAM_CTRL, data);
-	VpuWriteReg(BIT_FRAME_MEM_CTRL, IMAGE_ENDIAN);
+	vpu_write(vpu, BIT_BIT_STREAM_CTRL, data);
+	vpu_write(vpu, BIT_FRAME_MEM_CTRL, IMAGE_ENDIAN);
 
-	vpu_reset();
-	VpuWriteReg(BIT_INT_ENABLE, 0x8);	/* PIC_RUN irq enable */
+	vpu_reset(vpu);
+	vpu_write(vpu, BIT_INT_ENABLE, 0x8);	/* PIC_RUN irq enable */
 
-	VpuWriteReg(BIT_CODE_RUN, 1);
+	vpu_write(vpu, BIT_CODE_RUN, 1);
 
 	vpu_version_info(vpu);
 
@@ -1351,8 +1355,8 @@ static void vpu_videobuf_release(struct videobuf_queue *q,
 		 * frame. I found no sane way to actually cancel
 		 * the current frame.
 		 */
-		rdptr = VpuReadReg(BIT_RD_PTR(instance->idx));
-		VpuWriteReg(BIT_WR_PTR(instance->idx), rdptr - 1);
+		rdptr = vpu_read(vpu, BIT_RD_PTR(instance->idx));
+		vpu_write(vpu, BIT_WR_PTR(instance->idx), rdptr - 1);
 
 		vpu->active = NULL;
 	}
