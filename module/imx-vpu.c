@@ -63,7 +63,6 @@
 #define SLICE_SAVE_SIZE         0x02D800
 
 #define IMAGE_ENDIAN                    0
-#define STREAM_ENDIAN                   0
 #define MAX_FW_BINARY_LEN		102400
 
 struct fw_header_info {
@@ -602,7 +601,8 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		return -EINVAL;
 	};
 
-	vpu_write(vpu, BIT_BIT_STREAM_CTRL, 0xc);
+	vpu_write(vpu, BIT_BIT_STREAM_CTRL, 1 << bit_buf_pic_reset |
+			1 << bit_buf_pic_flush);
 	vpu_write(vpu, BIT_PARA_BUF_ADDR, instance->para_buf_phys);
 
 	vpu_write(vpu, BIT_WR_PTR(instance->idx), instance->bitstream_buf_phys);
@@ -1418,7 +1418,7 @@ static int vpu_program_firmware(struct vpu *vpu)
 
 	vpu_write(vpu, BIT_WORK_BUF_ADDR, vpu->vpu_work_buf_phys);
 
-	data = STREAM_ENDIAN | (1 << 2);
+	data = 1 << regs->bit_buf_pic_flush;
 	vpu_write(vpu, BIT_BIT_STREAM_CTRL, data);
 	vpu_write(vpu, BIT_FRAME_MEM_CTRL, IMAGE_ENDIAN);
 
