@@ -190,8 +190,13 @@
  *---------------------------------------------------------------------------*/
 #define CMD_SET_FRAME_BUF_NUM		0x180
 #define CMD_SET_FRAME_BUF_STRIDE	0x184
-#define CMD_SET_FRAME_SLICE_BB_START    0x188
-#define CMD_SET_FRAME_SLICE_BB_SIZE     0x18C
+#define CMD_SET_FRAME_SLICE_BB_START	0x188
+#define CMD_SET_FRAME_SLICE_BB_SIZE	0x18C
+#define V2_CMD_SET_FRAME_AXI_BIT_ADDR	0x190
+#define V2_CMD_SET_FRAME_AXI_IPACDC_ADDR	0x194
+#define V2_CMD_SET_FRAME_AXI_DBKY_ADDR	0x198
+#define V2_CMD_SET_FRAME_AXI_DBKC_ADDR	0x19C
+#define V2_CMD_SET_FRAME_AXI_OVL_ADDR	0x1A0
 
 /*---------------------------------------------------------------------------
  * [ENC HEADER] COMMAND

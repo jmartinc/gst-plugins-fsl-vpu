@@ -728,6 +728,14 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, CMD_SET_FRAME_BUF_NUM, instance->num_fb);
 	vpu_write(vpu, CMD_SET_FRAME_BUF_STRIDE, ROUND_UP_8(instance->width));
 
+	if (vpu->drvdata->version == 2) {
+		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_BIT_ADDR, 0x0);
+		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_IPACDC_ADDR, 0x0);
+		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_DBKY_ADDR, 0x0);
+		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_DBKC_ADDR, 0x0);
+		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_OVL_ADDR, 0x0);
+	}
+
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 
 	vpu_bit_issue_command(instance, SET_FRAME_BUF);
