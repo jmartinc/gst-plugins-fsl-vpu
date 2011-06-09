@@ -60,6 +60,15 @@
 #define PS_SAVE_SIZE            0x028000
 #define SLICE_SAVE_SIZE         0x02D800
 
+#define IMAGE_ENDIAN                    0
+#define STREAM_ENDIAN                   0
+#define MAX_FW_BINARY_LEN		102400
+
+struct fw_header_info {
+	u8 platform[12];
+	u32 size;
+};
+
 enum {
         VOL_HEADER,	/* video object layer header */
         VOS_HEADER,	/* visual object sequence header */
@@ -1290,15 +1299,6 @@ static int vpu_version_info(struct vpu *vpu)
 	return 0;
 }
 
-#define IMAGE_ENDIAN                    0
-#define STREAM_ENDIAN                   0
-#define MAX_FW_BINARY_LEN		102400
-
-struct headerInfo {
-	u8 platform[12];
-	u32 size;
-};
-
 static int vpu_program_firmware(struct vpu *vpu)
 {
 	struct vpu_regs *regs = vpu->regs;
@@ -1306,7 +1306,7 @@ static int vpu_program_firmware(struct vpu *vpu)
 	unsigned short *dp;
 	u32 *buf;
 
-	struct headerInfo info;
+	struct fw_header_info info;
 	const struct firmware *fw = NULL;
 
 	ret = request_firmware(&fw, vpu->drvdata->fw_name, vpu->dev);
@@ -1322,8 +1322,8 @@ static int vpu_program_firmware(struct vpu *vpu)
 
 	buf = vpu->vpu_code_table;
 
-	memcpy(&info, fw->data, sizeof(struct headerInfo));
-	dp = (unsigned short *)(fw->data + sizeof(struct headerInfo));
+	memcpy(&info, fw->data, sizeof(struct fw_header_info));
+	dp = (unsigned short *)(fw->data + sizeof(struct fw_header_info));
 
 	printk("size: %d\n", info.size);
 
