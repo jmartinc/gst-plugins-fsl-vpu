@@ -62,7 +62,6 @@
 #define PS_SAVE_SIZE            0x028000
 #define SLICE_SAVE_SIZE         0x02D800
 
-#define IMAGE_ENDIAN                    0
 #define MAX_FW_BINARY_LEN		102400
 
 struct fw_header_info {
@@ -1431,7 +1430,7 @@ static int vpu_program_firmware(struct vpu *vpu)
 
 	data = 1 << regs->bit_buf_pic_flush;
 	vpu_write(vpu, BIT_BIT_STREAM_CTRL, data);
-	vpu_write(vpu, BIT_FRAME_MEM_CTRL, IMAGE_ENDIAN);
+	vpu_write(vpu, BIT_FRAME_MEM_CTRL, 0);
 
 	if (vpu->drvdata->version == 2)
 		vpu_write(vpu, V2_BIT_AXI_SRAM_USE, 0);
