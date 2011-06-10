@@ -140,7 +140,6 @@ enum {
 
 struct vpu_regs {
 	u32 bitstream_buf_size;
-	u32 bit_axi_sram_use;
 	u32 bits_streamctrl_mask;
 	u32 bit_buf_check_dis;
 	u32 bit_enc_dyn_bufalloc_en;
@@ -158,7 +157,6 @@ struct vpu_regs {
 
 static struct vpu_regs regs_v1 = {
 	.bitstream_buf_size = (512 * 1024),
-	.bit_axi_sram_use = 0x178,
 	.bits_streamctrl_mask = 0x01f,
 	.bit_buf_check_dis = 1,
 	.bit_enc_dyn_bufalloc_en = 4,
@@ -176,7 +174,6 @@ static struct vpu_regs regs_v1 = {
 
 static struct vpu_regs regs_v2 = {
 	.bitstream_buf_size = 1024 * 1024,
-	.bit_axi_sram_use = 0x140,
 	.bits_streamctrl_mask = 0x03f,
 	.bit_buf_check_dis = 2,
 	.bit_enc_dyn_bufalloc_en = 5,
@@ -1433,6 +1430,9 @@ static int vpu_program_firmware(struct vpu *vpu)
 	data = 1 << regs->bit_buf_pic_flush;
 	vpu_write(vpu, BIT_BIT_STREAM_CTRL, data);
 	vpu_write(vpu, BIT_FRAME_MEM_CTRL, IMAGE_ENDIAN);
+
+	if (vpu->drvdata->version == 2)
+		vpu_write(vpu, V2_BIT_AXI_SRAM_USE, 0);
 
 	vpu_reset(vpu);
 	vpu_write(vpu, BIT_INT_ENABLE, 0x8);	/* PIC_RUN irq enable */

@@ -56,6 +56,8 @@
 #define BIT_RD_PTR_3			0x138
 #define BIT_WR_PTR_3			0x13C
 
+#define V2_BIT_AXI_SRAM_USE		0x140
+
 #define BIT_BUSY_FLAG			0x160
 #define BIT_RUN_COMMAND			0x164
 #define BIT_RUN_INDEX			0x168
