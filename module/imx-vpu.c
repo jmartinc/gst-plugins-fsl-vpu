@@ -581,7 +581,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	int ret;
 	u32 data;
 	u32 val;
-	u32 sliceSizeMode = 1;
+	u32 sliceSizeMode = 0;
 	u32 sliceMode = 1;
 	u32 bitrate = 0; /* auto bitrate */
 	u32 enableAutoSkip = 0;
@@ -668,7 +668,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		vpu_write(vpu, CMD_ENC_SEQ_264_PARA, data);
 	}
 
-	data = 8000 << 2 | /* slice size */
+	data = 4000 << 2 | /* slice size */
 		sliceSizeMode << 1 | sliceMode;
 
 	vpu_write(vpu, CMD_ENC_SEQ_SLICE_MODE, data);
