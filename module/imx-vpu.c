@@ -873,6 +873,8 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, CMD_SET_FRAME_SLICE_BB_START, instance->slice_mem_buf_phys);
 	vpu_write(vpu, CMD_SET_FRAME_SLICE_BB_SIZE, SLICE_SAVE_SIZE / 1024);
 
+	vpu_write(vpu, CMD_DEC_PIC_START_BYTE, 0);
+
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 	vpu_bit_issue_command(instance, SET_FRAME_BUF);
 
