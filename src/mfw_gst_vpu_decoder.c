@@ -105,6 +105,7 @@ typedef struct _GstVPU_Dec {
 	GstState state;
 
 	unsigned long streamtype;
+	GstBuffer *buf_gst[NUM_BUFFERS];
 } GstVPU_Dec;
 
 /* get the element details */
@@ -242,7 +243,77 @@ static void mfw_gst_vpudec_buffers_unref(GstVPU_Dec *vpu_dec)
 			struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
 			munmap(vpu_dec->buf_data[i], buf->length);
 		}
+	} else  {
+		for (i = 0; i < NUM_BUFFERS; i++) {
+			if (vpu_dec->buf_gst[i])
+				gst_buffer_unref(vpu_dec->buf_gst[i]);
+			vpu_dec->buf_gst[i] = NULL;
+		}
 	}
+}
+
+static int mfw_gst_vpudec_reqbufs_userp(GstVPU_Dec *vpu_dec)
+{
+	int ret, i;
+	struct v4l2_requestbuffers reqs = {
+		.count	= NUM_BUFFERS,
+		.type	= V4L2_BUF_TYPE_VIDEO_CAPTURE,
+		.memory	= V4L2_MEMORY_USERPTR,
+	};
+
+	vpu_dec->streamtype = V4L2_MEMORY_USERPTR;
+
+	ret = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
+	if (ret) {
+		GST_DEBUG_OBJECT(vpu_dec, "VIDIOC_REQBUFS with type userptr failed: %s\n",
+				strerror(errno));
+		return -errno;
+	}
+
+	for (i = 0; i < NUM_BUFFERS; i++) {
+		struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
+		buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		buf->memory = V4L2_MEMORY_USERPTR;
+		buf->index = i;
+		buf->length = vpu_dec->outsize;
+
+		ret = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
+						      buf->length,
+						      GST_PAD_CAPS(vpu_dec->srcpad),
+						      &vpu_dec->buf_gst[i]);
+		if (ret != GST_FLOW_OK) {
+			GST_DEBUG_OBJECT(vpu_dec, "Allocating the Framebuffer[%d] failed with %d",
+			     0, ret);
+			goto err_out1;
+		}
+
+		vpu_dec->buf_size[i] = buf->length;
+		vpu_dec->buf_data[i] = GST_BUFFER_DATA(vpu_dec->buf_gst[i]);
+
+		buf->m.userptr = (unsigned long)vpu_dec->buf_data[i];
+	}
+
+	for (i = 0; i < NUM_BUFFERS; ++i){
+		ret = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[i]);
+		if (ret) {
+			GST_DEBUG_OBJECT(vpu_dec, "VIDIOC_QBUF with type userptr failed: %s\n",
+					strerror(errno));
+			goto err_out2;
+		}
+	}
+
+	return 0;
+
+err_out2:
+	while (i) {
+		i--;
+		ioctl(vpu_dec->vpu_fd, VIDIOC_DQBUF, &vpu_dec->buf_v4l2[i]);
+	}
+
+err_out1:
+	mfw_gst_vpudec_buffers_unref(vpu_dec);
+
+	return -errno;
 }
 
 static int mfw_gst_vpudec_reqbufs_mmap(GstVPU_Dec *vpu_dec)
@@ -277,7 +348,7 @@ static int mfw_gst_vpudec_reqbufs_mmap(GstVPU_Dec *vpu_dec)
 				   PROT_READ | PROT_WRITE, MAP_SHARED,
 				   vpu_dec->vpu_fd, vpu_dec->buf_v4l2[i].m.offset);
 
-		if(!vpu_dec->buf_data[i])
+		if (!vpu_dec->buf_data[i])
 			GST_ERROR("MMAP failed: %s\n", strerror(errno));
 	}
 
@@ -297,6 +368,12 @@ static int mfw_gst_vpudec_reqbufs_mmap(GstVPU_Dec *vpu_dec)
 static int mfw_gst_vpudec_reqbufs(GstVPU_Dec *vpu_dec)
 {
 	int ret;
+
+	ret = mfw_gst_vpudec_reqbufs_userp(vpu_dec);
+	if (!ret) {
+		GST_DEBUG_OBJECT(vpu_dec, "using v4l2 userpointer buffers");
+		return 0;
+	}
 
 	ret = mfw_gst_vpudec_reqbufs_mmap(vpu_dec);
 	if (!ret) {
@@ -436,17 +513,32 @@ static int vpu_dec_loop (GstVPU_Dec *vpu_dec)
 	if (ret)
 		return -errno;
 
-	ret = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
+	if (vpu_dec->streamtype == V4L2_MEMORY_USERPTR) {
+		pushbuff = vpu_dec->buf_gst[v4l2_buf.index];
+		vpu_dec->buf_gst[v4l2_buf.index] = 0;
+
+		ret = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
+					      vpu_dec->outsize,
+					      GST_PAD_CAPS(vpu_dec->srcpad),
+					      &vpu_dec->buf_gst[v4l2_buf.index]);
+	} else {
+		ret = gst_pad_alloc_buffer_and_set_caps(vpu_dec->srcpad, 0,
 					      vpu_dec->outsize,
 					      GST_PAD_CAPS(vpu_dec->srcpad),
 					      &pushbuff);
+	}
+
 	if (ret != GST_FLOW_OK) {
 		GST_DEBUG_OBJECT(vpu_dec, "Allocating the Framebuffer[%d] failed with %d",
 		     0, ret);
 		goto done;
 	}
 
-	memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
+	if (vpu_dec->streamtype == V4L2_MEMORY_USERPTR)
+		v4l2_buf.m.userptr = (unsigned long)GST_BUFFER_DATA(vpu_dec->buf_gst[v4l2_buf.index]);
+	else
+		memcpy(GST_BUFFER_DATA(pushbuff), vpu_dec->buf_data[v4l2_buf.index], vpu_dec->outsize);
+
 	ret = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &v4l2_buf);
 	if (ret) {
 		GST_DEBUG_OBJECT(vpu_dec, "Decoder qbuf failed?? error: %d\n", errno);
