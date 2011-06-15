@@ -58,7 +58,6 @@
 
 #define RET_DEC_SEQ_ERR_REASON          0x1E0
 
-#define BITSTREAM_BUF_SIZE	(512 * 1024)
 #define PS_SAVE_SIZE            0x028000
 #define SLICE_SAVE_SIZE         0x02D800
 
