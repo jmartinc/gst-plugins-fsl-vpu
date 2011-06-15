@@ -233,6 +233,18 @@ mfw_gst_vpudec_get_property(GObject * object, guint prop_id,
 	return;
 }
 
+static void mfw_gst_vpudec_buffers_unref(GstVPU_Dec *vpu_dec)
+{
+	int i;
+
+	if (vpu_dec->streamtype == V4L2_MEMORY_MMAP) {
+		for (i = 0; i < NUM_BUFFERS; ++i){
+			struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
+			munmap(vpu_dec->buf_data[i], buf->length);
+		}
+	}
+}
+
 static struct v4l2_requestbuffers reqs = {
 	.count	= NUM_BUFFERS,
 	.type	= V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -600,7 +612,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	GstVPU_Dec *vpu_dec = MFW_GST_VPU_DEC(element);
 	GstState state, next;
-	int retval, i;
+	int retval;
 
 	state = (GstState) GST_STATE_TRANSITION_CURRENT (transition);
 	next = GST_STATE_TRANSITION_NEXT (transition);
@@ -636,14 +648,7 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 		vpu_dec->decoded_frames=0;
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
-		for (i = 0; i < NUM_BUFFERS; ++i){
-			struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
-			retval = munmap(vpu_dec->buf_data[i], buf->length);
-			if (retval) {
-				GST_ERROR("VIDIOC_QBUF munmap failed: %s\n", strerror(errno));
-				return -errno;
-			}
-		}
+		mfw_gst_vpudec_buffers_unref(vpu_dec);
 		retval = close(vpu_dec->vpu_fd);
 		if(retval)
 			GST_ERROR("closing filedesriptor error: %d\n", errno);
