@@ -363,12 +363,6 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 
 	GST_DEBUG("format: %d x %d\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
 
-	retval = mfw_gst_vpudec_reqbufs(vpu_dec);
-	if (retval) {
-		GST_ERROR("requesting buffers failed: %s\n", strerror(errno));
-		return -errno;
-	}
-
 	gint fourcc = GST_STR_FOURCC("I420");
 
 	vpu_dec->width = fmt.fmt.pix.width;
@@ -412,6 +406,12 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 	gst_caps_unref(caps);
 
 	vpu_dec->outsize = (vpu_dec->width * vpu_dec->height * 3) / 2;
+
+	retval = mfw_gst_vpudec_reqbufs(vpu_dec);
+	if (retval) {
+		GST_ERROR("requesting buffers failed: %s\n", strerror(errno));
+		return -errno;
+	}
 
 	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_STREAMON, &vpu_dec->streamtype);
 	if (retval) {
