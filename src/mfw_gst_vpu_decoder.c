@@ -103,6 +103,8 @@ typedef struct _GstVPU_Dec {
 	int once;
 
 	GstState state;
+
+	unsigned long streamtype;
 } GstVPU_Dec;
 
 /* get the element details */
@@ -237,6 +239,50 @@ static struct v4l2_requestbuffers reqs = {
 	.memory	= V4L2_MEMORY_MMAP,
 };
 
+static int mfw_gst_vpudec_reqbufs(GstVPU_Dec *vpu_dec)
+{
+	int ret, i;
+
+	ret = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
+	if (ret) {
+		GST_ERROR("VIDIOC_REQBUFS failed: %s\n", strerror(errno));
+		return -errno;
+	}
+
+	for (i = 0; i < NUM_BUFFERS; i++) {
+		struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
+		buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		buf->memory = V4L2_MEMORY_MMAP;
+		buf->index = i;
+
+		vpu_dec->buf_data[i] = NULL;
+		ret = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, buf);
+		if (ret) {
+			GST_ERROR("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
+			return -errno;
+		}
+		vpu_dec->buf_size[i] = buf->length;
+		vpu_dec->buf_data[i] = mmap(NULL, buf->length,
+				   PROT_READ | PROT_WRITE, MAP_SHARED,
+				   vpu_dec->vpu_fd, vpu_dec->buf_v4l2[i].m.offset);
+
+		if(!vpu_dec->buf_data[i])
+			GST_ERROR("MMAP failed: %s\n", strerror(errno));
+	}
+
+	for (i = 0; i < NUM_BUFFERS; ++i){
+		ret = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[i]);
+		if (ret) {
+			GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
+			return -errno;
+		}
+	}
+
+	vpu_dec->streamtype = V4L2_MEMORY_MMAP;
+
+	return 0;
+}
+
 static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 {
 	GstCaps *caps;
@@ -248,7 +294,6 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 	int rotmir;
 	int i, retval;
 	struct v4l2_format fmt;
-	unsigned long type = V4L2_MEMORY_MMAP;
 
 	switch (vpu_dec->mirror_dir) {
 	case MIRDIR_NONE:
@@ -294,39 +339,10 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 
 	GST_DEBUG("format: %d x %d\n", fmt.fmt.pix.width, fmt.fmt.pix.height);
 
-	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
+	retval = mfw_gst_vpudec_reqbufs(vpu_dec);
 	if (retval) {
-		GST_ERROR("VIDIOC_REQBUFS failed: %s\n", strerror(errno));
+		GST_ERROR("requesting buffers failed: %s\n", strerror(errno));
 		return -errno;
-	}
-
-	for (i = 0; i < NUM_BUFFERS; i++) {
-		struct v4l2_buffer *buf = &vpu_dec->buf_v4l2[i];
-		buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		buf->memory = V4L2_MEMORY_MMAP;
-		buf->index = i;
-
-		vpu_dec->buf_data[i] = NULL;
-		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QUERYBUF, buf);
-		if (retval) {
-			GST_ERROR("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
-			return -errno;
-		}
-		vpu_dec->buf_size[i] = buf->length;
-		vpu_dec->buf_data[i] = mmap(NULL, buf->length,
-				   PROT_READ | PROT_WRITE, MAP_SHARED,
-				   vpu_dec->vpu_fd, vpu_dec->buf_v4l2[i].m.offset);
-
-		if(!vpu_dec->buf_data[i])
-			GST_ERROR("MMAP failed: %s\n", strerror(errno));
-	}
-
-	for (i = 0; i < NUM_BUFFERS; ++i){
-		retval = ioctl(vpu_dec->vpu_fd, VIDIOC_QBUF, &vpu_dec->buf_v4l2[i]);
-		if (retval) {
-			GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
-			return -errno;
-		}
 	}
 
 	gint fourcc = GST_STR_FOURCC("I420");
@@ -373,7 +389,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 
 	vpu_dec->outsize = (vpu_dec->width * vpu_dec->height * 3) / 2;
 
-	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_STREAMON, &type);
+	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_STREAMON, &vpu_dec->streamtype);
 	if (retval) {
 		GST_ERROR("streamon failed with %d", retval);
 		return -errno;
