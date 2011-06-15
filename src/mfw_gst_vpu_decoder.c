@@ -245,15 +245,14 @@ static void mfw_gst_vpudec_buffers_unref(GstVPU_Dec *vpu_dec)
 	}
 }
 
-static struct v4l2_requestbuffers reqs = {
-	.count	= NUM_BUFFERS,
-	.type	= V4L2_BUF_TYPE_VIDEO_CAPTURE,
-	.memory	= V4L2_MEMORY_MMAP,
-};
-
-static int mfw_gst_vpudec_reqbufs(GstVPU_Dec *vpu_dec)
+static int mfw_gst_vpudec_reqbufs_mmap(GstVPU_Dec *vpu_dec)
 {
 	int ret, i;
+	struct v4l2_requestbuffers reqs = {
+		.count	= NUM_BUFFERS,
+		.type	= V4L2_BUF_TYPE_VIDEO_CAPTURE,
+		.memory	= V4L2_MEMORY_MMAP,
+	};
 
 	ret = ioctl(vpu_dec->vpu_fd, VIDIOC_REQBUFS, &reqs);
 	if (ret) {
@@ -293,6 +292,19 @@ static int mfw_gst_vpudec_reqbufs(GstVPU_Dec *vpu_dec)
 	vpu_dec->streamtype = V4L2_MEMORY_MMAP;
 
 	return 0;
+}
+
+static int mfw_gst_vpudec_reqbufs(GstVPU_Dec *vpu_dec)
+{
+	int ret;
+
+	ret = mfw_gst_vpudec_reqbufs_mmap(vpu_dec);
+	if (!ret) {
+		GST_DEBUG_OBJECT(vpu_dec, "using v4l2 mmap buffers");
+		return 0;
+	}
+
+	return -1;
 }
 
 static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
