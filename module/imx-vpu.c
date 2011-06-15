@@ -1085,14 +1085,14 @@ static irqreturn_t vpu_irq_handler(int irq, void *dev_id)
 
 	spin_lock_irqsave(&vpu->lock, flags);
 
+	vpu_write(vpu, BIT_INT_CLEAR, 1);
+	vpu_write(vpu, BIT_INT_REASON, 0);
+
 	if (!vb)
 		goto out;
 
 	vbuf = container_of(vpu->active, struct vpu_buffer, vb);
 	instance = vbuf->instance;
-
-	vpu_write(vpu, BIT_INT_CLEAR, 1);
-	vpu_write(vpu, BIT_INT_REASON, 0);
 
 	if (instance->mode == VPU_MODE_DECODER)
 		vpu_dec_irq_handler(vpu, instance, vb);
