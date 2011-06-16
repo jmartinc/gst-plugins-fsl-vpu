@@ -243,7 +243,7 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 	GstCaps *caps = NULL;
 	struct v4l2_format fmt;
 	int retval, i;
-	unsigned long type = V4L2_MEMORY_MMAP;
+	unsigned long type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
 printf("%s\n", __func__);
 	if (!vpu_enc->codecTypeProvided) {

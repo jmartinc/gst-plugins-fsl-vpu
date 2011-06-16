@@ -395,6 +395,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 	int rotmir;
 	int i, retval;
 	struct v4l2_format fmt;
+	unsigned long type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
 	switch (vpu_dec->mirror_dir) {
 	case MIRDIR_NONE:
@@ -490,7 +491,7 @@ static GstFlowReturn mfw_gst_vpudec_vpu_init(GstVPU_Dec * vpu_dec)
 		return -errno;
 	}
 
-	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_STREAMON, &vpu_dec->streamtype);
+	retval = ioctl(vpu_dec->vpu_fd, VIDIOC_STREAMON, &type);
 	if (retval) {
 		GST_ERROR("streamon failed with %d", retval);
 		return -errno;
