@@ -249,6 +249,7 @@ struct vpu_instance {
 	int format;
 	struct videobuf_queue vidq;
 	int in_use;
+	int videobuf_init;
 
 	dma_addr_t	bitstream_buf_phys;
 	void __iomem	*bitstream_buf;
@@ -1245,6 +1246,11 @@ static int vpu_release(struct file *file)
 	struct vpu_regs *regs = vpu->regs;
 	int i;
 
+	if (instance->videobuf_init) {
+		videobuf_stop(&instance->vidq);
+		instance->videobuf_init = 0;
+	}
+
 	dma_free_coherent(NULL, regs->para_buf_size, instance->para_buf,
 			instance->para_buf_phys);
 	dma_free_coherent(NULL, SLICE_SAVE_SIZE, instance->slice_mem_buf,
@@ -1579,6 +1585,8 @@ static int vpu_reqbufs(struct file *file, void *priv,
 					    sizeof(struct vpu_buffer),
 					    instance,
 					    NULL);
+
+	instance->videobuf_init = 1;
 
 	/* Allocate buffers */
 	ret = videobuf_reqbufs(&instance->vidq, reqbuf);
