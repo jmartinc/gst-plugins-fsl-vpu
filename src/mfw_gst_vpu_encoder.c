@@ -431,8 +431,6 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
-		ioctl(vpu_enc->vpu_fd, VPU_IOC_SET_ENCODER, 0);
-
 		printf("Enc opened. res: %dx%d\n", vpu_enc->width, vpu_enc->height);
 		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:

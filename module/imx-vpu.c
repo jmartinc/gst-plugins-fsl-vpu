@@ -41,8 +41,6 @@
 
 #define VPU_IOC_MAGIC  'V'
 
-#define	VPU_IOC_SET_ENCODER	_IO(VPU_IOC_MAGIC, 5)
-#define VPU_IOC_SET_DECODER	_IO(VPU_IOC_MAGIC, 6)
 #define	VPU_IOC_ROTATE_MIRROR	_IO(VPU_IOC_MAGIC, 7)
 #define VPU_IOC_CODEC		_IO(VPU_IOC_MAGIC, 8)
 
@@ -1211,12 +1209,6 @@ static long vpu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	u32 std;
 
 	switch (cmd) {
-	case VPU_IOC_SET_ENCODER:
-		instance->mode = VPU_MODE_ENCODER;
-		break;
-	case VPU_IOC_SET_DECODER:
-		instance->mode = VPU_MODE_DECODER;
-		break;
 	case VPU_IOC_ROTATE_MIRROR:
 		instance->rotmir = (u32)arg | 0x10;
 		break;
@@ -1657,6 +1649,10 @@ static int vpu_s_fmt_vid_out(struct file *file, void *priv,
 	struct vpu_instance *instance = file->private_data;
 
 	fmt->fmt.pix.width &= ~0xf;
+	if (fmt->type)
+		instance->mode = VPU_MODE_ENCODER;
+	else
+		instance->mode = VPU_MODE_DECODER;
 
 	instance->width = fmt->fmt.pix.width;
 	instance->height = fmt->fmt.pix.height;
