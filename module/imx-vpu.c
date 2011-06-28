@@ -507,6 +507,11 @@ static int vpu_alloc_fb_v2(struct vpu_instance *instance)
 	int i, ret = 0;
 	int size = (instance->width * instance->height * 3) / 2;
 	unsigned long *para_buf = instance->para_buf;
+	int height = instance->height;
+	int stridey = instance->width;
+	int mvsize = (stridey * height) >> 2;
+
+	size += mvsize;
 
 	for (i = 0; i < instance->num_fb; i++) {
 		struct memalloc_record *rec = &instance->rec[i];
