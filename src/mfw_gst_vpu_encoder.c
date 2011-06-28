@@ -82,6 +82,7 @@ typedef struct _GstVPU_Enc
 	struct v4l2_buffer buf_v4l2[NUM_BUFFERS];
 	unsigned char *buf_data[NUM_BUFFERS];
 	unsigned int buf_size[NUM_BUFFERS];
+	unsigned int queued;
 	char *device;
 }GstVPU_Enc;
 
@@ -294,14 +295,6 @@ printf("%s\n", __func__);
 				   vpu_enc->vpu_fd, vpu_enc->buf_v4l2[i].m.offset);
 	}
 
-	for (i = 0; i < NUM_BUFFERS; ++i) {
-		retval = ioctl(vpu_enc->vpu_fd, VIDIOC_QBUF, &vpu_enc->buf_v4l2[i]);
-		if (retval) {
-			GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
-			return -errno;
-		}
-	}
-
 	if (vpu_enc->codec == STD_MPEG4)
 		mime = "video/mpeg";
 	else if (vpu_enc->codec == STD_AVC)
@@ -336,12 +329,9 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	GstFlowReturn retval = GST_FLOW_OK;
 	GstCaps *src_caps;
 	GstBuffer *outbuffer;
+	gint i = 0;
 	int ret;
 	struct pollfd pollfd;
-	struct v4l2_buffer v4l2_buf = {
-		.type = V4L2_BUF_TYPE_VIDEO_OUTPUT,
-	};
-
 
 	GST_DEBUG("mfw_gst_vpuenc_chain");
 
@@ -355,26 +345,35 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 		printf("VPU ENC initialised\n");
 	}
 
+	for (i = 0; i < NUM_BUFFERS; i++) {
+		if (!(vpu_enc->queued & (1 << i)))
+			break;
+	}
+
+	if (i == NUM_BUFFERS) {
+		printf("NO BUFFER AVAILABLE\n");
+		return GST_FLOW_ERROR;
+	}
 
 	if (!buffer)
 		return GST_FLOW_OK;
 
+	/* copy the input Frame into the allocated buffer */
+	memcpy(vpu_enc->buf_data[i], GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+	gst_buffer_unref(buffer);
+
 	pollfd.fd = vpu_enc->vpu_fd;
 	pollfd.events = POLLIN | POLLOUT;
 
-	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_DQBUF, &v4l2_buf);
+	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_QBUF, &vpu_enc->buf_v4l2[0]);
 	if (ret) {
-		GST_ERROR("VIDIOC_DQBUF failed: %s\n", strerror(errno));
+		GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
 
-	/* copy the input Frame into the allocated buffer */
-	memcpy(vpu_enc->buf_data[v4l2_buf.index], GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-	gst_buffer_unref(buffer);
-
-	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_QBUF, &v4l2_buf);
+	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_DQBUF, &vpu_enc->buf_v4l2[0]);
 	if (ret) {
-		GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
+		GST_ERROR("VIDIOC_DQBUF failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
 
