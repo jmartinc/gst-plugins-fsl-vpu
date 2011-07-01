@@ -78,6 +78,9 @@ typedef struct _GstVPU_Enc
 	gint		bitrate;
 	gint		gopsize;
 	gboolean 	codecTypeProvided; 	/* Set when the user provides the compression format on the command line */
+
+	int		once;
+
 	int vpu_fd;
 	struct v4l2_buffer buf_v4l2[NUM_BUFFERS];
 	unsigned char *buf_data[NUM_BUFFERS];
@@ -244,7 +247,6 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
 	GstCaps *caps = NULL;
 	struct v4l2_format fmt;
 	int retval, i;
-	unsigned long type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
 printf("%s\n", __func__);
 	if (!vpu_enc->codecTypeProvided) {
@@ -312,12 +314,6 @@ printf("%s\n", __func__);
 
 	gst_pad_set_caps(vpu_enc->srcpad, caps);
 
-	retval = ioctl(vpu_enc->vpu_fd, VIDIOC_STREAMON, &type);
-	if (retval) {
-		printf("streamon failed with %d", retval);
-		return GST_FLOW_ERROR;
-	}
-
 	vpu_enc->init = TRUE;
 
 	return GST_FLOW_OK;
@@ -332,6 +328,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	gint i = 0;
 	int ret;
 	struct pollfd pollfd;
+	unsigned long type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
 	GST_DEBUG("mfw_gst_vpuenc_chain");
 
@@ -369,6 +366,15 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	if (ret) {
 		GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
+	}
+
+	if (!vpu_enc->once) {
+		retval = ioctl(vpu_enc->vpu_fd, VIDIOC_STREAMON, &type);
+		if (retval) {
+			printf("streamon failed with %d", retval);
+			return GST_FLOW_ERROR;
+		}
+		vpu_enc->once = 1;
 	}
 
 	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_DQBUF, &vpu_enc->buf_v4l2[0]);
