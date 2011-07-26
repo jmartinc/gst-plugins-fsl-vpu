@@ -240,7 +240,7 @@ struct memalloc_record {
 	void __iomem *cpu_addr;
 };
 
-#define VPU_MAX_FB	3
+#define VPU_MAX_FB	10
 
 struct vpu_instance {
 	struct vpu *vpu;
@@ -523,7 +523,7 @@ static int vpu_alloc_fb_v2(struct vpu_instance *instance)
 
 	size += mvsize;
 
-	for (i = 0; i < instance->num_fb; i++) {
+	for (i = 0; i < instance->num_fb + 1; i++) {
 		struct memalloc_record *rec = &instance->rec[i];
 
 		rec->cpu_addr = dma_alloc_coherent(NULL, size, &rec->dma_addr,
@@ -551,6 +551,9 @@ static int vpu_alloc_fb_v2(struct vpu_instance *instance)
 		}
 		if (instance->standard == STD_AVC)
 			para_buf[96 + i] = para_buf[i * 3 + 4] + (instance->width / 2) * (instance->height / 2);
+	}
+	if (instance->standard == STD_MPEG4) {
+		para_buf[97] = instance->rec[instance->num_fb].dma_addr;
 	}
 out:
 	if (ret)
@@ -795,6 +798,14 @@ out:
 	return ret;
 }
 
+enum
+{
+    MP4_MPEG4 = 0,
+    MP4_DIVX5_HIGHER = 1,
+    MP4_XVID = 2,
+    MP4_DIVX4 = 5,
+};
+
 static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 {
 	struct vpu *vpu = instance->vpu;
@@ -827,8 +838,15 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, CMD_DEC_SEQ_START_BYTE, instance->bitstream_buf_phys);
 	vpu_write(vpu, CMD_DEC_SEQ_BB_SIZE, regs->bitstream_buf_size / 1024);
 	vpu_write(vpu, CMD_DEC_SEQ_OPTION, 0);
-	vpu_write(vpu, CMD_DEC_SEQ_PS_BB_START, instance->ps_mem_buf_phys);
-	vpu_write(vpu, CMD_DEC_SEQ_PS_BB_SIZE, (PS_SAVE_SIZE / 1024));
+	if (instance->format == VPU_CODEC_AVC_DEC) {
+		vpu_write(vpu, CMD_DEC_SEQ_PS_BB_START, instance->ps_mem_buf_phys);
+		vpu_write(vpu, CMD_DEC_SEQ_PS_BB_SIZE, (PS_SAVE_SIZE / 1024));
+	}
+	if (instance->format == VPU_CODEC_MP4_DEC) {
+		vpu_write(vpu, CMD_DEC_SEQ_MP4_ASP_CLASS, MP4_MPEG4);
+	}
+
+	vpu_write(vpu, V2_BIT_RUN_AUX_STD, 0);
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 	vpu_bit_issue_command(instance, SEQ_INIT);
