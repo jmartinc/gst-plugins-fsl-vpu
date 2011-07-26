@@ -848,6 +848,10 @@ static int noinline vpu_dec_get_initial_info(struct vpu_instance *instance)
 	do_div(f, (val >> 16) + 1);
 	instance->frame_duration = ktime_set(0, (u32)f);
 	instance->num_fb = vpu_read(vpu, RET_DEC_SEQ_FRAME_NEED);
+	if (instance->num_fb > VPU_MAX_FB) {
+		dev_err(vpu->dev, "num_fb exceeds max fb\n");
+		return -EINVAL;
+	}
 
 	if (instance->format == VPU_CODEC_AVC_DEC) {
 		int top, right;
