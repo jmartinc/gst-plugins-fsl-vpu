@@ -740,7 +740,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		return -EINVAL;
 	}
 
-	instance->num_fb = 3; /* FIXME */
+	instance->num_fb = 2;
 	ret = vpu->drvdata->alloc_fb(instance);
 	if (ret) {
 		dev_dbg(vpu->dev, "alloc fb failed\n");
