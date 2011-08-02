@@ -80,6 +80,7 @@ typedef struct _GstVPU_Enc
 	gboolean 	codecTypeProvided; 	/* Set when the user provides the compression format on the command line */
 
 	int		once;
+	enum v4l2_memory	memory;
 
 	int vpu_fd;
 	struct v4l2_buffer buf_v4l2[NUM_BUFFERS];
@@ -239,7 +240,7 @@ static struct v4l2_requestbuffers reqs = {
 	.memory	= V4L2_MEMORY_MMAP,
 };
 
-static int mfw_gst_vpuenc_init_encoder(GstPad *pad, GstBuffer *buffer)
+static int mfw_gst_vpuenc_init_encoder(GstPad *pad, enum v4l2_memory memory)
 {
 	GstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
 	gchar *mime = "undef";
@@ -272,6 +273,7 @@ printf("%s\n", __func__);
 		return GST_FLOW_ERROR;
 	}
 
+	reqs.memory = memory;
 	retval = ioctl(vpu_enc->vpu_fd, VIDIOC_REQBUFS, &reqs);
 	if (retval) {
 		printf("VIDIOC_REQBUFS failed: %s\n", strerror(errno));
@@ -283,18 +285,20 @@ printf("%s\n", __func__);
 	for (i = 0; i < NUM_BUFFERS; i++) {
 		struct v4l2_buffer *buf = &vpu_enc->buf_v4l2[i];
 		buf->type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-		buf->memory = V4L2_MEMORY_MMAP;
+		buf->memory = memory;
 		buf->index = i;
 
-		retval = ioctl(vpu_enc->vpu_fd, VIDIOC_QUERYBUF, buf);
-		if (retval) {
-			GST_ERROR("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
-			return GST_FLOW_ERROR;
+		if (memory == V4L2_MEMORY_MMAP) {
+			retval = ioctl(vpu_enc->vpu_fd, VIDIOC_QUERYBUF, buf);
+			if (retval) {
+				GST_ERROR("VIDIOC_QUERYBUF failed: %s\n", strerror(errno));
+				return GST_FLOW_ERROR;
+			}
+			vpu_enc->buf_size[i] = buf->length;
+			vpu_enc->buf_data[i] = mmap(NULL, buf->length,
+					   PROT_READ | PROT_WRITE, MAP_SHARED,
+					   vpu_enc->vpu_fd, vpu_enc->buf_v4l2[i].m.offset);
 		}
-		vpu_enc->buf_size[i] = buf->length;
-		vpu_enc->buf_data[i] = mmap(NULL, buf->length,
-				   PROT_READ | PROT_WRITE, MAP_SHARED,
-				   vpu_enc->vpu_fd, vpu_enc->buf_v4l2[i].m.offset);
 	}
 
 	if (vpu_enc->codec == STD_MPEG4)
@@ -336,15 +340,25 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 //printf("%s: %dx%d\n", __func__, vpu_enc->width, vpu_enc->height);
 
 	if (vpu_enc->init == FALSE) {
-		retval = mfw_gst_vpuenc_init_encoder(pad, buffer);
+		retval = mfw_gst_vpuenc_init_encoder(pad, vpu_enc->memory);
 		if (retval != GST_FLOW_OK)
 			return retval;
 		printf("VPU ENC initialised\n");
 	}
 
-	for (i = 0; i < NUM_BUFFERS; i++) {
-		if (!(vpu_enc->queued & (1 << i)))
-			break;
+	i = 0;
+	if (vpu_enc->memory == V4L2_MEMORY_USERPTR) {
+		for (i = 0; i < NUM_BUFFERS; i++) {
+			if (vpu_enc->buf_v4l2[i].m.userptr == (long int)GST_BUFFER_DATA (buffer))
+				break;
+		}
+		if (i == NUM_BUFFERS) {
+			for (i = 0; i < NUM_BUFFERS; i++) {
+				if (!vpu_enc->buf_v4l2[i].m.userptr)
+					break;
+			}
+		}
+		i = i % NUM_BUFFERS;
 	}
 
 	if (i == NUM_BUFFERS) {
@@ -355,15 +369,27 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	if (!buffer)
 		return GST_FLOW_OK;
 
-	/* copy the input Frame into the allocated buffer */
-	memcpy(vpu_enc->buf_data[i], GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
-	gst_buffer_unref(buffer);
+	if (vpu_enc->memory == V4L2_MEMORY_MMAP) {
+		/* copy the input Frame into the allocated buffer */
+		memcpy(vpu_enc->buf_data[i], GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
+		gst_buffer_unref(buffer);
+	}else {
+		vpu_enc->buf_v4l2[i].m.userptr = (long int)GST_BUFFER_DATA (buffer);
+		vpu_enc->buf_v4l2[i].length = GST_BUFFER_SIZE (buffer);
+	}
 
 	pollfd.fd = vpu_enc->vpu_fd;
 	pollfd.events = POLLIN | POLLOUT;
 
-	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_QBUF, &vpu_enc->buf_v4l2[0]);
+	ret = ioctl(vpu_enc->vpu_fd, VIDIOC_QBUF, &vpu_enc->buf_v4l2[i]);
 	if (ret) {
+		if (vpu_enc->memory == V4L2_MEMORY_USERPTR) {
+			/* fallback to mmap */
+			vpu_enc->init = FALSE;
+			vpu_enc->memory = V4L2_MEMORY_MMAP;
+			GST_WARNING("mfw_gst_vpuenc_chain: fallback to mmap");
+			return mfw_gst_vpuenc_chain(pad, buffer);
+		}
 		GST_ERROR("VIDIOC_QBUF failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
 	}
@@ -381,6 +407,10 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	if (ret) {
 		GST_ERROR("VIDIOC_DQBUF failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
+	}
+
+	if (vpu_enc->memory == V4L2_MEMORY_USERPTR) {
+		gst_buffer_unref(buffer);
 	}
 
 	src_caps = GST_PAD_CAPS(vpu_enc->srcpad);
@@ -656,6 +686,7 @@ mfw_gst_vpuenc_init(GstVPU_Enc * vpu_enc, GstVPU_EncClass * gclass)
 	vpu_enc->bitrate = 0;
 	vpu_enc->gopsize = 0;
 	vpu_enc->codecTypeProvided = FALSE;
+	vpu_enc->memory = V4L2_MEMORY_USERPTR;
 }
 
 GType mfw_gst_type_vpu_enc_get_type(void)
