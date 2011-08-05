@@ -36,6 +36,7 @@
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
 #include <mach/hardware.h>
+#include <mach/iram.h>
 
 #include "imx-vpu.h"
 
@@ -60,6 +61,8 @@
 #define SLICE_SAVE_SIZE         0x02D800
 
 #define MAX_FW_BINARY_LEN		102400
+
+#define V2_IRAM_SIZE	0x14000
 
 struct fw_header_info {
 	u8 platform[12];
@@ -305,6 +308,9 @@ struct vpu {
 	void __iomem	*vpu_code_table;
 	dma_addr_t	vpu_work_buf_phys;
 	void __iomem	*vpu_work_buf;
+
+	void __iomem	*iram_virt;
+	unsigned long	iram_phys;
 };
 
 static struct vpu_buffer *to_vpu_vb(struct vb2_buffer *vb)
@@ -581,6 +587,8 @@ static int encode_header(struct vpu_instance *instance, int headertype)
 
 	return 0;
 }
+#define VPU_DEFAULT_MPEG4_QP 15
+#define VPU_DEFAULT_H264_QP 35
 
 static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 {
@@ -590,7 +598,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	u32 data;
 	u32 val;
 	u32 sliceSizeMode = 0;
-	u32 sliceMode = 1;
+	u32 sliceMode = 0;
 	u32 bitrate = 0; /* auto bitrate */
 	u32 enableAutoSkip = 0;
 	u32 initialDelay = 1;
@@ -637,6 +645,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 			mp4_verid << 6;
 
 		vpu_write(vpu, CMD_ENC_SEQ_MP4_PARA, data);
+		rcIntraQp = VPU_DEFAULT_MPEG4_QP;
 	} else if (instance->standard == STD_H263) {
 		u32 h263_annexJEnable = 0;
 		u32 h263_annexKEnable = 0;
@@ -659,6 +668,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 			h263_annexTEnable;
 
 		vpu_write(vpu, CMD_ENC_SEQ_263_PARA, data);
+		rcIntraQp = VPU_DEFAULT_MPEG4_QP;
 	} else if (instance->standard == STD_AVC) {
 		u32 avc_deblkFilterOffsetBeta = 0;
 		u32 avc_deblkFilterOffsetAlpha = 0;
@@ -674,13 +684,14 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 			avc_constrainedIntraPredFlag << 5 |
 			(avc_chromaQpOffset & 31);
 		vpu_write(vpu, CMD_ENC_SEQ_264_PARA, data);
+		rcIntraQp = VPU_DEFAULT_H264_QP;
 	}
 
 	data = 4000 << 2 | /* slice size */
 		sliceSizeMode << 1 | sliceMode;
 
 	vpu_write(vpu, CMD_ENC_SEQ_SLICE_MODE, data);
-	vpu_write(vpu, CMD_ENC_SEQ_GOP_NUM, 1); /* gop size */
+	vpu_write(vpu, CMD_ENC_SEQ_GOP_NUM, 30); /* gop size */
 
 	if (bitrate) {	/* rate control enabled */
 		data = (!enableAutoSkip) << 31 |
@@ -707,8 +718,15 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 
 	vpu_write(vpu, regs->cmd_enc_seq_intra_qp, rcIntraQp);
 
-	vpu_write(vpu, CMD_ENC_SEQ_OPTION, 0);
-	vpu_write(vpu, CMD_ENC_SEQ_FMO, 0);
+	vpu_write(vpu, CMD_ENC_SEQ_OPTION, data);
+
+	if (vpu->drvdata->version == 1) {
+		vpu_write(vpu, V1_CMD_ENC_SEQ_FMO, 0);
+		vpu_write(vpu, V1_BIT_SEARCH_RAM_BASE_ADDR, vpu->iram_phys);
+	} else {
+		vpu_write(vpu, V2_CMD_ENC_SEQ_SEARCH_BASE, vpu->iram_phys);
+		vpu_write(vpu, V2_CMD_ENC_SEQ_SEARCH_SIZE, V2_IRAM_SIZE);
+	}
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 
@@ -1815,6 +1833,12 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	if (err)
 		goto err_out_irq;
 
+	vpu->iram_virt = iram_alloc(V2_IRAM_SIZE, &vpu->iram_phys);
+	if (!vpu->iram_virt) {
+		dev_err(&pdev->dev, "unable to alloc iram\n");
+		goto err_out_irq;
+	}
+
 	err = video_register_device(vpu->vdev,
 				    VFL_TYPE_GRABBER, -1);
 	if (err) {
@@ -1866,6 +1890,10 @@ static int vpu_dev_remove(struct platform_device *pdev)
 			vpu->vpu_code_table_phys);
 
 	vb2_dma_contig_cleanup_ctx(vpu->alloc_ctx);
+
+	if (vpu->iram_virt)
+		iram_free(vpu->iram_phys, V2_IRAM_SIZE);
+
 	video_unregister_device(vpu->vdev);
 
 	device_remove_file(&pdev->dev, &dev_attr_info);
