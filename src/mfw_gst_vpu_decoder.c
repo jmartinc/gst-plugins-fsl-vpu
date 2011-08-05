@@ -633,10 +633,8 @@ mfw_gst_vpudec_chain_stream_mode(GstPad * pad, GstBuffer *buffer)
 				handled = 1;
 		}
 
-		if (pollfd.revents & POLLIN) {
+		if (pollfd.revents & POLLIN)
 			while (!vpu_dec_loop(vpu_dec));
-			handled = 1;
-		}
 	}
 done:
 	gst_buffer_unref(buffer);
