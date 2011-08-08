@@ -1127,7 +1127,7 @@ static irqreturn_t vpu_irq_handler(int irq, void *dev_id)
 	struct vpu *vpu = dev_id;
 	struct vpu_instance *instance;
 	struct vpu_buffer *vbuf = vpu->active;
-	struct vb2_queue *q = vbuf->vb.vb2_queue;
+	struct vb2_queue *q;
 	unsigned long flags;
 
 	spin_lock_irqsave(&vpu->lock, flags);
@@ -1135,8 +1135,11 @@ static irqreturn_t vpu_irq_handler(int irq, void *dev_id)
 	vpu_write(vpu, BIT_INT_CLEAR, 1);
 	vpu_write(vpu, BIT_INT_REASON, 0);
 
-	if (!&vbuf->vb)
+	if (!vbuf || !&vbuf->vb)
 		goto out;
+
+	q = vbuf->vb.vb2_queue;
+
 	instance = vb2_get_drv_priv(q);
 
 	if (instance->mode == VPU_MODE_DECODER)
