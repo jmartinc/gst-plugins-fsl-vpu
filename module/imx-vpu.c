@@ -785,7 +785,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 			return -ENOMEM;
 	}
 
-	ret = kfifo_alloc(&instance->fifo, 128 * 1024, GFP_KERNEL);
+	ret = kfifo_alloc(&instance->fifo, regs->bitstream_buf_size, GFP_KERNEL);
 	if (ret)
 		goto out;
 
