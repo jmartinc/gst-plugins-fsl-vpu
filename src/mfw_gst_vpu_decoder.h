@@ -35,7 +35,7 @@
 #include <linux/videodev2.h>
 #include "mfw_gst_utils.h"
 
-#define NUM_BUFFERS 4
+#define NUM_BUFFERS 2
 
 G_BEGIN_DECLS
 #define MFW_GST_TYPE_VPU_DEC (mfw_gst_type_vpu_dec_get_type())
