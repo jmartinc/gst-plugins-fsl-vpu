@@ -416,13 +416,13 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	src_caps = GST_PAD_CAPS(vpu_enc->srcpad);
 
 	retval = gst_pad_alloc_buffer_and_set_caps(vpu_enc->srcpad,
-			0, 128 * 1024, src_caps, &outbuffer);
+			0, 1024 * 1024, src_caps, &outbuffer);
 	if (retval != GST_FLOW_OK) {
 		GST_ERROR("Allocating buffer failed with %d", ret);
 		return retval;
 	}
 
-	ret = read(vpu_enc->vpu_fd, GST_BUFFER_DATA(outbuffer), 128 * 1024);
+	ret = read(vpu_enc->vpu_fd, GST_BUFFER_DATA(outbuffer), 1024 * 1024);
 	if (ret < 0) {
 		printf("read failed: %s\n", strerror(errno));
 		return GST_FLOW_ERROR;
