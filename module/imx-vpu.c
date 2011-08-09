@@ -311,6 +311,9 @@ struct vpu {
 
 	void __iomem	*iram_virt;
 	unsigned long	iram_phys;
+	struct workqueue_struct	*workqueue;
+	struct work_struct	work;
+	struct completion	complete;
 };
 
 static struct vpu_buffer *to_vpu_vb(struct vb2_buffer *vb)
@@ -1018,50 +1021,48 @@ static void vpu_dec_start_frame(struct vpu_instance *instance)
  * allowed to touch the VPU. Therefore all accesses to the VPU
  * are serialized here. Caller must hold vpu->lock
  */
-static int vpu_start_frame(struct vpu *vpu)
+static void vpu_work(struct work_struct *work)
 {
-	struct vpu_buffer *vbuf, *tmp;
-	struct vpu_instance *instance;
+	struct vpu *vpu = container_of(work, struct vpu, work);
+	struct vpu_buffer *vbuf;
+	struct vpu_instance *instance = NULL;
 	int i, ret;
 
-	vpu->active = NULL;
-
-	for (i = 0; i < VPU_NUM_INSTANCE; i++) {
-		instance = &vpu->instance[i];
-		if (instance->in_use &&
-		    instance->needs_init &&
-		    instance->mode == VPU_MODE_DECODER &&
-		    !instance->hold) {
-			ret = vpu_dec_get_initial_info(instance);
-			if (ret)
-				instance->hold = 1;
+	while (1) {
+		for (i = 0; i < VPU_NUM_INSTANCE; i++) {
+			instance = &vpu->instance[i];
+			if (instance->in_use && !instance->hold && instance->needs_init) {
+				if (instance->mode == VPU_MODE_ENCODER)
+					ret = vpu_enc_get_initial_info(instance);
+				else
+					ret = vpu_dec_get_initial_info(instance);
+				if (ret)
+					instance->hold = 1;
+			}
 		}
-	}
 
-	list_for_each_entry_safe(vbuf, tmp, &vpu->queued, list) {
-		struct vb2_queue *q = vbuf->vb.vb2_queue;
-		instance = vb2_get_drv_priv(q);
-		if (!instance->hold) {
-			vpu->active = vbuf;
-			break;
+		vpu->active = NULL;
+
+		list_for_each_entry(vbuf, &vpu->queued, list) {
+			struct vb2_queue *q = vbuf->vb.vb2_queue;
+			instance = vb2_get_drv_priv(q);
+			if (!instance->hold) {
+				vpu->active = vbuf;
+				break;
+			}
 		}
+
+		if (!vpu->active) {
+			return;
+		}
+
+		if (instance->mode == VPU_MODE_ENCODER)
+			vpu_enc_start_frame(instance);
+		else
+			vpu_dec_start_frame(instance);
+
+		wait_for_completion_interruptible(&vpu->complete);
 	}
-
-	if (!vpu->active)
-		return 0;
-
-	if (instance->mode == VPU_MODE_ENCODER && instance->needs_init) {
-		ret = vpu_enc_get_initial_info(instance);
-		if (ret)
-			instance->hold = 1;
-	}
-
-	if (instance->mode == VPU_MODE_ENCODER)
-		vpu_enc_start_frame(instance);
-	else
-		vpu_dec_start_frame(instance);
-
-	return 0;
 }
 
 static void vpu_dec_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
@@ -1152,9 +1153,8 @@ static irqreturn_t vpu_irq_handler(int irq, void *dev_id)
 	else
 		vpu_enc_irq_handler(vpu, instance, &vbuf->vb);
 
-	vpu_start_frame(vpu);
-
 out:
+	complete(&vpu->complete);
 	spin_unlock_irqrestore(&vpu->lock, flags);
 
 	return IRQ_HANDLED;
@@ -1332,6 +1332,7 @@ static ssize_t vpu_write_stream(struct file *file, const char __user *ubuf, size
 		loff_t *off)
 {
 	struct vpu_instance *instance = file->private_data;
+	struct vpu *vpu = instance->vpu;
 	int ret = 0;
 
 	if (instance->mode != VPU_MODE_DECODER)
@@ -1346,8 +1347,7 @@ static ssize_t vpu_write_stream(struct file *file, const char __user *ubuf, size
 
 	instance->hold = 0;
 
-	if (!instance->vpu->active)
-		vpu_start_frame(instance->vpu);
+	queue_work(vpu->workqueue, &vpu->work);
 
 	spin_unlock_irq(&instance->vpu->lock);
 
@@ -1560,8 +1560,7 @@ static void vpu_vb2_queue(struct vb2_buffer *vb)
 	list_add_tail(&buf->list, &vpu->queued);
 	spin_unlock_irqrestore(&vpu->lock, flags);
 
-	if (!vpu->active)
-		vpu_start_frame(vpu);
+	queue_work(vpu->workqueue, &vpu->work);
 }
 
 static void vpu_vb2_release(struct vb2_buffer *vb)
@@ -1806,6 +1805,15 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	if (!vpu->vdev)
 		return -ENOMEM;
 
+	vpu->workqueue = create_singlethread_workqueue(
+			dev_name(&pdev->dev));
+	if (!vpu->workqueue) {
+		err = -EBUSY;
+		got err_out_work;
+	}
+
+	INIT_WORK(&vpu->work, vpu_work);
+	init_completion(&vpu->complete);
 	strcpy(vpu->vdev->name, "vpu");
 	vpu->vdev->fops = &vpu_fops;
 	vpu->vdev->ioctl_ops = &vpu_ioctl_ops;
@@ -1887,6 +1895,8 @@ err_out_ioremap:
 	clk_disable(vpu->clk);
 	clk_put(vpu->clk);
 err_out_clk:
+	destroy_workqueue(vpu->workqueue);
+err_out_work:
 	kfree(vpu->vdev);
 
 	if (vpu->vpu_work_buf)
@@ -1921,6 +1931,8 @@ static int vpu_dev_remove(struct platform_device *pdev)
 		iram_free(vpu->iram_phys, V2_IRAM_SIZE);
 
 	video_unregister_device(vpu->vdev);
+
+	destroy_workqueue(vpu->workqueue);
 
 	device_remove_file(&pdev->dev, &dev_attr_info);
 	platform_set_drvdata(pdev, NULL);
