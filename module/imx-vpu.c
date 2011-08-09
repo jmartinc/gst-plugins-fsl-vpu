@@ -728,7 +728,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		vpu_write(vpu, V1_BIT_SEARCH_RAM_BASE_ADDR, vpu->iram_phys);
 	} else {
 		vpu_write(vpu, V2_CMD_ENC_SEQ_SEARCH_BASE, vpu->iram_phys);
-		vpu_write(vpu, V2_CMD_ENC_SEQ_SEARCH_SIZE, V2_IRAM_SIZE);
+		vpu_write(vpu, V2_CMD_ENC_SEQ_SEARCH_SIZE, 48 * 1024);
 	}
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
@@ -757,10 +757,10 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	if (vpu->drvdata->version == 2) {
 		vpu_write(vpu, CMD_SET_FRAME_SOURCE_BUF_STRIDE,
 				ROUND_UP_8(instance->width));
-		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_BIT_ADDR, 0x0);
-		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_IPACDC_ADDR, 0x0);
-		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_DBKY_ADDR, 0x0);
-		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_DBKC_ADDR, 0x0);
+		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_DBKY_ADDR, vpu->iram_phys + 48 * 1024);
+		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_DBKC_ADDR, vpu->iram_phys + 53 * 1024);
+		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_BIT_ADDR, vpu->iram_phys + 58 * 1024);
+		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_IPACDC_ADDR, vpu->iram_phys + 68 * 1024);
 		vpu_write(vpu, V2_CMD_SET_FRAME_AXI_OVL_ADDR, 0x0);
 	}
 
@@ -949,6 +949,7 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance)
 	int stridey = ROUND_UP_4(instance->width);
 	int ustride;
 	unsigned long u;
+	u32 val;
 
 	vpu_write(vpu, CMD_ENC_PIC_ROT_MODE, 0x10);
 
@@ -960,6 +961,8 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance)
 	ustride = ROUND_UP_8(instance->width) / 2;
 	vpu_write(vpu, CMD_ENC_PIC_SRC_ADDR_CR, u + ustride * ROUND_UP_2(height) / 2);
 	vpu_write(vpu, CMD_ENC_PIC_OPTION, (0 << 5) | (0 << 1));
+
+	vpu_write(vpu, V2_BIT_AXI_SRAM_USE, 1 | (1<<7) | (1<<4) | (1<<11));
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 	vpu_bit_issue_command(instance, PIC_RUN);
@@ -1002,6 +1005,8 @@ static void vpu_dec_start_frame(struct vpu_instance *instance)
 
 	vpu_write(vpu, CMD_DEC_PIC_OPTION, 1); /* Enable prescan */
 	vpu_write(vpu, CMD_DEC_PIC_SKIP_NUM, 0);
+
+	vpu_write(vpu, V2_BIT_AXI_SRAM_USE, 0);
 
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 	vpu_bit_issue_command(instance, PIC_RUN);
