@@ -1813,7 +1813,7 @@ static int vpu_dev_probe(struct platform_device *pdev)
 
 	INIT_WORK(&vpu->work, vpu_work);
 	init_completion(&vpu->complete);
-	strcpy(vpu->vdev->name, "vpu");
+	strcpy(vpu->vdev->name, "imx-vpu");
 	vpu->vdev->fops = &vpu_fops;
 	vpu->vdev->ioctl_ops = &vpu_ioctl_ops;
 	vpu->vdev->release = video_device_release;
