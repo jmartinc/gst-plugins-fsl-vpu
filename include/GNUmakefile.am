@@ -1,2 +1,6 @@
+noinst_HEADERS = \
+	mfw_gst_utils.h \
+	mxcfb.h
+
 MAINTAINERCLEANFILES = \
 	GNUmakefile.in

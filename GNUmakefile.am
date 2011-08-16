@@ -1,8 +1,22 @@
 SUBDIRS = include config src
 
 EXTRA_DIST = \
+	module/Makefile \
+	module/imx-vpu.c \
+	module/imx-vpu.h \
 	autogen.sh \
 	config/m4/.secret-world-domination-project
+
+firmwaredir = /lib/firmware
+
+dist_firmware_DATA = \
+	firmware/vpu_fw_imx27_TO1.bin \
+	firmware/vpu_fw_imx27_TO2.bin \
+	firmware/vpu_fw_imx27_TO2_2_2_5.bin \
+	firmware/vpu_fw_imx32.bin \
+	firmware/vpu_fw_imx37.bin \
+	firmware/vpu_fw_imx51.bin \
+	firmware/vpu_fw_imx53.bin
 
 MAINTAINERCLEANFILES = \
 	configure \
