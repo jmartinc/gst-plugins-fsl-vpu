@@ -952,7 +952,6 @@ static void noinline vpu_enc_start_frame(struct vpu_instance *instance)
 	int stridey = ROUND_UP_4(instance->width);
 	int ustride;
 	unsigned long u;
-	u32 val;
 
 	vpu_write(vpu, CMD_ENC_PIC_ROT_MODE, 0x10);
 
@@ -1809,7 +1808,7 @@ static int vpu_dev_probe(struct platform_device *pdev)
 			dev_name(&pdev->dev));
 	if (!vpu->workqueue) {
 		err = -EBUSY;
-		got err_out_work;
+		goto err_out_work;
 	}
 
 	INIT_WORK(&vpu->work, vpu_work);
@@ -1896,8 +1895,6 @@ err_out_ioremap:
 	clk_put(vpu->clk);
 err_out_clk:
 	destroy_workqueue(vpu->workqueue);
-err_out_work:
-	kfree(vpu->vdev);
 
 	if (vpu->vpu_work_buf)
 		dma_free_coherent(NULL, regs->work_buf_size, vpu->vpu_work_buf,
@@ -1905,6 +1902,9 @@ err_out_work:
 	if (vpu->vpu_code_table)
 		dma_free_coherent(NULL, regs->code_buf_size, vpu->vpu_code_table,
 				vpu->vpu_code_table_phys);
+
+err_out_work:
+	kfree(vpu->vdev);
 
 	return err;
 }
