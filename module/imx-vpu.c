@@ -268,6 +268,7 @@ struct vpu_instance {
 	u32 gopsize;
 	u32 rotmir;
 	int hold;
+	int newdata;
 	wait_queue_head_t waitq;
 	int needs_init;
 
@@ -987,6 +988,8 @@ static void vpu_dec_start_frame(struct vpu_instance *instance)
 	vpu_write(vpu, BIT_WR_PTR(instance->idx),
 			instance->bitstream_buf_phys + (instance->fifo_in % regs->bitstream_buf_size));
 
+	instance->newdata = 0;
+
 	if (instance->rotmir & 0x1) {
 		stridey = instance->height;
 		height = instance->width;
@@ -1076,7 +1079,10 @@ static void vpu_dec_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 			vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		} else {
 			vb2_buffer_done(vb, VB2_BUF_STATE_QUEUED);
-			instance->hold = 1;
+
+			if (!instance->newdata)
+				instance->hold = 1;
+
 			return;
 		}
 	} else
@@ -1345,6 +1351,7 @@ static ssize_t vpu_write_stream(struct file *file, const char __user *ubuf, size
 		instance->flushing = 1;
 
 	instance->hold = 0;
+	instance->newdata = 1;
 
 	queue_work(vpu->workqueue, &vpu->work);
 
