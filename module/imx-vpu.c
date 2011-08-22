@@ -352,7 +352,7 @@ static int vpu_fifo_in(struct vpu_instance *instance, const char __user *ubuf, s
 	unsigned int off, l;
 	int ret;
 
-	len = min(vpu_fifo_avail(instance), len);
+	len = min(vpu_fifo_avail(instance) - 1, len);
 
 	off = instance->fifo_in & (regs->bitstream_buf_size - 1);
 
