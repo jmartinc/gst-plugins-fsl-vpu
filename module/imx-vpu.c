@@ -64,6 +64,13 @@
 
 #define V2_IRAM_SIZE	0x14000
 
+#define VPU_MAX_BITRATE 32767
+
+static unsigned int vpu_bitrate;
+module_param(vpu_bitrate, uint, 0644);
+MODULE_PARM_DESC(vpu_bitrate, "bitrate: Specify bitrate for encoder. "
+		"0..32767, use 0 for auto bitrate. Default 0");
+
 struct fw_header_info {
 	u8 platform[12];
 	u32 size;
@@ -606,7 +613,6 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	u32 val;
 	u32 sliceSizeMode = 0;
 	u32 sliceMode = 0;
-	u32 bitrate = 0; /* auto bitrate */
 	u32 enableAutoSkip = 0;
 	u32 initialDelay = 1;
 	u32 sliceReport = 0;
@@ -700,10 +706,10 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, CMD_ENC_SEQ_SLICE_MODE, data);
 	vpu_write(vpu, CMD_ENC_SEQ_GOP_NUM, 30); /* gop size */
 
-	if (bitrate) {	/* rate control enabled */
+	if (vpu_bitrate) {	/* rate control enabled */
 		data = (!enableAutoSkip) << 31 |
 			initialDelay << 16 |
-			bitrate << 1 |
+			vpu_bitrate << 1 |
 			0;
 		vpu_write(vpu, CMD_ENC_SEQ_RC_PARA, data);
 	} else {
@@ -1816,6 +1822,12 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	if (!vpu->workqueue) {
 		err = -EBUSY;
 		goto err_out_work;
+	}
+
+	if (vpu_bitrate > VPU_MAX_BITRATE) {
+		vpu_bitrate = VPU_MAX_BITRATE;
+		dev_warn(&pdev->dev, "specified bitrate too high. Limiting to %d\n",
+				VPU_MAX_BITRATE);
 	}
 
 	INIT_WORK(&vpu->work, vpu_work);
