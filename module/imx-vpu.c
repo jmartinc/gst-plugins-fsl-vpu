@@ -679,7 +679,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	} else if (instance->standard == STD_AVC) {
 		u32 avc_deblkFilterOffsetBeta = 0;
 		u32 avc_deblkFilterOffsetAlpha = 0;
-		u32 avc_disableDeblk = 1;
+		u32 avc_disableDeblk = 0;
 		u32 avc_constrainedIntraPredFlag = 0;
 		u32 avc_chromaQpOffset = 0;
 
