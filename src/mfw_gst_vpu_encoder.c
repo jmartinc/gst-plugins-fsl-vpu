@@ -249,7 +249,6 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, enum v4l2_memory memory)
 	struct v4l2_format fmt;
 	int retval, i;
 
-printf("%s\n", __func__);
 	if (!vpu_enc->codecTypeProvided) {
 		GST_ERROR("Incomplete command line.\n");
 		GError *error = NULL;
@@ -337,7 +336,6 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	GST_DEBUG("mfw_gst_vpuenc_chain");
 
 	vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
-//printf("%s: %dx%d\n", __func__, vpu_enc->width, vpu_enc->height);
 
 	if (vpu_enc->init == FALSE) {
 		retval = mfw_gst_vpuenc_init_encoder(pad, vpu_enc->memory);
@@ -531,7 +529,7 @@ static gboolean mfw_gst_vpuenc_sink_event(GstPad * pad, GstEvent * event)
 	GstFormat format;
 	gint64 start, stop, position;
 	gdouble rate;
-printf("%s\n", __func__);
+
 	switch (GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
 		gst_event_parse_new_segment(event, NULL, &rate, &format,
@@ -569,7 +567,7 @@ static gboolean mfw_gst_vpuenc_setcaps(GstPad * pad, GstCaps * caps)
 	gint32 frame_rate_nu = 0;
 	gint width = 0;
 	gint height = 0;
-printf("%s\n", __func__);
+
 	GST_DEBUG("mfw_gst_vpuenc_setcaps");
 	vpu_enc = MFW_GST_VPU_ENC(gst_pad_get_parent(pad));
 
