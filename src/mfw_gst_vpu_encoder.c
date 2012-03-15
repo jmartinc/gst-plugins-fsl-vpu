@@ -114,7 +114,11 @@ to be chnaged for other platforms */
     \
     "video/x-h264, " \
     "width = (int) [16," STR(MAX_WIDTH)"], " \
-    "height = (int)[16," STR(MAX_HEIGHT)"] "
+    "height = (int)[16," STR(MAX_HEIGHT)"] " \
+    \
+    "image/jpeg, " \
+    "width = (int) [16, " STR(MAX_WIDTH) "], " \
+    "height = (int)[16, " STR(MAX_HEIGHT) "] "
 
 /* 	Chroma Subsampling ratio - assuming 4:2:0. */
 /*	Not providing ability to set this on the command line because I'm not sure if VPU supports 4:2:2 - r58604 */
