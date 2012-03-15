@@ -67,6 +67,14 @@
 
 #define VPU_MAX_BITRATE 32767
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0)
+static inline dma_addr_t
+vb2_dma_contig_plane_paddr(struct vb2_buffer *vb, unsigned int plane_no)
+{
+	return vb2_dma_contig_plane_dma_addr(vb, 0);
+}
+#endif
+
 static unsigned int vpu_bitrate;
 module_param(vpu_bitrate, uint, 0644);
 MODULE_PARM_DESC(vpu_bitrate, "bitrate: Specify bitrate for encoder. "
@@ -1528,10 +1536,15 @@ static int frame_calc_size(int width, int height)
 #endif
 	return (width * height * 3) / 2;
 }
-
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 1, 0)
+static int vpu_vb2_setup(struct vb2_queue *q, const struct v4l2_format *fmt,
+		unsigned int *count, unsigned int *num_planes,
+		unsigned int sizes[], void *alloc_ctxs[])
+#else
 static int vpu_vb2_setup(struct vb2_queue *q,
 		unsigned int *count, unsigned int *num_planes,
 		unsigned long sizes[], void *alloc_ctxs[])
+#endif
 {
 	struct vpu_instance *instance = vb2_get_drv_priv(q);
 	struct vpu *vpu = instance->vpu;
