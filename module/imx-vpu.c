@@ -18,6 +18,7 @@
 #include <linux/ioport.h>
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/kfifo.h>
