@@ -649,7 +649,7 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 
 	data = (instance->width << regs->bit_pic_width_offset) | instance->height;
 	vpu_write(vpu, CMD_ENC_SEQ_SRC_SIZE, data);
-	vpu_write(vpu, CMD_ENC_SEQ_SRC_F_RATE, 0x03e87530); /* 0x03e87530 */
+	vpu_write(vpu, CMD_ENC_SEQ_SRC_F_RATE, 0x0); /* 0x03e87530 */
 
 	if (instance->standard == STD_MPEG4) {
 		u32 mp4_intraDcVlcThr = 7;
@@ -786,6 +786,13 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
 
 	vpu_bit_issue_command(instance, SET_FRAME_BUF);
+	if (vpu_wait(vpu))
+		return -EINVAL;
+
+	vpu_write(vpu, BIT_BUSY_FLAG, 0x1);
+	vpu_write(vpu, CMD_ENC_SEQ_PARA_CHANGE_ENABLE, 1 << 3);
+	vpu_write(vpu, CMD_ENC_SEQ_PARA_RC_FRAME_RATE, 0x0);
+	vpu_bit_issue_command(instance, RC_CHANGE_PARAMETER);
 	if (vpu_wait(vpu))
 		return -EINVAL;
 
