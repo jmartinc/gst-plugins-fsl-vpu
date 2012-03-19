@@ -90,39 +90,25 @@ typedef struct _GstVPU_Enc
 	char *device;
 }GstVPU_Enc;
 
-/*maximum limit of the output buffer */
-#define BUFF_FILL_SIZE (200 * 1024)
-
-/* Maximum width and height - D1*/
-#define MAX_WIDTH		4096
-#define MAX_HEIGHT		4096
-
 /* Default frame rate */
 #define DEFAULT_FRAME_RATE	30
 
-/* The processor clock is 333 MHz for  MX27
-to be chnaged for other platforms */
-
 #define MFW_GST_VPUENC_VIDEO_CAPS \
     "video/mpeg, " \
-    "width = (int) [16, " STR(MAX_WIDTH)"], " \
-    "height = (int) [16," STR(MAX_HEIGHT)"]; " \
+    "width = (int) [16, 1280], " \
+    "height = (int) [16, 720]; " \
     \
     "video/x-h263, " \
-    "width = (int) [16, " STR(MAX_WIDTH)"], " \
-    "height = (int)[16, " STR(MAX_HEIGHT)"]; " \
+    "width = (int) [16, 1280], " \
+    "height = (int) [16, 720]; " \
     \
     "video/x-h264, " \
-    "width = (int) [16," STR(MAX_WIDTH)"], " \
-    "height = (int)[16," STR(MAX_HEIGHT)"] " \
+    "width = (int) [16, 1280], " \
+    "height = (int) [16, 720]; " \
     \
     "image/jpeg, " \
-    "width = (int) [16, " STR(MAX_WIDTH) "], " \
-    "height = (int)[16, " STR(MAX_HEIGHT) "] "
-
-/* 	Chroma Subsampling ratio - assuming 4:2:0. */
-/*	Not providing ability to set this on the command line because I'm not sure if VPU supports 4:2:2 - r58604 */
-#define CHROMA_SAMPLING_MULTIPLE	1.5
+    "width = (int) [16, 1280], " \
+    "height = (int) [16, 720]; "
 
 /* get the element details */
 static GstElementDetails mfw_gst_vpuenc_details =
@@ -144,9 +130,9 @@ GST_STATIC_PAD_TEMPLATE("sink",
 			GST_PAD_ALWAYS,
 			GST_STATIC_CAPS("video/x-raw-yuv, "
 					"format = (fourcc) {I420}, "
-					"width = (int) [ 16, " STR(MAX_WIDTH)"], "
-					"height = (int) [ 16, " STR(MAX_HEIGHT)"], "
-					"framerate = (fraction) [ 0/1, 60/1 ]")
+					"width = (int) [16, 1280], "
+					"height = (int) [16, 720], "
+					"framerate = (fraction) [0/1, 60/1]")
     );
 
 #define	GST_CAT_DEFAULT	mfw_gst_vpuenc_debug
@@ -157,7 +143,7 @@ static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 			    const GValue * value, GParamSpec * pspec)
 {
 	GST_DEBUG("mfw_gst_vpuenc_set_property");
-printf("%s\n", __func__);
+
 	GstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
 	switch (prop_id) {
 	case MFW_GST_VPU_PROF_ENABLE:
@@ -202,7 +188,6 @@ printf("%s\n", __func__);
 static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 			    GValue * value, GParamSpec * pspec)
 {
-printf("%s\n", __func__);
 	GST_DEBUG("mfw_gst_vpuenc_get_property");
 	GstVPU_Enc *vpu_enc = MFW_GST_VPU_ENC(object);
 	switch (prop_id) {
@@ -235,7 +220,6 @@ printf("%s\n", __func__);
 		break;
 	}
 	return;
-
 }
 
 static struct v4l2_requestbuffers reqs = {
@@ -304,12 +288,22 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, enum v4l2_memory memory)
 		}
 	}
 
-	if (vpu_enc->codec == STD_MPEG4)
+	switch (vpu_enc->codec) {
+	case  STD_MPEG4:
 		mime = "video/mpeg";
-	else if (vpu_enc->codec == STD_AVC)
+		break;
+	case STD_AVC:
 		mime = "video/x-h264";
-	else if (vpu_enc->codec == STD_H263)
+		break;
+	case STD_H263:
 		mime = "video/x-h263";
+		break;
+	case STD_MJPG:
+		mime = "image/jpeg";
+		break;
+	default:
+		return GST_FLOW_ERROR;
+	}
 
 	caps = gst_caps_new_simple(mime,
 			   "mpegversion", G_TYPE_INT, 4,
@@ -337,7 +331,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 	struct pollfd pollfd;
 	unsigned long type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
-	GST_DEBUG("mfw_gst_vpuenc_chain");
+	GST_DEBUG(__func__);
 
 	vpu_enc = MFW_GST_VPU_ENC(GST_PAD_PARENT(pad));
 
@@ -375,7 +369,7 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 		/* copy the input Frame into the allocated buffer */
 		memcpy(vpu_enc->buf_data[i], GST_BUFFER_DATA(buffer), GST_BUFFER_SIZE(buffer));
 		gst_buffer_unref(buffer);
-	}else {
+	} else {
 		vpu_enc->buf_v4l2[i].m.userptr = (long int)GST_BUFFER_DATA (buffer);
 		vpu_enc->buf_v4l2[i].length = GST_BUFFER_SIZE (buffer);
 	}
@@ -442,12 +436,10 @@ static GstFlowReturn mfw_gst_vpuenc_chain(GstPad * pad, GstBuffer * buffer)
 
 	retval = gst_pad_push(vpu_enc->srcpad, outbuffer);
 	if (retval != GST_FLOW_OK) {
-		GST_ERROR("Error in Pushing the Output ont to "
-			  "the Source Pad,error is %d \n",
+		GST_ERROR("Pushing Output onto the source pad failed with %d \n",
 			  retval);
 	}
 
-//done:
 	return retval;
 }
 
@@ -457,13 +449,12 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	GstVPU_Enc *vpu_enc = NULL;
 	vpu_enc = MFW_GST_VPU_ENC(element);
-//	gint vpu_ret = 0;
 	CodStd mode;
 
 	switch (transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 		GST_DEBUG("VPU State: Null to Ready");
-		vpu_enc->vpu_fd = open(vpu_enc->device, O_RDWR); // | O_NONBLOCK);
+		vpu_enc->vpu_fd = open(vpu_enc->device, O_RDWR);
 		if (vpu_enc->vpu_fd < 0) {
 			GST_ERROR("opening %s failed", vpu_enc->device);
 			return GST_STATE_CHANGE_FAILURE;
@@ -480,17 +471,18 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 
 		vpu_enc->init = FALSE;
 		vpu_enc->wait = FALSE;
-//		vpu_enc->encOP->bitRate = vpu_enc->bitrate;
-//		vpu_enc->encOP->gopSize = vpu_enc->gopsize;
-//		vpu_enc->encOP->slicemode.sliceMode = 1;	/* 1 slice per picture */
-//		vpu_enc->encOP->slicemode.sliceSize = 4000;	/* not used if sliceMode is 0 */
 		vpu_enc->numframebufs = 0;
 
-		if (mode == STD_MPEG4) {
-		} else if (mode == STD_H263) {
-//			vpu_enc->encOP->frameRateInfo = 0x3E87530;
-		} else if (mode == STD_AVC) {
-		} else {
+		switch (mode) {
+		case STD_MPEG4:
+			break;
+		case STD_H263:
+			break;
+		case STD_AVC:
+			break;
+		case STD_MJPG:
+			break;
+		default:
 			GST_ERROR("Encoder: Invalid codec standard mode");
 			return GST_STATE_CHANGE_FAILURE;
 		}
@@ -511,7 +503,7 @@ static GstStateChangeReturn mfw_gst_vpuenc_change_state
 		GST_DEBUG("VPU State: Playing to Paused");
 		break;
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
-		vpu_enc->encoded_frames=0;
+		vpu_enc->encoded_frames = 0;
 		GST_DEBUG("VPU State: Paused to Ready");
 		break;
 	case GST_STATE_CHANGE_READY_TO_NULL:
@@ -629,38 +621,37 @@ mfw_gst_vpuenc_class_init(GstVPU_EncClass * klass)
 	mfw_gst_vpu_class_init_common(gobject_class);
 
 	g_object_class_install_property(gobject_class, MFW_GST_VPU_PROF_ENABLE,
-					g_param_spec_boolean("profile",
-							     "Profile",
-							     "enable time profile of the vpu encoder plug-in",
-							     FALSE,
-							     G_PARAM_READWRITE));
+			g_param_spec_boolean("profile",
+					     "Profile",
+					     "enable time profile of the vpu encoder plug-in",
+					     FALSE,
+					     G_PARAM_READWRITE));
 
 	g_object_class_install_property(gobject_class,
-					MFW_GST_VPUENC_FRAME_RATE,
-					g_param_spec_float("framerate",
-							   "FrameRate",
-							   "gets the framerate at which the input stream is to be encoded",
-							   0, 60.0, 30.0,
-							   G_PARAM_READWRITE));
+			MFW_GST_VPUENC_FRAME_RATE,
+			g_param_spec_float("framerate",
+					   "FrameRate",
+					   "gets the framerate at which the input stream is to be encoded",
+					   0, 60.0, 30.0,
+					   G_PARAM_READWRITE));
 
 	g_object_class_install_property(gobject_class, MFW_GST_VPUENC_BITRATE,
-					g_param_spec_int("bitrate", "Bitrate",
-							 "gets the bitrate (in kbps) at which stream is to be encoded",
-							 0, 32767, 0,
-							 G_PARAM_READWRITE));
+			g_param_spec_int("bitrate", "Bitrate",
+					 "gets the bitrate (in kbps) at which stream is to be encoded",
+					 0, 32767, 0,
+					 G_PARAM_READWRITE));
 
 	g_object_class_install_property(gobject_class, MFW_GST_VPUENC_GOP,
-					g_param_spec_int("gopsize", "Gopsize",
-							 "gets the GOP size at which stream is to be encoded",
-							 0, 60, 0,
-							 G_PARAM_READWRITE));
+			g_param_spec_int("gopsize", "Gopsize",
+					 "gets the GOP size at which stream is to be encoded",
+					 0, 60, 0,
+					 G_PARAM_READWRITE));
 
 }
 
 static void
 mfw_gst_vpuenc_init(GstVPU_Enc * vpu_enc, GstVPU_EncClass * gclass)
 {
-
 	GST_DEBUG("mfw_gst_vpuenc_init");
 
 	GstElementClass *klass = GST_ELEMENT_GET_CLASS(vpu_enc);

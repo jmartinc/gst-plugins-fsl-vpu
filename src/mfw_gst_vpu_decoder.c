@@ -44,22 +44,22 @@
 
 #define MFW_GST_VPUDEC_VIDEO_CAPS \
     "video/mpeg, " \
-    "width = (int) [16, " STR(MAX_WIDTH)"], " \
-    "height = (int) [16," STR(MAX_HEIGHT)"], " \
+    "width = (int) [16, 1920], " \
+    "height = (int) [16, 1080], " \
     "mpegversion = (int) 4; " \
     \
     "video/x-divx, " \
-    "width = (int) [16, " STR(MAX_WIDTH)"], " \
-    "height = (int) [16, " STR(MAX_HEIGHT)"], " \
+    "width = (int) [16, 1920], " \
+    "height = (int) [16, 1080], " \
     "divxversion = (int) [4, 5]; " \
     \
     "video/x-h263, " \
-    "width = (int) [16, " STR(MAX_WIDTH)"], " \
-    "height = (int)[16, " STR(MAX_HEIGHT)"]; " \
-    \
+     "width = (int) [16, 1920], " \
+    "height = (int) [16, 1080], " \
+   \
     "video/x-h264, " \
-    "width = (int) [16, " STR(MAX_WIDTH)"], " \
-    "height = (int)[16, " STR(MAX_HEIGHT)"]"
+    "width = (int) [16, 1920], " \
+    "height = (int)[16, 1080]"
 
 #define DEFAULT_DBK_OFFSET_VALUE    5
 
@@ -732,8 +732,6 @@ mfw_gst_vpudec_change_state(GstElement * element, GstStateChange transition)
 			return GST_STATE_CHANGE_FAILURE;
 		}
 
-#define MFW_GST_VPU_DECODER_PLUGIN VERSION
-		PRINT_PLUGIN_VERSION(MFW_GST_VPU_DECODER_PLUGIN);
 		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		vpu_dec->init = FALSE;
