@@ -300,6 +300,12 @@ struct vpu_instance {
 	int		flushing;
 	int		standard;
 	unsigned int	readofs, fifo_in, fifo_out;
+
+	/* statistic */
+	uint64_t	encoding_time_max;
+	uint64_t	encoding_time_total;
+	uint64_t	start_time;
+	int		num_frames;
 };
 
 struct vpu {
@@ -422,15 +428,29 @@ static ssize_t show_info(struct device *dev,
 			instance->hold,
 			instance->width,
 			instance->height);
-		if (instance->mode == VPU_MODE_ENCODER)
-			len += sprintf(buf + len, "kfifo_avail: %d\n"
-					          "buffered size: %d\n"
-						  "header size:   %d\n",
-						  kfifo_avail(&instance->fifo),
-						  instance->buffered_size,
-						  instance->headersize);
-		else
+		if (instance->mode == VPU_MODE_ENCODER) {
+			uint64_t max_time = instance->encoding_time_max;
+			uint64_t avg_time = instance->encoding_time_total;
+
+			do_div(max_time, 1000000);
+			do_div(avg_time, instance->num_frames);
+			do_div(avg_time, 1000000);
+
+			len += sprintf(buf + len,
+				"kfifo_avail: %d\n"
+				"buffered size: %d\n"
+				"header size:   %d\n"
+				"avg encoding time: %lldms\n"
+				"max encoding time: %lldms\n",
+				kfifo_avail(&instance->fifo),
+				instance->buffered_size,
+				instance->headersize,
+				avg_time,
+				max_time);
+		} else {
 			len += sprintf(buf + len, "fifo_avail: %d\n", vpu_fifo_avail(instance));
+		}
+		len += sprintf(buf + len, "\n");
 	}
 
 	len += sprintf(buf + len, "queued buffers\n"
@@ -1054,6 +1074,7 @@ static void vpu_work(struct work_struct *work)
 	struct vpu_buffer *vbuf;
 	struct vpu_instance *instance = NULL;
 	int i, ret;
+	struct timespec s;
 
 	while (1) {
 		for (i = 0; i < VPU_NUM_INSTANCE; i++) {
@@ -1079,9 +1100,12 @@ static void vpu_work(struct work_struct *work)
 			}
 		}
 
-		if (!vpu->active) {
+		if (!vpu->active)
 			return;
-		}
+
+		ktime_get_ts(&s);
+
+		instance->start_time = timespec_to_ns(&s);
 
 		if (instance->mode == VPU_MODE_ENCODER)
 			vpu_enc_start_frame(instance);
@@ -1132,6 +1156,8 @@ static void vpu_enc_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 	int size;
 	int ret;
 	struct vpu_buffer *buf = to_vpu_vb(vb);
+	s64 time;
+	struct timespec e;
 
 	size = vpu_read(vpu, BIT_WR_PTR(instance->idx)) - vpu_read(vpu, BIT_RD_PTR(instance->idx));
 
@@ -1148,6 +1174,13 @@ static void vpu_enc_irq_handler(struct vpu *vpu, struct vpu_instance *instance,
 		if (ret < size)
 			BUG();
 	}
+
+	ktime_get_ts(&e);
+	time = timespec_to_ns(&e) - instance->start_time;
+	if (time > instance->encoding_time_max)
+		instance->encoding_time_max = time;
+	instance->encoding_time_total += time;
+	instance->num_frames++;
 
 	list_del_init(&buf->list);
 	vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
@@ -1224,6 +1257,10 @@ static int vpu_open(struct file *file)
 	instance->readofs = 0;
 	instance->fifo_in = 0;
 	instance->fifo_out = 0;
+
+	instance->encoding_time_max = 0;
+	instance->encoding_time_total = 0;
+	instance->num_frames = 0;
 
 	memset(instance->rec, 0, sizeof(instance->rec));
 
