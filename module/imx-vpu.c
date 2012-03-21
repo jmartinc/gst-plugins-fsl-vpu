@@ -243,7 +243,6 @@ static struct vpu_driver_data drvdata_imx53 = {
 
 /* buffer for one video frame */
 struct vpu_buffer {
-	/* common v4l buffer stuff -- must be first */
 	struct vb2_buffer		vb;
 	struct list_head		list;
 };
@@ -440,7 +439,8 @@ static ssize_t show_info(struct device *dev,
 	list_for_each_entry_safe(vbuf, tmp, &vpu->queued, list) {
 		struct vb2_queue *q = vbuf->vb.vb2_queue;
 		struct vpu_instance *q_instance = vb2_get_drv_priv(q);
-		len += sprintf(buf + len, "%p (instance %d, streaming %d)\n", vbuf, q_instance->idx, vb2_is_streaming(q));
+		len += sprintf(buf + len, "%p (instance %d, streaming %d)\n",
+				vbuf, q_instance->idx, vb2_is_streaming(q));
 	}
 
 	spin_unlock_irq(&vpu->lock);
@@ -560,14 +560,18 @@ static int vpu_alloc_fb_v2(struct vpu_instance *instance)
 
 		para_buf[i * 3] = rec->dma_addr + instance->width * instance->height; /* Cb */
 		para_buf[i * 3 + 1] = rec->dma_addr; /* Y */
-		para_buf[i * 3 + 3] = para_buf[i * 3] + (instance->width / 2) * (instance->height / 2); /* Cr */
+		para_buf[i * 3 + 3] = para_buf[i * 3] +
+			(instance->width / 2) * (instance->height / 2); /* Cr */
 		if (instance->standard == STD_AVC)
-			para_buf[96 + i + 1] = para_buf[i * 3 + 3] + (instance->width / 2) * (instance->height / 2);
+			para_buf[96 + i + 1] = para_buf[i * 3 + 3] +
+				(instance->width / 2) * (instance->height / 2);
 
 		if (i + 1 < instance->num_fb) {
 			para_buf[i * 3 + 2] = instance->rec[i + 1].dma_addr; /* Y */
-			para_buf[i * 3 + 5] = instance->rec[i + 1].dma_addr + instance->width * instance->height ; /* Cb */
-			para_buf[i * 3 + 4] = para_buf[i * 3 + 5] + (instance->width / 2) * (instance->height / 2); /* Cr */
+			para_buf[i * 3 + 5] = instance->rec[i + 1].dma_addr +
+				instance->width * instance->height ; /* Cb */
+			para_buf[i * 3 + 4] = para_buf[i * 3 + 5] +
+				(instance->width / 2) * (instance->height / 2); /* Cr */
 		}
 		if (instance->standard == STD_AVC)
 			para_buf[96 + i] = para_buf[i * 3 + 4] + (instance->width / 2) * (instance->height / 2);
@@ -824,8 +828,7 @@ out:
 	return ret;
 }
 
-enum
-{
+enum {
     MP4_MPEG4 = 0,
     MP4_DIVX5_HIGHER = 1,
     MP4_XVID = 2,
@@ -1230,7 +1233,6 @@ static int vpu_open(struct file *file)
 
 	file->private_data = instance;
 
-	
 	instance->bitstream_buf = dma_alloc_coherent(NULL, regs->bitstream_buf_size,
 			&instance->bitstream_buf_phys, GFP_DMA | GFP_KERNEL);
 	if (!instance->bitstream_buf) {
@@ -1976,8 +1978,6 @@ static int vpu_dev_remove(struct platform_device *pdev)
 
 	device_remove_file(&pdev->dev, &dev_attr_info);
 	platform_set_drvdata(pdev, NULL);
-
-
 
 	return 0;
 }
