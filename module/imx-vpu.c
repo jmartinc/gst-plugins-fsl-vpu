@@ -39,12 +39,14 @@
 #include <mach/hardware.h>
 #include <mach/iram.h>
 
+#include "imx-vpu-jpegtable.h"
 #include "imx-vpu.h"
 
 #define VPU_IOC_MAGIC  'V'
 
 #define	VPU_IOC_ROTATE_MIRROR	_IO(VPU_IOC_MAGIC, 7)
 #define VPU_IOC_CODEC		_IO(VPU_IOC_MAGIC, 8)
+#define VPU_IOC_MJPEG_QUALITY	_IO(VPU_IOC_MAGIC, 9)
 
 #define VPU_NUM_INSTANCE	4
 
@@ -66,6 +68,9 @@
 #define V2_IRAM_SIZE	0x14000
 
 #define VPU_MAX_BITRATE 32767
+
+#define VPU_HUFTABLE_SIZE 432
+#define VPU_QMATTABLE_SIZE 192
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0)
 static inline dma_addr_t
@@ -113,18 +118,18 @@ enum {
 #define STD_MPEG4	0
 #define STD_H263	1
 #define STD_AVC		2
+#define STD_MJPG	3
 
 static int vpu_v1_codecs[VPU_CODEC_MAX] = {
 	[VPU_CODEC_AVC_DEC] = 2,
 	[VPU_CODEC_VC1_DEC] = -1,
 	[VPU_CODEC_MP2_DEC] = -1,
-	[VPU_CODEC_MP4_DEC] = 0,
 	[VPU_CODEC_DV3_DEC] = -1,
 	[VPU_CODEC_RV_DEC] = -1,
-	[VPU_CODEC_MJPG_DEC] = -1,
+	[VPU_CODEC_MJPG_DEC] = 0x82,
 	[VPU_CODEC_AVC_ENC] = 3,
 	[VPU_CODEC_MP4_ENC] = 1,
-	[VPU_CODEC_MJPG_ENC] = -1,
+	[VPU_CODEC_MJPG_ENC] = 0x83,
 };
 
 static int vpu_v2_codecs[VPU_CODEC_MAX] = {
@@ -300,6 +305,10 @@ struct vpu_instance {
 	int		flushing;
 	int		standard;
 	unsigned int	readofs, fifo_in, fifo_out;
+
+	u32		*mjpg_huf_table;
+	u32		*mjpg_q_mat_table;
+	int		mjpg_quality;
 
 	/* statistic */
 	uint64_t	encoding_time_max;
@@ -526,7 +535,7 @@ static int vpu_alloc_fb_v1(struct vpu_instance *instance)
 	struct vpu *vpu = instance->vpu;
 	int i, ret = 0;
 	int size = (instance->width * instance->height * 3) / 2;
-	unsigned long *para_buf = instance->para_buf;
+	u32 *para_buf = instance->para_buf;
 
 	for (i = 0; i < instance->num_fb; i++) {
 		struct memalloc_record *rec = &instance->rec[i];
@@ -627,13 +636,189 @@ static int encode_header(struct vpu_instance *instance, int headertype)
 
 	memcpy(header + instance->headersize, instance->bitstream_buf, headersize);
 
-	print_hex_dump(KERN_INFO, "header: ", DUMP_PREFIX_ADDRESS, 16, 1, instance->bitstream_buf, headersize, 0);
+	print_hex_dump(KERN_INFO, "header: ", DUMP_PREFIX_ADDRESS, 16, 1,
+			instance->bitstream_buf, headersize, 0);
 
 	instance->header = header;
 	instance->headersize += headersize;
 
 	return 0;
 }
+
+static void vpu_calc_mjpeg_quant_tables(struct vpu_instance *instance,
+		int quality)
+{
+	int   i;
+	unsigned int temp, new_quality;
+
+	if (quality > 100)
+		quality = 100;
+	if (quality < 5)
+		quality = 5;
+
+	/* re-calculate the Q-matrix */
+	if (quality > 50)
+		new_quality = 5000 / quality;
+	else
+		new_quality = 200 - 2 * quality;
+
+	pr_info("quality = %d %d", quality, new_quality);
+
+	/* recalculate  luma Quantification table */
+	for (i = 0; i< 64; i++) {
+		temp = ((unsigned int)lumaQ2[i] * new_quality + 50) / 100;
+		if (temp <= 0)
+			temp = 1;
+		if (temp > 255)
+			temp = 255;
+		lumaQ2[i] = (unsigned char)temp;
+	}
+
+	pr_info("Luma Quant Table is \n");
+	for (i = 0; i < 64; i += 8) {
+		pr_info("0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, \n",
+				lumaQ2[i], lumaQ2[i + 1], lumaQ2[i + 2], lumaQ2[i + 3],
+				lumaQ2[i + 4], lumaQ2[i + 5], lumaQ2[i + 6], lumaQ2[i + 7]);
+	}
+
+	/* chromaB Quantification Table */
+	for (i = 0; i< 64; i++) {
+		temp = ((unsigned int)chromaBQ2[i] * new_quality + 50) / 100;
+		if (temp <= 0)
+			temp = 1;
+		if (temp > 255)
+			temp = 255;
+		chromaBQ2[i] = (unsigned char)temp;
+	}
+
+	pr_info("chromaB Quantification Table is \n");
+	for(i = 0; i < 64; i = i+8) {
+		pr_info("0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, \n",
+				chromaBQ2[i], chromaBQ2[i + 1], chromaBQ2[i + 2], chromaBQ2[i + 3],
+				chromaBQ2[i + 4], chromaBQ2[i + 5], chromaBQ2[i + 6], chromaBQ2[i + 7]);
+	}
+
+	/* chromaR Quantification Table */
+	for (i = 0; i< 64; i++) {
+		temp = ((unsigned int)chromaRQ2[i] * new_quality + 50) / 100;
+		if (temp <= 0)
+			temp = 1;
+		if (temp > 255)
+			temp = 255;
+		chromaRQ2[i] = (unsigned char)temp;
+	}
+
+	pr_info("chromaR Quantification Table is \n");
+	for (i = 0; i < 64; i += 8) {
+		pr_info("0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, 0x%2x, \n",
+				chromaRQ2[i], chromaRQ2[i + 1], chromaRQ2[i + 2], chromaRQ2[i + 3],
+				chromaRQ2[i + 4], chromaRQ2[i + 5], chromaRQ2[i + 6], chromaRQ2[i + 7]);
+	}
+}
+
+static int vpu_generate_jpeg_tables(struct vpu_instance *instance,
+		int quality)
+{
+	u8 *q_mat_table;
+	u8 *huf_table;
+	int i;
+
+	huf_table = kzalloc(VPU_HUFTABLE_SIZE, GFP_KERNEL);
+	q_mat_table = kzalloc(VPU_QMATTABLE_SIZE, GFP_KERNEL);
+
+	if (!huf_table || !q_mat_table) {
+		kfree(huf_table);
+		kfree(q_mat_table);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < 16; i += 4) {
+		huf_table[i] = lumaDcBits[i + 3];
+		huf_table[i + 1] = lumaDcBits[i + 2];
+		huf_table[i + 2] = lumaDcBits[i + 1];
+		huf_table[i + 3] = lumaDcBits[i];
+	}
+
+	for (i = 16; i < 32 ; i += 4) {
+		huf_table[i] = lumaDcValue[i + 3 - 16];
+		huf_table[i + 1] = lumaDcValue[i + 2 - 16];
+		huf_table[i + 2] = lumaDcValue[i + 1 - 16];
+		huf_table[i + 3] = lumaDcValue[i - 16];
+	}
+
+	for (i = 32; i < 48; i += 4) {
+		huf_table[i] = lumaAcBits[i + 3 - 32];
+		huf_table[i + 1] = lumaAcBits[i + 2 - 32];
+		huf_table[i + 2] = lumaAcBits[i + 1 - 32];
+		huf_table[i + 3] = lumaAcBits[i - 32];
+	}
+
+	for (i = 48; i < 216; i += 4) {
+		huf_table[i] = lumaAcValue[i + 3 - 48];
+		huf_table[i + 1] = lumaAcValue[i + 2 - 48];
+		huf_table[i + 2] = lumaAcValue[i + 1 - 48];
+		huf_table[i + 3] = lumaAcValue[i - 48];
+	}
+
+	for (i = 216; i < 232; i += 4) {
+		huf_table[i] = chromaDcBits[i + 3 - 216];
+		huf_table[i + 1] = chromaDcBits[i + 2 - 216];
+		huf_table[i + 2] = chromaDcBits[i + 1 - 216];
+		huf_table[i + 3] = chromaDcBits[i - 216];
+	}
+
+	for (i = 232; i < 248; i += 4) {
+		huf_table[i] = chromaDcValue[i + 3 - 232];
+		huf_table[i + 1] = chromaDcValue[i + 2 - 232];
+		huf_table[i + 2] = chromaDcValue[i + 1 - 232];
+		huf_table[i + 3] = chromaDcValue[i - 232];
+	}
+
+	for (i = 248; i < 264; i += 4) {
+		huf_table[i] = chromaAcBits[i + 3 - 248];
+		huf_table[i + 1] = chromaAcBits[i + 2 - 248];
+		huf_table[i + 2] = chromaAcBits[i + 1 - 248];
+		huf_table[i + 3] = chromaAcBits[i - 248];
+	}
+
+	for (i = 264; i < 432; i += 4) {
+		huf_table[i] = chromaAcValue[i + 3 - 264];
+		huf_table[i + 1] = chromaAcValue[i + 2 - 264];
+		huf_table[i + 2] = chromaAcValue[i + 1 - 264];
+		huf_table[i + 3] = chromaAcValue[i - 264];
+	}
+
+	/* according to the bitrate, recalculate the quant table */
+	vpu_calc_mjpeg_quant_tables(instance, quality);
+
+	/* Rearrange and insert pre-defined Q-matrix to deticated variable. */
+	for (i = 0; i < 64; i += 4) {
+		q_mat_table[i] = lumaQ2[i + 3];
+		q_mat_table[i + 1] = lumaQ2[i + 2];
+		q_mat_table[i + 2] = lumaQ2[i + 1];
+		q_mat_table[i + 3] = lumaQ2[i];
+	}
+
+	for (i = 64; i < 128; i += 4) {
+		q_mat_table[i] = chromaBQ2[i + 3 - 64];
+		q_mat_table[i + 1] = chromaBQ2[i + 2 - 64];
+		q_mat_table[i + 2] = chromaBQ2[i + 1 - 64];
+		q_mat_table[i + 3] = chromaBQ2[i - 64];
+	}
+
+	for (i = 128; i < 192; i += 4) {
+		q_mat_table[i] = chromaRQ2[i + 3 - 128];
+		q_mat_table[i + 1] = chromaRQ2[i + 2 - 128];
+		q_mat_table[i + 2] = chromaRQ2[i + 1 - 128];
+		q_mat_table[i + 3] = chromaRQ2[i - 128];
+	}
+
+	instance->mjpg_huf_table = (void *)huf_table;
+	instance->mjpg_q_mat_table = (void *)q_mat_table;
+
+	return 0;
+}
+
 #define VPU_DEFAULT_MPEG4_QP 15
 #define VPU_DEFAULT_H264_QP 35
 
@@ -651,6 +836,8 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 	u32 sliceReport = 0;
 	u32 mbReport = 0;
 	u32 rcIntraQp = 0;
+	u32 *table_buf, *para_buf;
+	int i;
 
 	switch (instance->standard) {
 	case STD_MPEG4:
@@ -659,6 +846,9 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 		break;
 	case STD_AVC:
 		instance->format = VPU_CODEC_AVC_ENC;
+		break;
+	case STD_MJPG:
+		instance->format = VPU_CODEC_MJPG_ENC;
 		break;
 	default:
 		return -EINVAL;
@@ -731,6 +921,31 @@ static int noinline vpu_enc_get_initial_info(struct vpu_instance *instance)
 			(avc_chromaQpOffset & 31);
 		vpu_write(vpu, CMD_ENC_SEQ_264_PARA, data);
 		rcIntraQp = VPU_DEFAULT_H264_QP;
+	} else if (instance->standard == STD_MJPG) {
+		vpu_write(vpu, CMD_ENC_SEQ_JPG_PARA, 0);
+		vpu_write(vpu, CMD_ENC_SEQ_JPG_RST_INTERVAL, 60);
+		vpu_write(vpu, CMD_ENC_SEQ_JPG_THUMB_EN, 0);
+		vpu_write(vpu, CMD_ENC_SEQ_JPG_THUMB_SIZE, 0);
+		vpu_write(vpu, CMD_ENC_SEQ_JPG_THUMB_OFFSET, 0);
+
+		vpu_generate_jpeg_tables(instance, instance->mjpg_quality);
+
+		para_buf = instance->para_buf;
+		table_buf = (u32 *)instance->mjpg_huf_table;
+
+		for (i = 0; i < 108; i += 2) {
+			para_buf[i + 1] = *table_buf;
+			para_buf[i] = *(table_buf + 1);
+			table_buf += 2;
+		}
+
+		table_buf = (u32 *)instance->mjpg_q_mat_table;
+
+		for (i = 0; i < 48; i += 2) {
+			para_buf[i + 129] = *table_buf;
+			para_buf[i + 128] = *(table_buf + 1);
+			table_buf += 2;
+		}
 	}
 
 	data = 4000 << 2 | /* slice size */
@@ -1339,10 +1554,17 @@ static long vpu_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		case STD_AVC:
 			instance->standard = std;
 			break;
+		case STD_MJPG:
+			instance->standard = std;
+			instance->mjpg_quality = 50;
+			break;
 		default:
 			ret = -EINVAL;
 			break;
 		}
+		break;
+	case VPU_IOC_MJPEG_QUALITY:
+		instance->mjpg_quality = (u32)arg;
 		break;
 	default:
 		ret = video_ioctl2(file, cmd, arg);

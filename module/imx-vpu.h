@@ -125,6 +125,12 @@
 #define CMD_ENC_SEQ_RC_QP_MAX		0x1C8
 #define RET_ENC_SEQ_SUCCESS		0x1C0
 
+#define CMD_ENC_SEQ_JPG_PARA	        0x198
+#define CMD_ENC_SEQ_JPG_RST_INTERVAL	0x19C
+#define CMD_ENC_SEQ_JPG_THUMB_EN	0x1A0
+#define CMD_ENC_SEQ_JPG_THUMB_SIZE	0x1A4
+#define CMD_ENC_SEQ_JPG_THUMB_OFFSET	0x1A8
+
 /*--------------------------------------------------------------------------
  * [ENC PARA CHANGE] COMMAND :
  *------------------------------------------------------------------------*/
