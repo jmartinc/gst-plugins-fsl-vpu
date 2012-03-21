@@ -263,11 +263,15 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, enum v4l2_memory memory)
 	reqs.memory = memory;
 	retval = ioctl(vpu_enc->vpu_fd, VIDIOC_REQBUFS, &reqs);
 	if (retval) {
-		printf("VIDIOC_REQBUFS failed: %s\n", strerror(errno));
+		perror("VIDIOC_REQBUFS");
 		return GST_FLOW_ERROR;
 	}
 
-	ioctl(vpu_enc->vpu_fd, VPU_IOC_CODEC, vpu_enc->codec);
+	retval = ioctl(vpu_enc->vpu_fd, VPU_IOC_CODEC, vpu_enc->codec);
+	if (retval) {
+		perror("VPU_IOC_CODEC");
+		return GST_FLOW_ERROR;
+	}
 
 	for (i = 0; i < NUM_BUFFERS; i++) {
 		struct v4l2_buffer *buf = &vpu_enc->buf_v4l2[i];
