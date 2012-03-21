@@ -148,34 +148,28 @@ static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 	switch (prop_id) {
 	case MFW_GST_VPU_PROF_ENABLE:
 		vpu_enc->profile = g_value_get_boolean(value);
-		GST_DEBUG("profile=%d", vpu_enc->profile);
 		break;
 
 	case MFW_GST_VPU_DEVICE:
 		g_free(vpu_enc->device);
 		vpu_enc->device = g_strdup(g_value_get_string(value));
-		GST_DEBUG("device=%s", vpu_enc->device);
 		break;
 
 	case MFW_GST_VPU_CODEC_TYPE:
 		vpu_enc->codec = g_value_get_enum(value);
-		GST_DEBUG("codec=%d", vpu_enc->codec);
 		vpu_enc->codecTypeProvided = TRUE;
 		break;
 
 	case MFW_GST_VPUENC_BITRATE:
 		vpu_enc->bitrate = g_value_get_int(value);
-		GST_DEBUG("bitrate=%u", vpu_enc->bitrate);
 		break;
 
 	case MFW_GST_VPUENC_FRAME_RATE:
 		vpu_enc->framerate = g_value_get_float(value);
-		GST_DEBUG("framerate=%u", vpu_enc->framerate);
 		break;
 
 	case MFW_GST_VPUENC_GOP:
 		vpu_enc->gopsize = g_value_get_int(value);
-		GST_DEBUG("gopsize=%u", vpu_enc->gopsize);
 		break;
 
 	default:
