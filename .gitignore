@@ -4,3 +4,17 @@ config/
 configure
 autom4te.cache/
 aclocal.m4
+GNUmakefile
+config.log
+config.status
+*.ko
+*.o
+*.cmd
+*.lo
+.libs
+.deps
+*.order
+*.mod.c
+*.symvers
+.tmp_versions
+libtool
