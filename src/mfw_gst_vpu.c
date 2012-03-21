@@ -31,6 +31,7 @@ mfw_gst_vpu_codec_get_type(void)
 		{STD_MPEG4, "0", "std_mpeg4"},
 		{STD_H263, "1", "std_h263"},
 		{STD_AVC, "2", "std_avc"},
+		{STD_MJPG, "3", "std_mjpg"},
 		{0, NULL, NULL},
 	};
 	if (!vpu_codec_type) {

@@ -98,6 +98,7 @@ GType mfw_gst_vpuenc_codec_get_type(void);
 #define	VPU_IOC_MAGIC		'V'
 #define	VPU_IOC_ROTATE_MIRROR	_IO(VPU_IOC_MAGIC, 7)
 #define VPU_IOC_CODEC		_IO(VPU_IOC_MAGIC, 8)
+#define VPU_IOC_MJPEG_QUALITY	_IO(VPU_IOC_MAGIC, 9)
 
 G_END_DECLS
 #endif				/* __MFW_GST_VPU_ENCODER_H__ */

@@ -88,6 +88,8 @@ typedef struct _GstVPU_Enc
 	unsigned int buf_size[NUM_BUFFERS];
 	unsigned int queued;
 	char *device;
+
+	int mjpeg_quality;
 }GstVPU_Enc;
 
 /* Default frame rate */
@@ -107,8 +109,8 @@ typedef struct _GstVPU_Enc
     "height = (int) [16, 720]; " \
     \
     "image/jpeg, " \
-    "width = (int) [16, 1280], " \
-    "height = (int) [16, 720]; "
+    "width = (int) [16, 1920], " \
+    "height = (int) [16, 1080]; "
 
 /* get the element details */
 static GstElementDetails mfw_gst_vpuenc_details =
@@ -130,8 +132,8 @@ GST_STATIC_PAD_TEMPLATE("sink",
 			GST_PAD_ALWAYS,
 			GST_STATIC_CAPS("video/x-raw-yuv, "
 					"format = (fourcc) {I420}, "
-					"width = (int) [16, 1280], "
-					"height = (int) [16, 720], "
+					"width = (int) [16, 1920], "
+					"height = (int) [16, 1080], "
 					"framerate = (fraction) [0/1, 60/1]")
     );
 
@@ -172,6 +174,10 @@ static void mfw_gst_vpuenc_set_property(GObject * object, guint prop_id,
 		vpu_enc->gopsize = g_value_get_int(value);
 		break;
 
+	case MFW_GST_VPUENC_MJPEG_QUALITY:
+		vpu_enc->mjpeg_quality = g_value_get_int(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -207,6 +213,10 @@ static void mfw_gst_vpuenc_get_property(GObject * object, guint prop_id,
 
 	case MFW_GST_VPUENC_GOP:
 		g_value_set_int(value, vpu_enc->gopsize);
+		break;
+
+	case MFW_GST_VPUENC_MJPEG_QUALITY:
+		g_value_set_int(value, vpu_enc->mjpeg_quality);
 		break;
 
 	default:
@@ -264,6 +274,12 @@ static int mfw_gst_vpuenc_init_encoder(GstPad *pad, enum v4l2_memory memory)
 	retval = ioctl(vpu_enc->vpu_fd, VPU_IOC_CODEC, vpu_enc->codec);
 	if (retval) {
 		perror("VPU_IOC_CODEC");
+		return GST_FLOW_ERROR;
+	}
+
+	retval = ioctl(vpu_enc->vpu_fd, VPU_IOC_MJPEG_QUALITY, vpu_enc->mjpeg_quality);
+	if (retval) {
+		perror("VPU_IOC_MJPEG_QUALITY");
 		return GST_FLOW_ERROR;
 	}
 
@@ -645,6 +661,11 @@ mfw_gst_vpuenc_class_init(GstVPU_EncClass * klass)
 					 0, 60, 0,
 					 G_PARAM_READWRITE));
 
+	g_object_class_install_property(gobject_class, MFW_GST_VPUENC_MJPEG_QUALITY,
+			g_param_spec_int("mjpegquality", "mjpegquality",
+					 "MJPEG Quality",
+					 0, 100, 50,
+					 G_PARAM_READWRITE));
 }
 
 static void
@@ -678,6 +699,7 @@ mfw_gst_vpuenc_init(GstVPU_Enc * vpu_enc, GstVPU_EncClass * gclass)
 	vpu_enc->gopsize = 0;
 	vpu_enc->codecTypeProvided = FALSE;
 	vpu_enc->memory = V4L2_MEMORY_USERPTR;
+	vpu_enc->mjpeg_quality = 50;
 }
 
 GType mfw_gst_type_vpu_enc_get_type(void)
