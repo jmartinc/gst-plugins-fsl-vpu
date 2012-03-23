@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.59)
 
-AC_INIT([gst-plugins-fsl-vpu], [2012.03.0], [bugs@pengutronix.de])
+AC_INIT([gst-plugins-fsl-vpu], [2012.03.1], [bugs@pengutronix.de])
 AC_CONFIG_SRCDIR([src/mfw_gst_vpu_encoder.c])
 AC_CONFIG_MACRO_DIR([config/m4])
 AC_CONFIG_AUX_DIR([config/autoconf])
