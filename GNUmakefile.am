@@ -4,6 +4,7 @@ EXTRA_DIST = \
 	module/Makefile \
 	module/imx-vpu.c \
 	module/imx-vpu.h \
+	module/imx-vpu-jpegtable.h \
 	autogen.sh \
 	config/m4/.secret-world-domination-project
 
