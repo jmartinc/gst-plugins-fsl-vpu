@@ -2136,7 +2136,7 @@ static int vpu_dev_probe(struct platform_device *pdev)
 		goto err_out_clk;
 	}
 
-	clk_enable(vpu->clk);
+	clk_prepare_enable(vpu->clk);
 	spin_lock_init(&vpu->lock);
 	INIT_LIST_HEAD(&vpu->queued);
 
@@ -2192,7 +2192,7 @@ err_out_irq:
 err_alloc_ctx:
 	iounmap(vpu->base);
 err_out_ioremap:
-	clk_disable(vpu->clk);
+	clk_disable_unprepare(vpu->clk);
 	clk_put(vpu->clk);
 err_out_clk:
 	destroy_workqueue(vpu->workqueue);
@@ -2217,7 +2217,7 @@ static int vpu_dev_remove(struct platform_device *pdev)
 
 	free_irq(vpu->irq, vpu);
 
-	clk_disable(vpu->clk);
+	clk_disable_unprepare(vpu->clk);
 	clk_put(vpu->clk);
 	iounmap(vpu->base);
 
